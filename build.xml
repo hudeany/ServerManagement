@@ -20,7 +20,7 @@
 	<property name="buildPath" value="build" />
 	<echo message="buildPath: ${buildPath}" />
 
-	<target name="build_jar" depends="cleanup_before, create_jar, sign_jar, cleanup_after" />
+	<target name="build_jar" depends="cleanup_before, create_jar, cleanup_after" />
 
 	<target name="cleanup_before">
 		<delete dir="${buildPath}" />
@@ -97,15 +97,7 @@
 			<zipfileset dir="src" includes="ServerManagement_Icon.png" />
 			<zipfileset dir="src" includes="ServerManagement.ico" />
 		</jar>
-	</target>
 
-	<available file="${user.home}/git/codeSigning.properties" property="signingPropertiesAvailable" />
-	<target name="sign_jar" depends="create_jar" if="signingPropertiesAvailable">
-		<signjar destDir="${buildPath}" alias="${CodeSigningKeyAlias}" keystore="${CodeSigningKeyStore}" storepass="${CodeSigningKeyStorePassword}" keypass="${CodeSigningKeyPassword}" preservelastmodified="true" tsaurl="${TsaUrl}">
-			<path>
-				<fileset dir="${buildPath}" includes="ServerManagement.jar" />
-			</path>
-		</signjar>
 		<signjar destDir="${buildPath}" alias="${CodeSigningKeyAlias}" keystore="${CodeSigningKeyStore}" storepass="${CodeSigningKeyStorePassword}" keypass="${CodeSigningKeyPassword}" preservelastmodified="true" tsaurl="${TsaUrl}">
 			<path>
 				<fileset dir="${buildPath}" includes="ServerManagement-${build.version}.jar" />

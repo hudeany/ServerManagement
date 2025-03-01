@@ -63,6 +63,7 @@ public class ServerManagementItem extends JPanel {
 	private final Server server;
 	private final ProxyConfiguration proxyConfiguration;
 
+	private JButton readAllUsersButton;
 	private JTable managedUserTable;
 	private JTable urlsTable;
 	private String status = "OK";
@@ -105,6 +106,8 @@ public class ServerManagementItem extends JPanel {
 
 		validate();
 		updateUI();
+		
+		checkButtonStatus();
 	}
 
 	public String getServerName() {
@@ -460,7 +463,7 @@ public class ServerManagementItem extends JPanel {
 		});
 		buttonPanel.add(editAdminButton);
 
-		final JButton readAllUsersButton = new JButton(LangResources.get("readAllUsers"));
+		readAllUsersButton = new JButton(LangResources.get("readAllUsers"));
 		readAllUsersButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -744,6 +747,8 @@ public class ServerManagementItem extends JPanel {
 	}
 
 	private void checkButtonStatus() {
+		readAllUsersButton.setEnabled(server.getSshAdmin() != null);
+		
 		if (managedUserTable != null) {
 			if (managedUserTable.getSelectedRowCount() == 1) {
 				final String username = (String) managedUserTable.getModel().getValueAt(managedUserTable.getSelectedRow(), 0);

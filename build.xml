@@ -5,6 +5,7 @@
 	<echo message="build.version: ${build.version}" />
 	
 	<property file="${user.home}/git/codeSigning.properties" />
+	<available file="${user.home}/git/codeSigning.properties" property="useCodeSigning" />
 	
 	<tstamp>
 		<format property="buildTime" pattern="yyyy-MM-dd HH:mm:ss" locale="en" />
@@ -20,7 +21,7 @@
 	<property name="buildPath" value="build" />
 	<echo message="buildPath: ${buildPath}" />
 
-	<target name="build_jar" depends="cleanup_before, create_jar, cleanup_after" />
+	<target name="build_jar" depends="cleanup_before, create_jar, show_code_signing_status, sign_jar, cleanup_after" />
 
 	<target name="cleanup_before">
 		<delete dir="${buildPath}" />
@@ -58,7 +59,7 @@
 			</fileset>
 		</path>
 
-		<javac debug="true" nowarn="true" deprecation="false" destdir="${buildPath}/bin" fork="yes" source="1.8" target="1.8" srcdir="src" includeantruntime="false" encoding="UTF-8" classpath="lib/*">			
+		<javac debug="true" nowarn="true" deprecation="false" destdir="${buildPath}/bin" fork="yes" source="1.9" target="1.9" srcdir="src" includeantruntime="false" encoding="UTF-8" classpath="lib/*">			
 			<classpath refid="build.classpath" />
 		</javac>
 
@@ -97,7 +98,14 @@
 			<zipfileset dir="src" includes="ServerManagement_Icon.png" />
 			<zipfileset dir="src" includes="ServerManagement.ico" />
 		</jar>
-
+	</target>
+	
+	<target name="show_code_signing_status" unless="useCodeSigning">
+		<echo message="NOT using code signing" />
+	</target>
+	
+	<target name="sign_jar" depends="create_jar" if="useCodeSigning">
+		<echo message="Using code signing" />
 		<signjar destDir="${buildPath}" alias="${CodeSigningKeyAlias}" keystore="${CodeSigningKeyStore}" storepass="${CodeSigningKeyStorePassword}" keypass="${CodeSigningKeyPassword}" preservelastmodified="true" tsaurl="${TsaUrl}">
 			<path>
 				<fileset dir="${buildPath}" includes="ServerManagement-${build.version}.jar" />

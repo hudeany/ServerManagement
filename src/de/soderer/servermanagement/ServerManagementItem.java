@@ -8,9 +8,11 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -30,6 +32,7 @@ import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
+import javax.swing.SwingConstants;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -40,6 +43,7 @@ import de.soderer.servermanagement.config.KnownPublicSshKey;
 import de.soderer.servermanagement.config.Server;
 import de.soderer.servermanagement.config.ServerManagementConfiguration;
 import de.soderer.servermanagement.config.User;
+import de.soderer.servermanagement.config.Version;
 import de.soderer.servermanagement.worker.RefreshServerItemStatusWorker;
 import de.soderer.sshkeyformats.AuthorizedKey;
 import de.soderer.sshkeyformats.SshKey;
@@ -51,6 +55,8 @@ import de.soderer.utilities.http.HttpRequest.HttpMethod;
 import de.soderer.utilities.http.HttpResponse;
 import de.soderer.utilities.http.HttpUtilities;
 import de.soderer.utilities.http.ProxyConfiguration;
+import de.soderer.utilities.json.JsonReader;
+import de.soderer.utilities.json.JsonUtilities;
 import de.soderer.utilities.swing.QuestionDialog;
 import de.soderer.utilities.swing.SimpleInputDialog;
 import de.soderer.utilities.swing.SwingColor;
@@ -66,6 +72,7 @@ public class ServerManagementItem extends JPanel {
 	private JButton readAllUsersButton;
 	private JTable managedUserTable;
 	private JTable urlsTable;
+	private JTable versionsTable;
 	private String status = "OK";
 
 	private JButton editUserButton;
@@ -83,10 +90,10 @@ public class ServerManagementItem extends JPanel {
 		this.server = server;
 		this.proxyConfiguration = proxyConfiguration;
 
-		createComponents(serverManagementGui, server);
+		createComponents();
 	}
 
-	private void createComponents(final ServerManagementGui serverManagementGui, final Server server) {
+	private void createComponents() {
 		removeAll();
 
 		addServerNamePanel(server.getName());
@@ -95,18 +102,23 @@ public class ServerManagementItem extends JPanel {
 		}
 
 		if (Utilities.isNotEmpty(server.getManagedUsers())) {
-			addManagedUsersPanel(serverManagementGui, server.getManagedUsers());
+			addManagedUsersPanel(server.getManagedUsers());
 		}
-		addManagedUsersButtons(serverManagementGui);
+		addManagedUsersButtons();
 
 		if (Utilities.isNotEmpty(server.getUrls())) {
 			addUrlsPanel(server.getUrls());
 		}
-		addUrlsButtons(serverManagementGui);
+		addUrlsButtons();
+
+		if (Utilities.isNotEmpty(server.getVersions())) {
+			addVersionsPanel(server.getVersions());
+		}
+		addVersionsButtons();
 
 		validate();
 		updateUI();
-		
+
 		checkButtonStatus();
 	}
 
@@ -166,12 +178,21 @@ public class ServerManagementItem extends JPanel {
 			urlsTable.setBackground(Color.WHITE);
 		}
 
+		if (versionsTable != null) {
+			for (int i = 0; i < versionsTable.getModel().getRowCount(); i++) {
+				if (Utilities.isNotBlank((String) versionsTable.getModel().getValueAt(i, 0))) {
+					versionsTable.getModel().setValueAt("", i, 3);
+				}
+			}
+			versionsTable.setBackground(Color.WHITE);
+		}
+
 		status = "OK";
 	}
 
 	public void setManagedUserCurrentAuthKeys(final String username, final int expectedAuthKeys, final int currentAuthKeys, final int surplusAuthKeys) {
 		if (managedUserTable == null) {
-			createComponents(serverManagementGui, server);
+			createComponents();
 		}
 
 		managedUserTable.clearSelection();
@@ -199,7 +220,6 @@ public class ServerManagementItem extends JPanel {
 		urlsTable.clearSelection();
 		for (int i = 0; i < urlsTable.getModel().getRowCount(); i++) {
 			if (urlsTable.getModel().getValueAt(i, 0).equals(url)) {
-
 				if (timeInSeconds < 0) {
 					urlsTable.getModel().setValueAt("ERROR", i, 1);
 					urlsTable.setBackground(CustomizedColor.RED);
@@ -218,7 +238,22 @@ public class ServerManagementItem extends JPanel {
 		}
 	}
 
-	private void addManagedUsersPanel(final ServerManagementGui serverManagementGui, final List<User> managedUsers) {
+	public void setVersion(final String name, final String versionText) {
+		versionsTable.clearSelection();
+		for (int i = 0; i < versionsTable.getModel().getRowCount(); i++) {
+			if (versionsTable.getModel().getValueAt(i, 0).equals(name)) {
+				versionsTable.getModel().setValueAt(versionText, i, 3);
+				if (versionsTable.getBackground().equals(Color.WHITE)) {
+					versionsTable.setBackground(CustomizedColor.GREEN);
+				} else if ("ERROR".equals(versionText)) {
+					versionsTable.setBackground(CustomizedColor.RED);
+				}
+				break;
+			}
+		}
+	}
+
+	private void addManagedUsersPanel(final List<User> managedUsers) {
 		final JPanel labelPanel = new JPanel();
 		labelPanel.setLayout(new FlowLayout(FlowLayout.LEFT));
 
@@ -232,7 +267,7 @@ public class ServerManagementItem extends JPanel {
 		model.addColumn(LangResources.get("currentAuthKeys"));
 		model.addColumn(LangResources.get("surplusAuthKeys"));
 
-		loadUserData(model, managedUsers);
+		loadUsersData(model, managedUsers);
 
 		managedUserTable = new JTable(model) {
 			private static final long serialVersionUID = 4698367052129394845L;
@@ -249,6 +284,7 @@ public class ServerManagementItem extends JPanel {
 		managedUserTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 		final ListSelectionModel selectionModel = managedUserTable.getSelectionModel();
 		selectionModel.addListSelectionListener(new ListSelectionListener() {
+			@Override
 			public void valueChanged(final ListSelectionEvent e) {
 				checkButtonStatus();
 			}
@@ -261,7 +297,7 @@ public class ServerManagementItem extends JPanel {
 					// Open Edit user on doubleclick
 					try {
 						final JTable table = (JTable) mouseEvent.getSource();
-						editUser(serverManagementGui, table.convertRowIndexToModel(table.rowAtPoint(mouseEvent.getPoint())));
+						editUser( table.convertRowIndexToModel(table.rowAtPoint(mouseEvent.getPoint())));
 					} catch (final Exception e) {
 						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
 					}
@@ -271,17 +307,17 @@ public class ServerManagementItem extends JPanel {
 
 		managedUserTable.getColumnModel().getColumn(1).setPreferredWidth(100);
 		final DefaultTableCellRenderer rightRenderer1 = new DefaultTableCellRenderer();
-		rightRenderer1.setHorizontalAlignment(JLabel.RIGHT);
+		rightRenderer1.setHorizontalAlignment(SwingConstants.RIGHT);
 		managedUserTable.getColumnModel().getColumn(1).setCellRenderer(rightRenderer1);
 
 		managedUserTable.getColumnModel().getColumn(2).setPreferredWidth(100);
 		final DefaultTableCellRenderer rightRenderer2 = new DefaultTableCellRenderer();
-		rightRenderer2.setHorizontalAlignment(JLabel.RIGHT);
+		rightRenderer2.setHorizontalAlignment(SwingConstants.RIGHT);
 		managedUserTable.getColumnModel().getColumn(2).setCellRenderer(rightRenderer2);
 
 		managedUserTable.getColumnModel().getColumn(3).setPreferredWidth(100);
 		final DefaultTableCellRenderer rightRenderer3 = new DefaultTableCellRenderer();
-		rightRenderer3.setHorizontalAlignment(JLabel.RIGHT);
+		rightRenderer3.setHorizontalAlignment(SwingConstants.RIGHT);
 		managedUserTable.getColumnModel().getColumn(3).setCellRenderer(rightRenderer3);
 
 		managedUserTable.setBorder(BorderFactory.createLineBorder(Color.BLACK));
@@ -311,7 +347,7 @@ public class ServerManagementItem extends JPanel {
 		model.addColumn(LangResources.get("url"));
 		model.addColumn(LangResources.get("time"));
 
-		loadUrlData(model, urls);
+		loadUrlsData(model, urls);
 
 		urlsTable = new JTable(model) {
 			private static final long serialVersionUID = -5447166999136247378L;
@@ -327,6 +363,7 @@ public class ServerManagementItem extends JPanel {
 
 		final ListSelectionModel selectionModel = urlsTable.getSelectionModel();
 		selectionModel.addListSelectionListener(new ListSelectionListener() {
+			@Override
 			public void valueChanged(final ListSelectionEvent e) {
 				checkButtonStatus();
 			}
@@ -334,7 +371,7 @@ public class ServerManagementItem extends JPanel {
 
 		urlsTable.getColumnModel().getColumn(1).setPreferredWidth(100);
 		final DefaultTableCellRenderer rightRenderer1 = new DefaultTableCellRenderer();
-		rightRenderer1.setHorizontalAlignment(JLabel.RIGHT);
+		rightRenderer1.setHorizontalAlignment(SwingConstants.RIGHT);
 		urlsTable.getColumnModel().getColumn(1).setCellRenderer(rightRenderer1);
 
 		urlsTable.setBorder(BorderFactory.createLineBorder(Color.BLACK));
@@ -358,7 +395,72 @@ public class ServerManagementItem extends JPanel {
 		add(Box.createRigidArea(new Dimension(5, 5)));
 	}
 
-	private void addUrlsButtons(final ServerManagementGui serverManagementGui) {
+	private void addVersionsPanel(final List<Version> urls) {
+		final DefaultTableModel model = new DefaultTableModel();
+		model.addColumn(LangResources.get("versionName"));
+		model.addColumn(LangResources.get("location"));
+		model.addColumn(LangResources.get("path"));
+		model.addColumn(LangResources.get("version"));
+
+		loadVersionsData(model, urls);
+
+		versionsTable = new JTable(model) {
+			private static final long serialVersionUID = -5447166999136247378L;
+			@Override
+			public void changeSelection(final int rowIndex, final int columnIndex, final boolean toggle, final boolean extend) {
+				// Always toggle on single selection
+				super.changeSelection(rowIndex, columnIndex, !extend, extend);
+			}
+		};
+
+		versionsTable.setDefaultEditor(Object.class, null);
+		versionsTable.getColumnModel().getColumn(0).setPreferredWidth(50);
+
+		versionsTable.getColumnModel().getColumn(1).setPreferredWidth(200);
+		final DefaultTableCellRenderer rightRenderer1 = new DefaultTableCellRenderer();
+		rightRenderer1.setHorizontalAlignment(SwingConstants.LEFT);
+		versionsTable.getColumnModel().getColumn(1).setCellRenderer(rightRenderer1);
+
+		versionsTable.getColumnModel().getColumn(2).setPreferredWidth(200);
+		final DefaultTableCellRenderer rightRenderer2 = new DefaultTableCellRenderer();
+		rightRenderer2.setHorizontalAlignment(SwingConstants.LEFT);
+		versionsTable.getColumnModel().getColumn(2).setCellRenderer(rightRenderer2);
+
+		versionsTable.getColumnModel().getColumn(3).setPreferredWidth(50);
+		final DefaultTableCellRenderer rightRenderer3 = new DefaultTableCellRenderer();
+		rightRenderer3.setHorizontalAlignment(SwingConstants.LEFT);
+		versionsTable.getColumnModel().getColumn(3).setCellRenderer(rightRenderer3);
+
+		final ListSelectionModel selectionModel = versionsTable.getSelectionModel();
+		selectionModel.addListSelectionListener(new ListSelectionListener() {
+			@Override
+			public void valueChanged(final ListSelectionEvent e) {
+				checkButtonStatus();
+			}
+		});
+
+		versionsTable.setBorder(BorderFactory.createLineBorder(Color.BLACK));
+		versionsTable.setRowHeight(20);
+
+		if (versionsTable.getPreferredSize().getHeight() < 65) {
+			versionsTable.setPreferredScrollableViewportSize(versionsTable.getPreferredSize());
+		} else {
+			versionsTable.setPreferredScrollableViewportSize(new Dimension((int) versionsTable.getPreferredSize().getWidth(), 65));
+		}
+
+		final JScrollPane urlsScrollPane = new JScrollPane(versionsTable);
+		urlsScrollPane.setBorder(BorderFactory.createEmptyBorder());
+
+		final JPanel versionsTablePanel = new JPanel();
+		versionsTablePanel.setLayout(new BorderLayout());
+		versionsTablePanel.add(urlsScrollPane);
+
+		add(versionsTablePanel);
+
+		add(Box.createRigidArea(new Dimension(5, 5)));
+	}
+
+	private void addUrlsButtons() {
 		final JPanel buttonPanel = new JPanel();
 		buttonPanel.setLayout(new FlowLayout(FlowLayout.LEFT));
 
@@ -371,7 +473,7 @@ public class ServerManagementItem extends JPanel {
 					if (Utilities.isNotBlank(url)) {
 						server.getUrls().add(url);
 
-						createComponents(serverManagementGui, server);
+						createComponents();
 
 						checkButtonStatus();
 						serverManagementGui.signalUnsavedChanges();
@@ -397,7 +499,7 @@ public class ServerManagementItem extends JPanel {
 							server.getUrls().remove(urlToRemove);
 						}
 
-						createComponents(serverManagementGui, server);
+						createComponents();
 
 						checkButtonStatus();
 						serverManagementGui.signalUnsavedChanges();
@@ -412,7 +514,87 @@ public class ServerManagementItem extends JPanel {
 		add(buttonPanel);
 	}
 
-	private void loadUrlData(final DefaultTableModel model, final List<String> urls) {
+	private void addVersionsButtons() {
+		final JPanel buttonPanel = new JPanel();
+		buttonPanel.setLayout(new FlowLayout(FlowLayout.LEFT));
+
+		final JButton addUrlButton = new JButton(LangResources.get("addVersion"));
+		addUrlButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(final ActionEvent event) {
+				try {
+					final String url = new SimpleInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addUrl"), LangResources.get("addUrl")).open();
+					if (Utilities.isNotBlank(url)) {
+						server.getUrls().add(url);
+
+						createComponents();
+
+						checkButtonStatus();
+						serverManagementGui.signalUnsavedChanges();
+					}
+				} catch (final Exception e) {
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+				}
+			}
+		});
+		buttonPanel.add(addUrlButton);
+
+		final JButton removeUrlButton = new JButton(LangResources.get("removeVersion"));
+		removeUrlButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(final ActionEvent event) {
+				try {
+					if (versionsTable.getSelectedColumnCount() > 0
+							&& new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("removeUrl"), LangResources.get("removeUrl"), LangResources.get("yes"), LangResources.get("cancel")).open() == 0) {
+
+						final int[] selectedRows = versionsTable.getSelectedRows();
+						for (int i = selectedRows.length - 1; i >= 0; i--) {
+							final String urlToRemove = (String) ((DefaultTableModel) versionsTable.getModel()).getValueAt(selectedRows[i], 0);
+							server.getUrls().remove(urlToRemove);
+						}
+
+						createComponents();
+
+						checkButtonStatus();
+						serverManagementGui.signalUnsavedChanges();
+					}
+				} catch (final Exception e) {
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+				}
+			}
+		});
+		buttonPanel.add(removeUrlButton);
+
+		final JButton readVersionsButton = new JButton(LangResources.get("readVersions"));
+		readVersionsButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(final ActionEvent event) {
+				try {
+					if (versionsTable.getSelectedColumnCount() > 0
+							&& new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("readVersions"), LangResources.get("readVersions"), LangResources.get("yes"), LangResources.get("cancel")).open() == 0) {
+
+						final int[] selectedRows = versionsTable.getSelectedRows();
+						for (int i = selectedRows.length - 1; i >= 0; i--) {
+							final String urlToRemove = (String) ((DefaultTableModel) versionsTable.getModel()).getValueAt(selectedRows[i], 0);
+							server.getUrls().remove(urlToRemove);
+						}
+
+						createComponents();
+
+						checkButtonStatus();
+						serverManagementGui.signalUnsavedChanges();
+					}
+				} catch (final Exception e) {
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+				}
+			}
+		});
+		buttonPanel.add(readVersionsButton);
+
+		add(buttonPanel);
+	}
+
+	private static void loadUrlsData(final DefaultTableModel model, final List<String> urls) {
 		for (int i = model.getRowCount() - 1; i >= 0; i--) {
 			model.removeRow(i);
 		}
@@ -421,7 +603,7 @@ public class ServerManagementItem extends JPanel {
 		}
 	}
 
-	private void loadUserData(final DefaultTableModel model, final List<User> managedUsers) {
+	private static void loadUsersData(final DefaultTableModel model, final List<User> managedUsers) {
 		for (int i = model.getRowCount() - 1; i >= 0; i--) {
 			model.removeRow(i);
 		}
@@ -430,7 +612,16 @@ public class ServerManagementItem extends JPanel {
 		}
 	}
 
-	private void addManagedUsersButtons(final ServerManagementGui serverManagementGui) {
+	private static void loadVersionsData(final DefaultTableModel model, final List<Version> versions) {
+		for (int i = model.getRowCount() - 1; i >= 0; i--) {
+			model.removeRow(i);
+		}
+		for (final Version version : versions) {
+			model.addRow(new String[] { version.getName(), version.getLocation(), version.getPath() });
+		}
+	}
+
+	private void addManagedUsersButtons() {
 		final JPanel buttonPanel = new JPanel();
 		buttonPanel.setLayout(new FlowLayout(FlowLayout.LEFT));
 
@@ -487,7 +678,7 @@ public class ServerManagementItem extends JPanel {
 					}
 
 					if (changesHappened) {
-						createComponents(serverManagementGui, server);
+						createComponents();
 						serverManagementGui.signalUnsavedChanges();
 					}
 				} catch (final Exception e) {
@@ -502,7 +693,7 @@ public class ServerManagementItem extends JPanel {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
 				try {
-					editUser(serverManagementGui, managedUserTable.getSelectedRows()[0]);
+					editUser(managedUserTable.getSelectedRows()[0]);
 				} catch (final Exception e) {
 					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
 				}
@@ -542,7 +733,7 @@ public class ServerManagementItem extends JPanel {
 		add(buttonPanel);
 	}
 
-	private KnownPublicSshKey getKeyFromKnownKeysByKeyId(final String keyId, final List<KnownPublicSshKey> knownPublicSshKeys) {
+	private static KnownPublicSshKey getKeyFromKnownKeysByKeyId(final String keyId, final List<KnownPublicSshKey> knownPublicSshKeys) {
 		for (final KnownPublicSshKey knownPublicSshKey : knownPublicSshKeys) {
 			if (knownPublicSshKey.getKeyId().equals(keyId)) {
 				return knownPublicSshKey;
@@ -551,7 +742,7 @@ public class ServerManagementItem extends JPanel {
 		return null;
 	}
 
-	private void editUser(final ServerManagementGui serverManagementGui, final int clickedRow) throws Exception {
+	private void editUser(final int clickedRow) throws Exception {
 		final User user = server.getManagedUsers().get(clickedRow);
 		final String username = user.getUsername();
 
@@ -689,14 +880,14 @@ public class ServerManagementItem extends JPanel {
 				}
 
 				serverManagementGui.signalUnsavedChanges();
-				loadUserData((DefaultTableModel) managedUserTable.getModel(), server.getManagedUsers());
+				loadUsersData((DefaultTableModel) managedUserTable.getModel(), server.getManagedUsers());
 			} catch (final Exception e) {
 				new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
 			}
 		}
 	}
 
-	private String getAdminKeyHash(final File sshAccessPrivateKeyFile, final char[] sshAccessPassword) throws Exception {
+	private static String getAdminKeyHash(final File sshAccessPrivateKeyFile, final char[] sshAccessPassword) throws Exception {
 		if (sshAccessPrivateKeyFile != null) {
 			try (InputStream inputStream = new FileInputStream(sshAccessPrivateKeyFile)) {
 				SshKey sshKey;
@@ -712,7 +903,7 @@ public class ServerManagementItem extends JPanel {
 		}
 	}
 
-	private boolean compareAuthorizedKeysLists(final List<AuthorizedKey> existingAuthorizedKeys, final ArrayList<AuthorizedKey> newAuthorizedKeys) throws Exception {
+	private static boolean compareAuthorizedKeysLists(final List<AuthorizedKey> existingAuthorizedKeys, final ArrayList<AuthorizedKey> newAuthorizedKeys) throws Exception {
 		if (existingAuthorizedKeys.size() != newAuthorizedKeys.size()) {
 			return false;
 		} else {
@@ -748,7 +939,7 @@ public class ServerManagementItem extends JPanel {
 
 	private void checkButtonStatus() {
 		readAllUsersButton.setEnabled(server.getSshAdmin() != null);
-		
+
 		if (managedUserTable != null) {
 			if (managedUserTable.getSelectedRowCount() == 1) {
 				final String username = (String) managedUserTable.getModel().getValueAt(managedUserTable.getSelectedRow(), 0);
@@ -801,6 +992,15 @@ public class ServerManagementItem extends JPanel {
 				}
 			}
 			urlsTable.setBackground(Color.WHITE);
+		}
+
+		if (versionsTable != null) {
+			for (int i = 0; i < versionsTable.getModel().getRowCount(); i++) {
+				if (Utilities.isNotBlank((String) versionsTable.getModel().getValueAt(i, 0))) {
+					versionsTable.getModel().setValueAt("", i, 3);
+				}
+			}
+			versionsTable.setBackground(Color.WHITE);
 		}
 
 		status = "OK";
@@ -904,6 +1104,50 @@ public class ServerManagementItem extends JPanel {
 					status = "ERROR";
 				}
 
+			}
+
+			// Refresh versions status
+			for (final Version version : server.getVersions()) {
+				String data = null;
+				if (version.getLocation().toLowerCase().startsWith("http://")
+						|| version.getLocation().toLowerCase().startsWith("https://")) {
+					try {
+						final HttpRequest request = new HttpRequest(HttpMethod.GET, version.getLocation());
+						request.setCheckSslCertificates(false);
+						final HttpResponse response = HttpUtilities.executeHttpRequest(request, proxyConfiguration.getProxy(request.getUrl()));
+						if (response.getHttpCode() == 200) {
+							data = response.getContent();
+						} else {
+							setVersion(version.getName(), "ERROR");
+						}
+					} catch (@SuppressWarnings("unused") final Exception e) {
+						setVersion(version.getName(), "ERROR");
+						status = "ERROR";
+					}
+				} else {
+					setVersion(version.getName(), "ERROR");
+					status = "ERROR";
+				}
+
+				if (data != null) {
+					if (version.getPath().toLowerCase().startsWith("json:")) {
+						try (final JsonReader jsonReader = new JsonReader(new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)))) {
+							JsonUtilities.readUpToJsonPath(jsonReader, version.getPath().substring(5));
+							jsonReader.readNextJsonNode();
+							final String versionText = (String) jsonReader.getCurrentObject();
+							setVersion(version.getName(), versionText);
+						} catch (@SuppressWarnings("unused") final Exception e) {
+							setVersion(version.getName(), "ERROR");
+							status = "ERROR";
+						}
+					} else {
+						setVersion(version.getName(), "ERROR");
+						status = "ERROR";
+					}
+				} else {
+					setVersion(version.getName(), "ERROR");
+					status = "ERROR";
+				}
 			}
 		} catch (final Exception e) {
 			e.printStackTrace();

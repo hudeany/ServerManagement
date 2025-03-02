@@ -37,27 +37,27 @@ import de.soderer.utilities.swing.SwingColor;
 
 public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 	private static final long serialVersionUID = -1512808290727321131L;
-	
+
 	private JTable table;
 	private final JButton removePublicKeysButton;
 
-	public KnownPublicKeysDialog(final ServerManagementGui serverManagementGui, final String title, ServerManagementConfiguration serverManagementConfiguration) {
+	public KnownPublicKeysDialog(final ServerManagementGui serverManagementGui, final String title, final ServerManagementConfiguration serverManagementConfiguration) {
 		super(serverManagementGui, title);
-		
+
 		final KnownPublicKeysDialog dialog = this;
 
 		setResizable(false);
 
 		final JPanel panel = new JPanel();
 		panel.setLayout(new BoxLayout(panel, BoxLayout.PAGE_AXIS));
-		
-		DefaultTableModel model = new DefaultTableModel();
+
+		final DefaultTableModel model = new DefaultTableModel();
 		model.addColumn("Keytype");
 		model.addColumn("Keylength");
 		model.addColumn("Keyname");
 		model.addColumn("ID/Comment");
 		model.addColumn("Keydata");
-				
+
 		loadPublicKeysInTable(model, serverManagementConfiguration);
 
 		table = new JTable(model);
@@ -67,16 +67,17 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 		table.getColumnModel().getColumn(2).setPreferredWidth(40);
 		table.getColumnModel().getColumn(3).setPreferredWidth(40);
 		table.getColumnModel().getColumn(4).setPreferredWidth(120);
-		
+
 		table.setBackground(Color.LIGHT_GRAY);
 
 		final JScrollPane tableScrollpane = new JScrollPane(table);
 		tableScrollpane.setPreferredSize(new Dimension(700, 250));
-		
+
 		table.setDefaultEditor(Object.class, null);
-		
+
 		table.getSelectionModel().addListSelectionListener(new ListSelectionListener() {
-			public void valueChanged(ListSelectionEvent e) {
+			@Override
+			public void valueChanged(final ListSelectionEvent e) {
 				checkButtonStatus();
 			}
 		});
@@ -99,47 +100,47 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
 				final String homePath = System.getProperty("user.home") + File.separator + ".ssh" + File.separator;
-				File newPublicKeyFile = selectFile(homePath, LangResources.get("addPublicKey"));
+				final File newPublicKeyFile = selectFile(homePath, LangResources.get("addPublicKey"));
 				if (newPublicKeyFile != null) {
 					try (FileInputStream fileInputStream = new FileInputStream(newPublicKeyFile)) {
-						List<SshKey> keys = SshKeyReader.readAllPublicKeys(fileInputStream);
-						for (SshKey key : keys) {
-							String authKeyString = key.encodePublicKeyForAuthorizedKeys();
-							String[] authKeyStringParts = authKeyString.split(" ");
-							
-							for (KnownPublicSshKey existingKey : serverManagementConfiguration.getKnownPublicSshKeys()) {
+						final List<SshKey> keys = SshKeyReader.readAllPublicKeys(fileInputStream);
+						for (final SshKey key : keys) {
+							final String authKeyString = key.encodePublicKeyForAuthorizedKeys();
+							final String[] authKeyStringParts = authKeyString.split(" ");
+
+							for (final KnownPublicSshKey existingKey : serverManagementConfiguration.getKnownPublicSshKeys()) {
 								if (existingKey.getKey().equals(authKeyStringParts[1])) {
 									new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\nKey already exists").setBackgroundColor(SwingColor.LightRed).open();
 									return;
 								}
 							}
-							
-							
-							KnownPublicSshKey newKey = new KnownPublicSshKey();
+
+
+							final KnownPublicSshKey newKey = new KnownPublicSshKey();
 							newKey.setKeyTypeString(authKeyStringParts[0]);
 							newKey.setKey(authKeyStringParts[1]);
-							
-							String keyId = new SimpleInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addPublicKey"), LangResources.get("enterKeyId")).open();
+
+							final String keyId = new SimpleInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addPublicKey"), LangResources.get("enterKeyId")).open();
 							if (Utilities.isNotBlank(keyId)) {
 								newKey.setKeyId(keyId);
 							}
-							
-							String keyName = new SimpleInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addPublicKey"), LangResources.get("enterKeyName")).open();
+
+							final String keyName = new SimpleInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addPublicKey"), LangResources.get("enterKeyName")).open();
 							if (Utilities.isNotBlank(keyName)) {
 								newKey.setName(keyName);
 								serverManagementConfiguration.getKnownPublicSshKeys().add(newKey);
 							}
 						}
-					} catch (Exception e) {
+					} catch (final Exception e) {
 						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
 						return;
 					}
 				}
-				
+
 				loadPublicKeysInTable(model, serverManagementConfiguration);
-				
+
 				returnValue = true;
-				
+
 				serverManagementGui.signalUnsavedChanges();
 			}
 		});
@@ -154,21 +155,21 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 				if (new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, LangResources.get("removePublicKeys") + ": " + table.getSelectedRows().length, LangResources.get("yes"), LangResources.get("no")).open() != 0) {
 					return;
 				}
-				for (int rowIndex : table.getSelectedRows()) {
-					String keyId = (String) table.getModel().getValueAt(rowIndex, 3);
+				for (final int rowIndex : table.getSelectedRows()) {
+					final String keyId = (String) table.getModel().getValueAt(rowIndex, 3);
 					serverManagementConfiguration.getKnownPublicSshKeys().remove(serverManagementConfiguration.getKnownPublicSshKeyByKeyId(keyId));
-					
-					for (Server server : serverManagementConfiguration.getServers()) {
-						for (User user : server.getManagedUsers()) {
+
+					for (final Server server : serverManagementConfiguration.getServers()) {
+						for (final User user : server.getManagedUsers()) {
 							user.getAuthorized_key_ids().remove(keyId);
 						}
 					}
 				}
-				
+
 				loadPublicKeysInTable(model, serverManagementConfiguration);
-				
+
 				returnValue = true;
-				
+
 				serverManagementGui.signalUnsavedChanges();
 			}
 		});
@@ -189,7 +190,7 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 		buttonPanel2.add(Box.createRigidArea(new Dimension(5, 0)));
 
 		panel.add(Box.createRigidArea(new Dimension(0, 5)));
-		
+
 		panel.add(tablePanel);
 
 		panel.add(buttonPanel2);
@@ -201,46 +202,46 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 		setLocationRelativeTo(serverManagementGui);
 
 		getRootPane().setDefaultButton(closeButton);
-		
+
 		checkButtonStatus();
 	}
 
-	private void loadPublicKeysInTable(DefaultTableModel model, ServerManagementConfiguration serverManagementConfiguration) {
+	private static void loadPublicKeysInTable(final DefaultTableModel model, final ServerManagementConfiguration serverManagementConfiguration) {
 		// Remove all existing rows from table
 		for (int i = model.getRowCount() - 1; i >= 0; i--) {
 			model.removeRow(i);
 		}
-		
+
 		// Fill table with current data
-		for (KnownPublicSshKey knownPublicSshKey : serverManagementConfiguration.getKnownPublicSshKeys()) {
+		for (final KnownPublicSshKey knownPublicSshKey : serverManagementConfiguration.getKnownPublicSshKeys()) {
 			String keyType;
 			int keyLength;
 			try {
 				// Using fix KeyType.RSA. Real keytype is detected afterwards.
-				List<SshKey> keys = SshKeyReader.readAllPublicKeys(new ByteArrayInputStream(knownPublicSshKey.getKey().getBytes(StandardCharsets.UTF_8)));
-				SshKey key = keys.get(0);
-				Algorithm algorithm = key.getAlgorithm();
+				final List<SshKey> keys = SshKeyReader.readAllPublicKeys(new ByteArrayInputStream(knownPublicSshKey.getKey().getBytes(StandardCharsets.UTF_8)));
+				final SshKey key = keys.get(0);
+				final Algorithm algorithm = key.getAlgorithm();
 				keyType = algorithm.getSshAlgorithmId();
 				if (Algorithm.RSA == algorithm) {
 					keyLength = key.getKeyStrength();
 				} else {
 					keyLength = 0;
 				}
-			} catch (@SuppressWarnings("unused") Exception e) {
+			} catch (@SuppressWarnings("unused") final Exception e) {
 				keyType = "Unknown key type";
 				keyLength = 0;
 			}
-			
+
 			model.addRow(new Object[]{
-				keyType,
-				keyLength > 0 ? Integer.toString(keyLength) : "",
-				knownPublicSshKey.getName(),
-				knownPublicSshKey.getKeyId(),
-				Utilities.shortenStringToMaxLengthCutMiddle(knownPublicSshKey.getKey(), 30)
+					keyType,
+					keyLength > 0 ? Integer.toString(keyLength) : "",
+							knownPublicSshKey.getName(),
+							knownPublicSshKey.getKeyId(),
+							Utilities.shortenStringToMaxLengthCutMiddle(knownPublicSshKey.getKey(), 30)
 			});
 		}
 	}
-	
+
 	private void checkButtonStatus() {
 		if (table.getSelectedRows().length > 0) {
 			removePublicKeysButton.setEnabled(true);
@@ -248,7 +249,7 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 			removePublicKeysButton.setEnabled(false);
 		}
 	}
-	
+
 	private File selectFile(String basePath, final String text) {
 		if (Utilities.isBlank(basePath)) {
 			basePath = System.getProperty("user.home");

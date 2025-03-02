@@ -53,7 +53,7 @@ public class AdminDialog extends ModalDialog<Integer> {
 		setResizable(false);
 
 		createComponents(this);
-		
+
 		returnValue = 1;
 	}
 
@@ -113,19 +113,19 @@ public class AdminDialog extends ModalDialog<Integer> {
 			@Override
 			public void keyReleased(final KeyEvent event) {
 				privateKeyFilePath = privateKeyFilePathField.getText();
-				
+
 				privateKeyFilePath = new File(privateKeyFilePath).getAbsolutePath();
 				if (privateKeyFilePath.startsWith(System.getProperty("user.home"))) {
 					privateKeyFilePath = privateKeyFilePath.replace(System.getProperty("user.home"), "$HOME");
 					privateKeyFilePathField.setText(privateKeyFilePath);
 				}
-				
+
 				checkButtonStatus();
 			}
 		});
 		privateKeyFilePathPanel.add(privateKeyFilePathField);
 
-		JButton privateKeyFileButton = new JButton("...");
+		final JButton privateKeyFileButton = new JButton("...");
 		privateKeyFileButton.setPreferredSize(new Dimension(20, privateKeyFilePathField.getPreferredSize().height));
 		privateKeyFileButton.addActionListener(new ActionListener() {
 			@Override
@@ -135,13 +135,13 @@ public class AdminDialog extends ModalDialog<Integer> {
 					if (trustStoreFile != null) {
 						privateKeyFilePathField.setText(trustStoreFile.getAbsolutePath());
 						privateKeyFilePath = privateKeyFilePathField.getText();
-						
+
 						privateKeyFilePath = new File(privateKeyFilePath).getAbsolutePath();
 						if (privateKeyFilePath.startsWith(System.getProperty("user.home"))) {
 							privateKeyFilePath = privateKeyFilePath.replace(System.getProperty("user.home"), "$HOME");
 							privateKeyFilePathField.setText(privateKeyFilePath);
 						}
-						
+
 						checkButtonStatus();
 					}
 				} catch (final Exception e) {
@@ -231,24 +231,24 @@ public class AdminDialog extends ModalDialog<Integer> {
 	public char[] getPassword() {
 		return password;
 	}
-	
+
 	public String getPrivateKeyFilePath() {
 		return privateKeyFilePath;
 	}
 
-	public AdminDialog setUsername(String username) {
+	public AdminDialog setUsername(final String username) {
 		this.username = username;
 		userField.setText(username);
 		return this;
 	}
 
-	public AdminDialog setPassword(char[] password) {
+	public AdminDialog setPassword(final char[] password) {
 		this.password = password;
 		passwordField.setText(new String(password));
 		return this;
 	}
-	
-	public AdminDialog setPrivateKeyFilePath(String privateKeyFilePath) {
+
+	public AdminDialog setPrivateKeyFilePath(final String privateKeyFilePath) {
 		this.privateKeyFilePath = privateKeyFilePath;
 		privateKeyFilePathField.setText(privateKeyFilePath);
 		return this;
@@ -281,8 +281,8 @@ public class AdminDialog extends ModalDialog<Integer> {
 			return MessageFormat.format(pattern, arguments);
 		}
 	}
-	
-	private File selectFile(String basePath, final String text) {
+
+	private File selectFile(String basePath, final String selectFileDialogText) {
 		if (Utilities.isBlank(basePath)) {
 			basePath = System.getProperty("user.home");
 		} else if (basePath.contains(File.separator)) {
@@ -290,7 +290,7 @@ public class AdminDialog extends ModalDialog<Integer> {
 		}
 
 		final JFileChooser fileChooser = new JFileChooser(basePath);
-		fileChooser.setDialogTitle(ServerManagement.APPLICATION_NAME + " " + text);
+		fileChooser.setDialogTitle(ServerManagement.APPLICATION_NAME + " " + selectFileDialogText);
 		if (JFileChooser.APPROVE_OPTION == fileChooser.showOpenDialog(this)) {
 			return fileChooser.getSelectedFile();
 		} else {

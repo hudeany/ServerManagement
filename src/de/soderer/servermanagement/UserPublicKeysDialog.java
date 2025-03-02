@@ -416,6 +416,7 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 	}
 
 	private void checkButtonStatus() {
+		// nothing to do
 	}
 
 	private static String getI18NString(final String resourceKey, final Object... arguments) {

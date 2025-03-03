@@ -64,6 +64,7 @@ import de.soderer.utilities.http.ProxyConfiguration;
 import de.soderer.utilities.json.JsonReader;
 import de.soderer.utilities.json.JsonUtilities;
 import de.soderer.utilities.remote.SftpConnection;
+import de.soderer.utilities.swing.MultiInputDialog;
 import de.soderer.utilities.swing.QuestionDialog;
 import de.soderer.utilities.swing.SimpleInputDialog;
 import de.soderer.utilities.swing.SwingColor;
@@ -82,8 +83,9 @@ public class ServerManagementItem extends JPanel {
 	private JTable versionsTable;
 	private String status = "OK";
 
-	private JButton editUserButton;
 	private JButton removeUserButton;
+	private JButton removeUrlButton;
+	private JButton removeVersionButton;
 
 	private RefreshServerItemStatusWorker worker;
 
@@ -304,7 +306,7 @@ public class ServerManagementItem extends JPanel {
 					// Open Edit user on doubleclick
 					try {
 						final JTable table = (JTable) mouseEvent.getSource();
-						editUser( table.convertRowIndexToModel(table.rowAtPoint(mouseEvent.getPoint())));
+						editUser(table.convertRowIndexToModel(table.rowAtPoint(mouseEvent.getPoint())));
 					} catch (final Exception e) {
 						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
 					}
@@ -342,6 +344,7 @@ public class ServerManagementItem extends JPanel {
 
 		final JPanel managedUsersTablePanel = new JPanel();
 		managedUsersTablePanel.setLayout(new BorderLayout());
+
 		managedUsersTablePanel.add(pane);
 
 		add(managedUsersTablePanel);
@@ -446,6 +449,48 @@ public class ServerManagementItem extends JPanel {
 			}
 		});
 
+		versionsTable.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseClicked(final MouseEvent mouseEvent) {
+				if (mouseEvent.getClickCount() == 2) {
+					// Open Edit version on doubleclick
+					try {
+						final JTable table = (JTable) mouseEvent.getSource();
+						final int rowIndex = (table.convertRowIndexToModel(table.rowAtPoint(mouseEvent.getPoint())));
+
+						final String versionName = (String) table.getModel().getValueAt(rowIndex, 0);
+
+						final List<String> dialogResult = new MultiInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("editVersion"), LangResources.get("editVersion"),
+								LangResources.get("versionName"),
+								LangResources.get("location"),
+								LangResources.get("path"))
+								.setDefaultTexts(new String[] {
+										versionName,
+										(String) table.getModel().getValueAt(rowIndex, 1),
+										(String) table.getModel().getValueAt(rowIndex, 2)})
+								.open();
+						if (dialogResult != null) {
+							for (final Version version : server.getVersions()) {
+								if (versionName.equals(version.getName())) {
+									version.setName(dialogResult.get(0));
+									version.setLocation(dialogResult.get(1));
+									version.setPath(dialogResult.get(2));
+									break;
+								}
+							}
+
+							createComponents();
+
+							checkButtonStatus();
+							serverManagementGui.signalUnsavedChanges();
+						}
+					} catch (final Exception e) {
+						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+					}
+				}
+			}
+		});
+
 		versionsTable.setBorder(BorderFactory.createLineBorder(Color.BLACK));
 		versionsTable.setRowHeight(20);
 
@@ -492,7 +537,7 @@ public class ServerManagementItem extends JPanel {
 		});
 		buttonPanel.add(addUrlButton);
 
-		final JButton removeUrlButton = new JButton(LangResources.get("removeUrl"));
+		removeUrlButton = new JButton(LangResources.get("removeUrl"));
 		removeUrlButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -525,14 +570,18 @@ public class ServerManagementItem extends JPanel {
 		final JPanel buttonPanel = new JPanel();
 		buttonPanel.setLayout(new FlowLayout(FlowLayout.LEFT));
 
-		final JButton addUrlButton = new JButton(LangResources.get("addVersion"));
-		addUrlButton.addActionListener(new ActionListener() {
+		final JButton addVersionButton = new JButton(LangResources.get("addVersion"));
+		addVersionButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
 				try {
-					final String url = new SimpleInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addUrl"), LangResources.get("addUrl")).open();
-					if (Utilities.isNotBlank(url)) {
-						server.getUrls().add(url);
+					final List<String> dialogResult = new MultiInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addVersion"), LangResources.get("addVersion"),
+							LangResources.get("versionName"),
+							LangResources.get("location"),
+							LangResources.get("path")).open();
+					if (dialogResult != null) {
+						final Version newVersion = new Version().setName(dialogResult.get(0)).setLocation(dialogResult.get(1)).setPath(dialogResult.get(2));
+						server.getVersions().add(newVersion);
 
 						createComponents();
 
@@ -544,23 +593,24 @@ public class ServerManagementItem extends JPanel {
 				}
 			}
 		});
-		buttonPanel.add(addUrlButton);
+		buttonPanel.add(addVersionButton);
 
-		final JButton removeUrlButton = new JButton(LangResources.get("removeVersion"));
-		removeUrlButton.addActionListener(new ActionListener() {
+		removeVersionButton = new JButton(LangResources.get("removeVersion"));
+		removeVersionButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
 				try {
-					if (versionsTable.getSelectedColumnCount() > 0
-							&& new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("removeUrl"), LangResources.get("removeUrl"), LangResources.get("yes"), LangResources.get("cancel")).open() == 0) {
-
-						final int[] selectedRows = versionsTable.getSelectedRows();
-						for (int i = selectedRows.length - 1; i >= 0; i--) {
-							final String urlToRemove = (String) ((DefaultTableModel) versionsTable.getModel()).getValueAt(selectedRows[i], 0);
-							server.getUrls().remove(urlToRemove);
+					final String versionName = (String) versionsTable.getModel().getValueAt(versionsTable.getSelectedRow(), 0);
+					if (Utilities.isNotBlank(versionName)
+							&& new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("removeVersion"), LangResources.get("removeVersionQuestion", versionName), LangResources.get("ok"), LangResources.get("cancel")).open() == 0) {
+						for (int i = 0; i < server.getVersions().size(); i++) {
+							if (server.getVersions().get(i).getName().equals(versionName)) {
+								server.getVersions().remove(i);
+								break;
+							}
 						}
 
-						createComponents();
+						((DefaultTableModel) versionsTable.getModel()).removeRow(versionsTable.getSelectedRow());
 
 						checkButtonStatus();
 						serverManagementGui.signalUnsavedChanges();
@@ -570,8 +620,9 @@ public class ServerManagementItem extends JPanel {
 				}
 			}
 		});
-		buttonPanel.add(removeUrlButton);
+		buttonPanel.add(removeVersionButton);
 
+		// TODO
 		final JButton readVersionsButton = new JButton(LangResources.get("readVersions"));
 		readVersionsButton.addActionListener(new ActionListener() {
 			@Override
@@ -694,20 +745,6 @@ public class ServerManagementItem extends JPanel {
 			}
 		});
 		buttonPanel.add(readAllUsersButton);
-
-		editUserButton = new JButton(LangResources.get("editUser"));
-		editUserButton.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(final ActionEvent event) {
-				try {
-					editUser(managedUserTable.getSelectedRows()[0]);
-				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
-				}
-			}
-		});
-		editUserButton.setEnabled(false);
-		buttonPanel.add(editUserButton);
 
 		removeUserButton = new JButton(LangResources.get("removeUser"));
 		removeUserButton.addActionListener(new ActionListener() {
@@ -948,13 +985,27 @@ public class ServerManagementItem extends JPanel {
 		readAllUsersButton.setEnabled(server.getSshAdmin() != null);
 
 		if (managedUserTable != null) {
-			if (managedUserTable.getSelectedRowCount() == 1) {
+			if (managedUserTable.getSelectedRowCount() > 0) {
 				final String username = (String) managedUserTable.getModel().getValueAt(managedUserTable.getSelectedRow(), 0);
-				editUserButton.setEnabled(Utilities.isNotBlank(username));
 				removeUserButton.setEnabled(Utilities.isNotBlank(username));
 			} else {
-				editUserButton.setEnabled(false);
 				removeUserButton.setEnabled(false);
+			}
+		}
+
+		if (urlsTable != null) {
+			if (urlsTable.getSelectedRowCount() > 0) {
+				removeUrlButton.setEnabled(true);
+			} else {
+				removeUrlButton.setEnabled(false);
+			}
+		}
+
+		if (versionsTable != null) {
+			if (versionsTable.getSelectedRowCount() > 0) {
+				removeVersionButton.setEnabled(true);
+			} else {
+				removeVersionButton.setEnabled(false);
 			}
 		}
 	}

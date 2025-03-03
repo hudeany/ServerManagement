@@ -9,8 +9,10 @@ import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
@@ -20,6 +22,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import javax.swing.BorderFactory;
@@ -48,6 +52,8 @@ import de.soderer.servermanagement.worker.RefreshServerItemStatusWorker;
 import de.soderer.sshkeyformats.AuthorizedKey;
 import de.soderer.sshkeyformats.SshKey;
 import de.soderer.sshkeyformats.SshKeyReader;
+import de.soderer.sshkeyformats.SshKeyWriter;
+import de.soderer.utilities.IoUtilities;
 import de.soderer.utilities.LangResources;
 import de.soderer.utilities.Utilities;
 import de.soderer.utilities.http.HttpRequest;
@@ -57,6 +63,7 @@ import de.soderer.utilities.http.HttpUtilities;
 import de.soderer.utilities.http.ProxyConfiguration;
 import de.soderer.utilities.json.JsonReader;
 import de.soderer.utilities.json.JsonUtilities;
+import de.soderer.utilities.remote.SftpConnection;
 import de.soderer.utilities.swing.QuestionDialog;
 import de.soderer.utilities.swing.SimpleInputDialog;
 import de.soderer.utilities.swing.SwingColor;
@@ -1119,7 +1126,17 @@ public class ServerManagementItem extends JPanel {
 							data = response.getContent();
 						} else {
 							setVersion(version.getName(), "ERROR");
+							status = "ERROR";
 						}
+					} catch (@SuppressWarnings("unused") final Exception e) {
+						setVersion(version.getName(), "ERROR");
+						status = "ERROR";
+					}
+				} else if (version.getLocation().toLowerCase().startsWith("ssh://")) {
+					// TODO: other host and user credentials
+					try (SftpConnection sftpConnection = openSftpConnection(hostname, server.getSshAdmin().getUsername(), server.getSshAdmin().getPrivateKeyFile(), server.getSshAdmin().getPasswordArray());
+							InputStream inputStream = sftpConnection.downloadFile(version.getLocation().substring(6))) {
+						data = new String(IoUtilities.toByteArray(inputStream), StandardCharsets.UTF_8);
 					} catch (@SuppressWarnings("unused") final Exception e) {
 						setVersion(version.getName(), "ERROR");
 						status = "ERROR";
@@ -1140,6 +1157,15 @@ public class ServerManagementItem extends JPanel {
 							setVersion(version.getName(), "ERROR");
 							status = "ERROR";
 						}
+					} else if (version.getPath().toLowerCase().startsWith("regex:")) {
+						final Pattern regex = Pattern.compile(version.getPath().substring(6));
+						final Matcher matcher = regex.matcher(data);
+						if (matcher.find()) {
+							setVersion(version.getName(), matcher.group());
+						} else {
+							setVersion(version.getName(), "ERROR");
+							status = "ERROR";
+						}
 					} else {
 						setVersion(version.getName(), "ERROR");
 						status = "ERROR";
@@ -1157,5 +1183,27 @@ public class ServerManagementItem extends JPanel {
 
 	public String getStatus() {
 		return status;
+	}
+
+	private static SftpConnection openSftpConnection(final String hostname, final String sshAccessUsername, final File sshAccessPrivateKeyFile, final char[] sshAccessPassword) throws Exception, IOException {
+		if (sshAccessPrivateKeyFile != null) {
+			byte[] sshKeyData;
+			try (InputStream inputStream = new FileInputStream(sshAccessPrivateKeyFile)) {
+				SshKey sshKey;
+				if (Utilities.isNotBlank(sshAccessPassword)) {
+					sshKey = SshKeyReader.readKey(inputStream, sshAccessPassword);
+				} else {
+					sshKey = SshKeyReader.readKey(inputStream, null);
+				}
+				final ByteArrayOutputStream keyDataStream = new ByteArrayOutputStream();
+				SshKeyWriter.writePuttyVersion2Key(keyDataStream, sshKey, null);
+				sshKeyData = keyDataStream.toByteArray();
+			}
+			return new SftpConnection(hostname, sshAccessUsername, sshKeyData, null, 22, null);
+		} else if (Utilities.isNotBlank(sshAccessPassword)) {
+			return new SftpConnection(hostname, sshAccessUsername, null, sshAccessPassword, 22, null);
+		} else {
+			throw new Exception("No supported authentification method available for host '" + hostname + "'");
+		}
 	}
 }

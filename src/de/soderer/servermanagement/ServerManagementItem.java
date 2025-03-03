@@ -622,26 +622,17 @@ public class ServerManagementItem extends JPanel {
 		});
 		buttonPanel.add(removeVersionButton);
 
-		// TODO
 		final JButton readVersionsButton = new JButton(LangResources.get("readVersions"));
 		readVersionsButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
 				try {
-					if (versionsTable.getSelectedColumnCount() > 0
-							&& new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("readVersions"), LangResources.get("readVersions"), LangResources.get("yes"), LangResources.get("cancel")).open() == 0) {
-
-						final int[] selectedRows = versionsTable.getSelectedRows();
-						for (int i = selectedRows.length - 1; i >= 0; i--) {
-							final String urlToRemove = (String) ((DefaultTableModel) versionsTable.getModel()).getValueAt(selectedRows[i], 0);
-							server.getUrls().remove(urlToRemove);
-						}
-
-						createComponents();
-
-						checkButtonStatus();
-						serverManagementGui.signalUnsavedChanges();
+					refreshVersions();
+					String result = "";
+					for (int i = 0; i < versionsTable.getModel().getRowCount(); i++) {
+						result += versionsTable.getModel().getValueAt(i, 0) + ": " + versionsTable.getModel().getValueAt(i, 3) + "\n";
 					}
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " readVersions", result).open();
 				} catch (final Exception e) {
 					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
 				}
@@ -1165,80 +1156,84 @@ public class ServerManagementItem extends JPanel {
 			}
 
 			// Refresh versions status
-			for (final Version version : server.getVersions()) {
-				String data = null;
-				if (version.getLocation().toLowerCase().startsWith("http://")
-						|| version.getLocation().toLowerCase().startsWith("https://")) {
-					try {
-						final HttpRequest request = new HttpRequest(HttpMethod.GET, version.getLocation());
-						request.setCheckSslCertificates(false);
-						final HttpResponse response = HttpUtilities.executeHttpRequest(request, proxyConfiguration.getProxy(request.getUrl()));
-						if (response.getHttpCode() == 200) {
-							data = response.getContent();
-						} else {
-							setVersion(version.getName(), "ERROR");
-							status = "ERROR";
-						}
-					} catch (@SuppressWarnings("unused") final Exception e) {
+			refreshVersions();
+		} catch (final Exception e) {
+			e.printStackTrace();
+			status = "ERROR";
+		}
+	}
+
+	private void refreshVersions() {
+		for (final Version version : server.getVersions()) {
+			String data = null;
+			if (version.getLocation().toLowerCase().startsWith("http://")
+					|| version.getLocation().toLowerCase().startsWith("https://")) {
+				try {
+					final HttpRequest request = new HttpRequest(HttpMethod.GET, version.getLocation());
+					request.setCheckSslCertificates(false);
+					final HttpResponse response = HttpUtilities.executeHttpRequest(request, proxyConfiguration.getProxy(request.getUrl()));
+					if (response.getHttpCode() == 200) {
+						data = response.getContent();
+					} else {
 						setVersion(version.getName(), "ERROR");
 						status = "ERROR";
 					}
-				} else if (version.getLocation().toLowerCase().startsWith("ssh://")) {
-					String hostnameForSsh = hostname;
-					String usernameForSsh = server.getSshAdmin().getUsername();
-					File privateKeyFileForSsh = server.getSshAdmin().getPrivateKeyFile();
-					char[] passwordForSsh = server.getSshAdmin().getPasswordArray();
-
-					String filePath = version.getLocation().substring(6);
-
-					if (filePath.contains(":")) {
-						hostnameForSsh = filePath.substring(0, filePath.lastIndexOf(":"));
-						filePath = filePath.substring(filePath.lastIndexOf(":") + 1);
-					}
-
-					if (hostnameForSsh.contains("@")) {
-						usernameForSsh = hostnameForSsh.substring(0, hostnameForSsh.lastIndexOf("@"));
-						hostnameForSsh = hostnameForSsh.substring(hostnameForSsh.lastIndexOf("@") + 1);
-					}
-
-					if (usernameForSsh.contains(":")) {
-						privateKeyFileForSsh = null;
-						passwordForSsh = usernameForSsh.substring(usernameForSsh.lastIndexOf(":") + 1).toCharArray();
-						usernameForSsh = usernameForSsh.substring(0, usernameForSsh.lastIndexOf(":"));
-					}
-
-					try (SftpConnection sftpConnection = openSftpConnection(hostnameForSsh, usernameForSsh, privateKeyFileForSsh, passwordForSsh);
-							InputStream inputStream = sftpConnection.downloadFile(filePath)) {
-						data = new String(IoUtilities.toByteArray(inputStream), StandardCharsets.UTF_8);
-					} catch (@SuppressWarnings("unused") final Exception e) {
-						setVersion(version.getName(), "ERROR");
-						status = "ERROR";
-					}
-				} else {
+				} catch (@SuppressWarnings("unused") final Exception e) {
 					setVersion(version.getName(), "ERROR");
 					status = "ERROR";
 				}
+			} else if (version.getLocation().toLowerCase().startsWith("ssh://")) {
+				String hostnameForSsh = server.getHost();
+				String usernameForSsh = server.getSshAdmin().getUsername();
+				File privateKeyFileForSsh = server.getSshAdmin().getPrivateKeyFile();
+				char[] passwordForSsh = server.getSshAdmin().getPasswordArray();
 
-				if (data != null) {
-					if (version.getPath().toLowerCase().startsWith("json:")) {
-						try (final JsonReader jsonReader = new JsonReader(new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)))) {
-							JsonUtilities.readUpToJsonPath(jsonReader, version.getPath().substring(5));
-							jsonReader.readNextJsonNode();
-							final String versionText = (String) jsonReader.getCurrentObject();
-							setVersion(version.getName(), versionText);
-						} catch (@SuppressWarnings("unused") final Exception e) {
-							setVersion(version.getName(), "ERROR");
-							status = "ERROR";
-						}
-					} else if (version.getPath().toLowerCase().startsWith("regex:")) {
-						final Pattern regex = Pattern.compile(version.getPath().substring(6));
-						final Matcher matcher = regex.matcher(data);
-						if (matcher.find()) {
-							setVersion(version.getName(), matcher.group());
-						} else {
-							setVersion(version.getName(), "ERROR");
-							status = "ERROR";
-						}
+				String filePath = version.getLocation().substring(6);
+
+				if (filePath.contains(":")) {
+					hostnameForSsh = filePath.substring(0, filePath.lastIndexOf(":"));
+					filePath = filePath.substring(filePath.lastIndexOf(":") + 1);
+				}
+
+				if (hostnameForSsh.contains("@")) {
+					usernameForSsh = hostnameForSsh.substring(0, hostnameForSsh.lastIndexOf("@"));
+					hostnameForSsh = hostnameForSsh.substring(hostnameForSsh.lastIndexOf("@") + 1);
+				}
+
+				if (usernameForSsh.contains(":")) {
+					privateKeyFileForSsh = null;
+					passwordForSsh = usernameForSsh.substring(usernameForSsh.lastIndexOf(":") + 1).toCharArray();
+					usernameForSsh = usernameForSsh.substring(0, usernameForSsh.lastIndexOf(":"));
+				}
+
+				try (SftpConnection sftpConnection = openSftpConnection(hostnameForSsh, usernameForSsh, privateKeyFileForSsh, passwordForSsh);
+						InputStream inputStream = sftpConnection.downloadFile(filePath)) {
+					data = new String(IoUtilities.toByteArray(inputStream), StandardCharsets.UTF_8);
+				} catch (@SuppressWarnings("unused") final Exception e) {
+					setVersion(version.getName(), "ERROR");
+					status = "ERROR";
+				}
+			} else {
+				setVersion(version.getName(), "ERROR");
+				status = "ERROR";
+			}
+
+			if (data != null) {
+				if (version.getPath().toLowerCase().startsWith("json:")) {
+					try (final JsonReader jsonReader = new JsonReader(new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)))) {
+						JsonUtilities.readUpToJsonPath(jsonReader, version.getPath().substring(5));
+						jsonReader.readNextJsonNode();
+						final String versionText = (String) jsonReader.getCurrentObject();
+						setVersion(version.getName(), versionText);
+					} catch (@SuppressWarnings("unused") final Exception e) {
+						setVersion(version.getName(), "ERROR");
+						status = "ERROR";
+					}
+				} else if (version.getPath().toLowerCase().startsWith("regex:")) {
+					final Pattern regex = Pattern.compile(version.getPath().substring(6));
+					final Matcher matcher = regex.matcher(data);
+					if (matcher.find()) {
+						setVersion(version.getName(), matcher.group());
 					} else {
 						setVersion(version.getName(), "ERROR");
 						status = "ERROR";
@@ -1247,10 +1242,10 @@ public class ServerManagementItem extends JPanel {
 					setVersion(version.getName(), "ERROR");
 					status = "ERROR";
 				}
+			} else {
+				setVersion(version.getName(), "ERROR");
+				status = "ERROR";
 			}
-		} catch (final Exception e) {
-			e.printStackTrace();
-			status = "ERROR";
 		}
 	}
 

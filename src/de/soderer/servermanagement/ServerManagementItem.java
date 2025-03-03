@@ -1184,9 +1184,31 @@ public class ServerManagementItem extends JPanel {
 						status = "ERROR";
 					}
 				} else if (version.getLocation().toLowerCase().startsWith("ssh://")) {
-					// TODO: other host and user credentials
-					try (SftpConnection sftpConnection = openSftpConnection(hostname, server.getSshAdmin().getUsername(), server.getSshAdmin().getPrivateKeyFile(), server.getSshAdmin().getPasswordArray());
-							InputStream inputStream = sftpConnection.downloadFile(version.getLocation().substring(6))) {
+					String hostnameForSsh = hostname;
+					String usernameForSsh = server.getSshAdmin().getUsername();
+					File privateKeyFileForSsh = server.getSshAdmin().getPrivateKeyFile();
+					char[] passwordForSsh = server.getSshAdmin().getPasswordArray();
+
+					String filePath = version.getLocation().substring(6);
+
+					if (filePath.contains(":")) {
+						hostnameForSsh = filePath.substring(0, filePath.lastIndexOf(":"));
+						filePath = filePath.substring(filePath.lastIndexOf(":") + 1);
+					}
+
+					if (hostnameForSsh.contains("@")) {
+						usernameForSsh = hostnameForSsh.substring(0, hostnameForSsh.lastIndexOf("@"));
+						hostnameForSsh = hostnameForSsh.substring(hostnameForSsh.lastIndexOf("@") + 1);
+					}
+
+					if (usernameForSsh.contains(":")) {
+						privateKeyFileForSsh = null;
+						passwordForSsh = usernameForSsh.substring(usernameForSsh.lastIndexOf(":") + 1).toCharArray();
+						usernameForSsh = usernameForSsh.substring(0, usernameForSsh.lastIndexOf(":"));
+					}
+
+					try (SftpConnection sftpConnection = openSftpConnection(hostnameForSsh, usernameForSsh, privateKeyFileForSsh, passwordForSsh);
+							InputStream inputStream = sftpConnection.downloadFile(filePath)) {
 						data = new String(IoUtilities.toByteArray(inputStream), StandardCharsets.UTF_8);
 					} catch (@SuppressWarnings("unused") final Exception e) {
 						setVersion(version.getName(), "ERROR");
@@ -1236,7 +1258,13 @@ public class ServerManagementItem extends JPanel {
 		return status;
 	}
 
-	private static SftpConnection openSftpConnection(final String hostname, final String sshAccessUsername, final File sshAccessPrivateKeyFile, final char[] sshAccessPassword) throws Exception, IOException {
+	private static SftpConnection openSftpConnection(String hostname, final String sshAccessUsername, final File sshAccessPrivateKeyFile, final char[] sshAccessPassword) throws Exception, IOException {
+		int port = 22;
+		if (hostname.contains(":")) {
+			port = Integer.parseInt(hostname.substring(hostname.lastIndexOf(":" + 1)));
+			hostname = hostname.substring(0, hostname.lastIndexOf(":"));
+		}
+
 		if (sshAccessPrivateKeyFile != null) {
 			byte[] sshKeyData;
 			try (InputStream inputStream = new FileInputStream(sshAccessPrivateKeyFile)) {
@@ -1250,9 +1278,9 @@ public class ServerManagementItem extends JPanel {
 				SshKeyWriter.writePuttyVersion2Key(keyDataStream, sshKey, null);
 				sshKeyData = keyDataStream.toByteArray();
 			}
-			return new SftpConnection(hostname, sshAccessUsername, sshKeyData, null, 22, null);
+			return new SftpConnection(hostname, sshAccessUsername, sshKeyData, null, port, null);
 		} else if (Utilities.isNotBlank(sshAccessPassword)) {
-			return new SftpConnection(hostname, sshAccessUsername, null, sshAccessPassword, 22, null);
+			return new SftpConnection(hostname, sshAccessUsername, null, sshAccessPassword, port, null);
 		} else {
 			throw new Exception("No supported authentification method available for host '" + hostname + "'");
 		}

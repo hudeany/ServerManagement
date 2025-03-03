@@ -66,7 +66,13 @@ public class AuthorizedKeysHelper {
 		}
 	}
 
-	private static SftpConnection openSftpConnection(final String hostname, final String sshAccessUsername, final File sshAccessPrivateKeyFile, final char[] sshAccessPassword) throws Exception, IOException {
+	private static SftpConnection openSftpConnection(String hostname, final String sshAccessUsername, final File sshAccessPrivateKeyFile, final char[] sshAccessPassword) throws Exception, IOException {
+		int port = 22;
+		if (hostname.contains(":")) {
+			port = Integer.parseInt(hostname.substring(hostname.lastIndexOf(":" + 1)));
+			hostname = hostname.substring(0, hostname.lastIndexOf(":"));
+		}
+
 		if (sshAccessPrivateKeyFile != null) {
 			byte[] sshKeyData;
 			try (InputStream inputStream = new FileInputStream(sshAccessPrivateKeyFile)) {
@@ -80,9 +86,9 @@ public class AuthorizedKeysHelper {
 				SshKeyWriter.writePuttyVersion2Key(keyDataStream, sshKey, null);
 				sshKeyData = keyDataStream.toByteArray();
 			}
-			return new SftpConnection(hostname, sshAccessUsername, sshKeyData, null, 22, null);
+			return new SftpConnection(hostname, sshAccessUsername, sshKeyData, null, port, null);
 		} else if (Utilities.isNotBlank(sshAccessPassword)) {
-			return new SftpConnection(hostname, sshAccessUsername, null, sshAccessPassword, 22, null);
+			return new SftpConnection(hostname, sshAccessUsername, null, sshAccessPassword, port, null);
 		} else {
 			throw new Exception("No supported authentification method available for host '" + hostname + "'");
 		}

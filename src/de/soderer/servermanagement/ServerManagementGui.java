@@ -57,6 +57,7 @@ import de.soderer.utilities.swing.UpdateableGuiApplication;
  * TODO:
 	Convenience Button: Add KnownKey to all selected users
 	Convenience Button: Remove KnownKey from all servers
+	Interval Testing button: every 5 sec
  */
 
 /**

@@ -1238,6 +1238,16 @@ public class ServerManagementItem extends JPanel {
 						setVersion(version.getName(), "ERROR");
 						status = "ERROR";
 					}
+				} else if (version.getPath().toLowerCase().startsWith("regex(")) {
+					final Pattern regex = Pattern.compile(version.getPath().substring(version.getPath().indexOf(":") + 1));
+					final int group = Integer.parseInt(version.getPath().substring(6, version.getPath().indexOf(")")));
+					final Matcher matcher = regex.matcher(data);
+					if (matcher.find()) {
+						setVersion(version.getName(), matcher.group(group));
+					} else {
+						setVersion(version.getName(), "ERROR");
+						status = "ERROR";
+					}
 				} else {
 					setVersion(version.getName(), "ERROR");
 					status = "ERROR";

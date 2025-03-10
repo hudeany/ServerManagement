@@ -86,7 +86,7 @@
 			<manifest>
 				<attribute name="Main-Class" value="de.soderer.ServerManagement" />
 				<attribute name="Class-Path" value="." />
-				<attribute name="Rsrc-Main-Class" value="de.soderer.serverManagement.ServerManagement" />
+				<attribute name="Rsrc-Main-Class" value="de.soderer.servermanagement.ServerManagement" />
 			</manifest>
 
 			<fileset dir="${buildPath}/bin" />

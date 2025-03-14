@@ -151,6 +151,7 @@ public class ServerManagementItem extends JPanel {
 		serverNamePanel.add(serverNameLabel);
 
 		final JTextField serverNameField = new JTextField(serverName);
+		serverNameField.setBackground(Color.LIGHT_GRAY);
 		serverNameField.setEditable(false);
 		serverNamePanel.add(serverNameField);
 

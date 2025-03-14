@@ -8,6 +8,8 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.MouseWheelEvent;
+import java.awt.event.MouseWheelListener;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -27,6 +29,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import javax.swing.BorderFactory;
+import javax.swing.BoundedRangeModel;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
@@ -37,6 +40,7 @@ import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -339,13 +343,29 @@ public class ServerManagementItem extends JPanel {
 			managedUserTable.setPreferredScrollableViewportSize(new Dimension((int) managedUserTable.getPreferredSize().getWidth(), 65));
 		}
 
-		final JScrollPane pane = new JScrollPane(managedUserTable);
-		pane.setBorder(BorderFactory.createEmptyBorder());
+		final ServerManagementItem item = this;
+
+		final JScrollPane scrollPane = new JScrollPane(managedUserTable);
+		scrollPane.setBorder(BorderFactory.createEmptyBorder());
+		scrollPane.addMouseWheelListener(
+				new MouseWheelListener() {
+					@Override
+					public void mouseWheelMoved(final MouseWheelEvent e) {
+						final boolean scrollDown = e.getWheelRotation() > 0;
+						final BoundedRangeModel verticalScrollBarModel = scrollPane.getVerticalScrollBar().getModel();
+						if (!scrollDown && verticalScrollBarModel.getValue() <= verticalScrollBarModel.getMinimum()) {
+							scrollPane.getParent().dispatchEvent(SwingUtilities.convertMouseEvent(scrollPane, e, item));
+						} else if (scrollDown && verticalScrollBarModel.getValue() + verticalScrollBarModel.getExtent() >= verticalScrollBarModel.getMaximum()) {
+							scrollPane.getParent().dispatchEvent(SwingUtilities.convertMouseEvent(scrollPane, e, item));
+						}
+					}
+				}
+				);
 
 		final JPanel managedUsersTablePanel = new JPanel();
 		managedUsersTablePanel.setLayout(new BorderLayout());
 
-		managedUsersTablePanel.add(pane);
+		managedUsersTablePanel.add(scrollPane);
 
 		add(managedUsersTablePanel);
 
@@ -393,8 +413,24 @@ public class ServerManagementItem extends JPanel {
 			urlsTable.setPreferredScrollableViewportSize(new Dimension((int) urlsTable.getPreferredSize().getWidth(), 65));
 		}
 
+		final ServerManagementItem item = this;
+
 		final JScrollPane urlsScrollPane = new JScrollPane(urlsTable);
 		urlsScrollPane.setBorder(BorderFactory.createEmptyBorder());
+		urlsScrollPane.addMouseWheelListener(
+				new MouseWheelListener() {
+					@Override
+					public void mouseWheelMoved(final MouseWheelEvent e) {
+						final boolean scrollDown = e.getWheelRotation() > 0;
+						final BoundedRangeModel verticalScrollBarModel = urlsScrollPane.getVerticalScrollBar().getModel();
+						if (!scrollDown && verticalScrollBarModel.getValue() <= verticalScrollBarModel.getMinimum()) {
+							urlsScrollPane.getParent().dispatchEvent(SwingUtilities.convertMouseEvent(urlsScrollPane, e, item));
+						} else if (scrollDown && verticalScrollBarModel.getValue() + verticalScrollBarModel.getExtent() >= verticalScrollBarModel.getMaximum()) {
+							urlsScrollPane.getParent().dispatchEvent(SwingUtilities.convertMouseEvent(urlsScrollPane, e, item));
+						}
+					}
+				}
+				);
 
 		final JPanel urlsTablePanel = new JPanel();
 		urlsTablePanel.setLayout(new BorderLayout());
@@ -500,12 +536,28 @@ public class ServerManagementItem extends JPanel {
 			versionsTable.setPreferredScrollableViewportSize(new Dimension((int) versionsTable.getPreferredSize().getWidth(), 65));
 		}
 
-		final JScrollPane urlsScrollPane = new JScrollPane(versionsTable);
-		urlsScrollPane.setBorder(BorderFactory.createEmptyBorder());
+		final ServerManagementItem item = this;
+
+		final JScrollPane versionsScrollPane = new JScrollPane(versionsTable);
+		versionsScrollPane.setBorder(BorderFactory.createEmptyBorder());
+		versionsScrollPane.addMouseWheelListener(
+				new MouseWheelListener() {
+					@Override
+					public void mouseWheelMoved(final MouseWheelEvent e) {
+						final boolean scrollDown = e.getWheelRotation() > 0;
+						final BoundedRangeModel verticalScrollBarModel = versionsScrollPane.getVerticalScrollBar().getModel();
+						if (!scrollDown && verticalScrollBarModel.getValue() <= verticalScrollBarModel.getMinimum()) {
+							versionsScrollPane.getParent().dispatchEvent(SwingUtilities.convertMouseEvent(versionsScrollPane, e, item));
+						} else if (scrollDown && verticalScrollBarModel.getValue() + verticalScrollBarModel.getExtent() >= verticalScrollBarModel.getMaximum()) {
+							versionsScrollPane.getParent().dispatchEvent(SwingUtilities.convertMouseEvent(versionsScrollPane, e, item));
+						}
+					}
+				}
+				);
 
 		final JPanel versionsTablePanel = new JPanel();
 		versionsTablePanel.setLayout(new BorderLayout());
-		versionsTablePanel.add(urlsScrollPane);
+		versionsTablePanel.add(versionsScrollPane);
 
 		add(versionsTablePanel);
 

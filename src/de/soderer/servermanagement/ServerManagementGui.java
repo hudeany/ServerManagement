@@ -175,7 +175,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 		}
 
 		serverInformationScrollPane = new JScrollPane(serverInformationPanel);
-		serverInformationScrollPane.setPreferredSize(new Dimension(750, 400));
+		serverInformationScrollPane.setPreferredSize(new Dimension(750, 600));
 		serverInformationScrollPane.getVerticalScrollBar().setUnitIncrement(8);
 
 		final JPanel mainPanel = new JPanel();

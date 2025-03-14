@@ -632,7 +632,7 @@ public class ServerManagementItem extends JPanel {
 					for (int i = 0; i < versionsTable.getModel().getRowCount(); i++) {
 						result += versionsTable.getModel().getValueAt(i, 0) + ": " + versionsTable.getModel().getValueAt(i, 3) + "\n";
 					}
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " readVersions", result).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " readVersions", result.trim()).open();
 				} catch (final Exception e) {
 					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
 				}

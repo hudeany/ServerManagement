@@ -17,6 +17,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyStore;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -80,6 +81,7 @@ public class ServerManagementItem extends JPanel {
 	private final ServerManagementConfiguration serverManagementConfiguration;
 	private final Server server;
 	private final ProxyConfiguration proxyConfiguration;
+	private final KeyStore trustedKeyStore;
 
 	private JButton readAllUsersButton;
 	private JTable managedUserTable;
@@ -93,7 +95,7 @@ public class ServerManagementItem extends JPanel {
 
 	private RefreshServerItemStatusWorker worker;
 
-	public ServerManagementItem(final ServerManagementGui serverManagementGui, final Server server, final ProxyConfiguration proxyConfiguration) {
+	public ServerManagementItem(final ServerManagementGui serverManagementGui, final Server server, final ProxyConfiguration proxyConfiguration) throws Exception {
 		super();
 		setLayout(new BoxLayout(this, BoxLayout.PAGE_AXIS));
 		setBorder(BorderFactory.createLineBorder(Color.BLACK));
@@ -102,6 +104,12 @@ public class ServerManagementItem extends JPanel {
 		serverManagementConfiguration = serverManagementGui.getServerManagementConfiguration();
 		this.server = server;
 		this.proxyConfiguration = proxyConfiguration;
+
+		if (Utilities.isNotBlank(serverManagementConfiguration.getKeystore())) {
+			trustedKeyStore = HttpUtilities.readTrustStore(new File(serverManagementConfiguration.getKeystore()));
+		} else {
+			trustedKeyStore = null;
+		}
 
 		createComponents();
 	}
@@ -1192,9 +1200,11 @@ public class ServerManagementItem extends JPanel {
 			for (final String url : server.getUrls()) {
 				try {
 					final HttpRequest request = new HttpRequest(HttpMethod.GET, url);
-					request.setCheckSslCertificates(false);
 					final LocalDateTime start = LocalDateTime.now();
-					final HttpResponse response = HttpUtilities.executeHttpRequest(request, proxyConfiguration.getProxy(request.getUrl()));
+					if (trustedKeyStore == null) {
+						request.setCheckTlsCertificates(false);
+					}
+					final HttpResponse response = HttpUtilities.executeHttpRequest(request, proxyConfiguration.getProxy(request.getUrl()), trustedKeyStore);
 					final LocalDateTime end = LocalDateTime.now();
 					if (response.getHttpCode() == 200) {
 						setUrlTime(url, (int) ChronoUnit.SECONDS.between(start, end));
@@ -1223,8 +1233,10 @@ public class ServerManagementItem extends JPanel {
 					|| version.getLocation().toLowerCase().startsWith("https://")) {
 				try {
 					final HttpRequest request = new HttpRequest(HttpMethod.GET, version.getLocation());
-					request.setCheckSslCertificates(false);
-					final HttpResponse response = HttpUtilities.executeHttpRequest(request, proxyConfiguration.getProxy(request.getUrl()));
+					if (trustedKeyStore == null) {
+						request.setCheckTlsCertificates(false);
+					}
+					final HttpResponse response = HttpUtilities.executeHttpRequest(request, proxyConfiguration.getProxy(request.getUrl()), trustedKeyStore);
 					if (response.getHttpCode() == 200) {
 						data = response.getContent();
 					} else {

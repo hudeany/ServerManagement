@@ -6,8 +6,13 @@ import java.util.List;
 import de.soderer.utilities.Utilities;
 
 public class ServerManagementConfiguration {
+	private String keystore;
 	private List<Server> servers = new ArrayList<>();
 	private List<KnownPublicSshKey> knownPublicSshKeys = new ArrayList<>();
+
+	public String getKeystore() {
+		return keystore;
+	}
 
 	public List<Server> getServers() {
 		return servers;

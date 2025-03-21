@@ -162,7 +162,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 		setResizable(false);
 	}
 
-	private JPanel addServerItemsPanel() {
+	private JPanel addServerItemsPanel() throws Exception {
 		// Server information Panel
 		final JPanel serverInformationPanel = new JPanel();
 		serverInformationPanel.setLayout(new BoxLayout(serverInformationPanel, BoxLayout.PAGE_AXIS));

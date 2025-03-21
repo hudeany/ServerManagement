@@ -66,6 +66,7 @@ import de.soderer.utilities.http.HttpRequest.HttpMethod;
 import de.soderer.utilities.http.HttpResponse;
 import de.soderer.utilities.http.HttpUtilities;
 import de.soderer.utilities.http.ProxyConfiguration;
+import de.soderer.utilities.http.TrustManagerUtilities;
 import de.soderer.utilities.json.JsonReader;
 import de.soderer.utilities.json.JsonUtilities;
 import de.soderer.utilities.remote.SftpConnection;
@@ -106,9 +107,9 @@ public class ServerManagementItem extends JPanel {
 		this.proxyConfiguration = proxyConfiguration;
 
 		if (Utilities.isNotBlank(serverManagementConfiguration.getKeystore())) {
-			trustManager = HttpUtilities.createTrustManagerForKeyStore(new File(serverManagementConfiguration.getKeystore()));
+			trustManager = TrustManagerUtilities.createTrustManagerForKeyStore(new File(serverManagementConfiguration.getKeystore()));
 		} else {
-			trustManager = HttpUtilities.createTrustAllTrustManager();
+			trustManager = TrustManagerUtilities.createTrustAllTrustManager();
 		}
 
 		createComponents();

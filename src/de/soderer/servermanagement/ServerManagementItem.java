@@ -17,7 +17,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.security.KeyStore;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -29,6 +28,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import javax.net.ssl.TrustManager;
 import javax.swing.BorderFactory;
 import javax.swing.BoundedRangeModel;
 import javax.swing.Box;
@@ -81,7 +81,7 @@ public class ServerManagementItem extends JPanel {
 	private final ServerManagementConfiguration serverManagementConfiguration;
 	private final Server server;
 	private final ProxyConfiguration proxyConfiguration;
-	private final KeyStore trustedKeyStore;
+	private final TrustManager trustManager;
 
 	private JButton readAllUsersButton;
 	private JTable managedUserTable;
@@ -106,9 +106,9 @@ public class ServerManagementItem extends JPanel {
 		this.proxyConfiguration = proxyConfiguration;
 
 		if (Utilities.isNotBlank(serverManagementConfiguration.getKeystore())) {
-			trustedKeyStore = HttpUtilities.readTrustStore(new File(serverManagementConfiguration.getKeystore()));
+			trustManager = HttpUtilities.createTrustManagerForKeyStore(new File(serverManagementConfiguration.getKeystore()));
 		} else {
-			trustedKeyStore = null;
+			trustManager = HttpUtilities.createTrustAllTrustManager();
 		}
 
 		createComponents();
@@ -1201,10 +1201,7 @@ public class ServerManagementItem extends JPanel {
 				try {
 					final HttpRequest request = new HttpRequest(HttpMethod.GET, url);
 					final LocalDateTime start = LocalDateTime.now();
-					if (trustedKeyStore == null) {
-						request.setCheckTlsCertificates(false);
-					}
-					final HttpResponse response = HttpUtilities.executeHttpRequest(request, proxyConfiguration.getProxy(request.getUrl()), trustedKeyStore);
+					final HttpResponse response = HttpUtilities.executeHttpRequest(request, proxyConfiguration.getProxy(request.getUrl()), trustManager);
 					final LocalDateTime end = LocalDateTime.now();
 					if (response.getHttpCode() == 200) {
 						setUrlTime(url, (int) ChronoUnit.SECONDS.between(start, end));
@@ -1233,10 +1230,7 @@ public class ServerManagementItem extends JPanel {
 					|| version.getLocation().toLowerCase().startsWith("https://")) {
 				try {
 					final HttpRequest request = new HttpRequest(HttpMethod.GET, version.getLocation());
-					if (trustedKeyStore == null) {
-						request.setCheckTlsCertificates(false);
-					}
-					final HttpResponse response = HttpUtilities.executeHttpRequest(request, proxyConfiguration.getProxy(request.getUrl()), trustedKeyStore);
+					final HttpResponse response = HttpUtilities.executeHttpRequest(request, proxyConfiguration.getProxy(request.getUrl()), trustManager);
 					if (response.getHttpCode() == 200) {
 						data = response.getContent();
 					} else {

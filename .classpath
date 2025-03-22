@@ -7,6 +7,8 @@
 	<classpathentry kind="lib" path="lib/sshkeyformats-25.1.5.jar"/>
 	<classpathentry kind="lib" path="lib/bcprov-jdk18on-1.80.jar"/>
 	<classpathentry kind="lib" path="lib_soderer/soderer-utilities-25.1.6.jar"/>
+	<classpathentry kind="lib" path="lib/network-25.1.0.jar"/>
+	<classpathentry kind="lib" path="lib/proxyautoconfig-25.1.2.jar"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER">
 		<attributes>
 			<attribute name="module" value="true"/>

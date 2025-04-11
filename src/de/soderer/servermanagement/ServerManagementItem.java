@@ -1206,6 +1206,10 @@ public class ServerManagementItem extends JPanel {
 					final LocalDateTime end = LocalDateTime.now();
 					if (response.getHttpCode() == 200) {
 						setUrlTime(url, (int) ChronoUnit.SECONDS.between(start, end));
+					} else if (response.getHttpCode() == 302) {
+						setUrlTime(url, (int) ChronoUnit.SECONDS.between(start, end));
+					} else if (response.getHttpCode() == 400) {
+						setUrlTime(url, (int) ChronoUnit.SECONDS.between(start, end));
 					} else {
 						setUrlTime(url, -1);
 					}

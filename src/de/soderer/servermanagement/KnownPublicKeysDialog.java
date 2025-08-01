@@ -120,7 +120,11 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 							newKey.setKeyTypeString(authKeyStringParts[0]);
 							newKey.setKey(authKeyStringParts[1]);
 
-							final String keyId = new SimpleInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addPublicKey"), LangResources.get("enterKeyId")).open();
+							final SimpleInputDialog keyInputDialog = new SimpleInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addPublicKey"), LangResources.get("enterKeyId"));
+							if (key.getComment() != null) {
+								keyInputDialog.setDefaultText(key.getComment());
+							}
+							final String keyId = keyInputDialog.open();
 							if (Utilities.isNotBlank(keyId)) {
 								newKey.setKeyId(keyId);
 							}

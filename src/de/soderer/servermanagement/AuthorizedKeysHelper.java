@@ -16,6 +16,7 @@ import de.soderer.sshkeyformats.SshKeyWriter;
 import de.soderer.utilities.Tuple;
 import de.soderer.utilities.Utilities;
 import de.soderer.utilities.remote.FileInfo;
+import de.soderer.utilities.remote.FilePermissions;
 import de.soderer.utilities.remote.FolderInfo;
 import de.soderer.utilities.remote.SftpConnection;
 
@@ -62,7 +63,7 @@ public class AuthorizedKeysHelper {
 			dataStream.write("\n".getBytes(StandardCharsets.UTF_8));
 		}
 		try (SftpConnection sftpConnection = openSftpConnection(hostname, sshAccessUsername, sshAccessPrivateKeyFile, sshAccessPassword)) {
-			sftpConnection.uploadFileData("/home/" + sshUserNameToRead + "/.ssh", "authorized_keys", dataStream.toByteArray(), true);
+			sftpConnection.uploadFileData("/home/" + sshUserNameToRead + "/.ssh", "authorized_keys", dataStream.toByteArray(), new FilePermissions(true, true, false), true);
 		}
 	}
 

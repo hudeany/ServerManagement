@@ -16,6 +16,7 @@ import de.soderer.servermanagement.config.ServerManagementConfiguration;
 import de.soderer.utilities.ConfigurationProperties;
 import de.soderer.utilities.DateUtilities;
 import de.soderer.utilities.IoUtilities;
+import de.soderer.utilities.LangResources;
 import de.soderer.utilities.ParameterException;
 import de.soderer.utilities.UpdateableConsoleApplication;
 import de.soderer.utilities.Utilities;
@@ -26,6 +27,7 @@ import de.soderer.utilities.json.JsonObject;
 import de.soderer.utilities.json.JsonReader;
 import de.soderer.utilities.json.JsonSerializer;
 import de.soderer.utilities.swing.ApplicationConfigurationDialog;
+import de.soderer.utilities.swing.QuestionDialog;
 import de.soderer.utilities.worker.WorkerParentDual;
 
 public class ServerManagement extends UpdateableConsoleApplication implements WorkerParentDual {
@@ -43,7 +45,7 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 
 	/** The Constant CONFIGURATION_FILE. */
 	public static final File CONFIGURATION_FILE = new File(System.getProperty("user.home") + File.separator + "." + APPLICATION_NAME + ".config");
-	
+
 	public static final File SERVERS_CONFIGURATION_FILE = new File(System.getProperty("user.home") + File.separator + "." + APPLICATION_NAME + ".servers.config");
 
 	/** The version is filled in at application start from the version.txt file. */
@@ -60,7 +62,7 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 	 * version.txt file.
 	 */
 	public static String VERSIONINFO_DOWNLOAD_URL = null;
-	
+
 	/** The usage message. **/
 	private static String getUsageMessage() {
 		try (InputStream helpInputStream = ServerManagement.class.getResourceAsStream(HELP_RESOURCE_FILE)) {
@@ -71,8 +73,8 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 			return "Help info is missing";
 		}
 	}
-	
-	public static void main(String[] args) {
+
+	public static void main(final String[] args) {
 		_main(args);
 	}
 
@@ -112,7 +114,7 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 		final ProxyConfiguration proxyConfiguration = new ProxyConfiguration(proxyConfigurationType, proxyUrl);
 
 		try {
-			String[] arguments = args;
+			final String[] arguments = args;
 
 			if (arguments.length == 0) {
 				// If started without any parameter we check for headless mode and show the console menu or the GUI
@@ -145,14 +147,18 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 			}
 
 			ServerManagementConfiguration serverManagementConfiguration = new ServerManagementConfiguration();
-			
-			if (ServerManagement.SERVERS_CONFIGURATION_FILE.exists()) {
-				JsonNode rootNode = null;
-				try (JsonReader jsonReader = new JsonReader(new FileInputStream(ServerManagement.SERVERS_CONFIGURATION_FILE))) {
-					rootNode = jsonReader.read();
+
+			try {
+				if (ServerManagement.SERVERS_CONFIGURATION_FILE.exists()) {
+					JsonNode rootNode = null;
+					try (JsonReader jsonReader = new JsonReader(new FileInputStream(ServerManagement.SERVERS_CONFIGURATION_FILE))) {
+						rootNode = jsonReader.read();
+					}
+
+					serverManagementConfiguration = (ServerManagementConfiguration) JsonSerializer.deserialize(ServerManagementConfiguration.class, (JsonObject) rootNode.getValue());
 				}
-				
-				serverManagementConfiguration = (ServerManagementConfiguration) JsonSerializer.deserialize(ServerManagementConfiguration.class, (JsonObject) rootNode.getValue());
+			} catch (final Exception e) {
+				new QuestionDialog(null, ServerManagement.APPLICATION_NAME, "Configuration file '" + ServerManagement.SERVERS_CONFIGURATION_FILE + "' is corrupt: \n" + e.getMessage(), LangResources.get("ok")).open();
 			}
 
 			// open the preconfigured GUI
@@ -186,13 +192,13 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 	}
 
 	@Override
-	public void receiveDoneSignal(LocalDateTime arg0, LocalDateTime arg1, long arg2, String arg3, String arg4) {
+	public void receiveDoneSignal(final LocalDateTime arg0, final LocalDateTime arg1, final long arg2, final String arg3, final String arg4) {
 		// do nothing
 
 	}
 
 	@Override
-	public void receiveProgressSignal(LocalDateTime arg0, long arg1, long arg2, String arg3) {
+	public void receiveProgressSignal(final LocalDateTime arg0, final long arg1, final long arg2, final String arg3) {
 		// do nothing
 
 	}
@@ -204,18 +210,18 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 	}
 
 	@Override
-	public void receiveItemDoneSignal(LocalDateTime arg0, LocalDateTime arg1, long arg2, String arg3, String arg4) {
+	public void receiveItemDoneSignal(final LocalDateTime arg0, final LocalDateTime arg1, final long arg2, final String arg3, final String arg4) {
 		// do nothing
 
 	}
 
 	@Override
-	public void receiveItemProgressSignal(LocalDateTime arg0, long arg1, long arg2, String arg3) {
+	public void receiveItemProgressSignal(final LocalDateTime arg0, final long arg1, final long arg2, final String arg3) {
 		// do nothing
 	}
 
 	@Override
-	public void receiveItemStartSignal(String arg0, String arg1) {
+	public void receiveItemStartSignal(final String arg0, final String arg1) {
 		// do nothing
 
 	}
@@ -227,7 +233,7 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see de.soderer.utilities.WorkerParentSimple#cancel()
 	 */
 	@Override

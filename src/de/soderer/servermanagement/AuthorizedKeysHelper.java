@@ -62,7 +62,7 @@ public class AuthorizedKeysHelper {
 			dataStream.write("\n".getBytes(StandardCharsets.UTF_8));
 		}
 		try (SftpConnection sftpConnection = openSftpConnection(hostname, sshAccessUsername, sshAccessPrivateKeyFile, sshAccessPassword)) {
-			sftpConnection.uploadFileData("/home/" + sshUserNameToRead + "/.ssh", "authorized_keys", dataStream.toByteArray());
+			sftpConnection.uploadFileData("/home/" + sshUserNameToRead + "/.ssh", "authorized_keys", dataStream.toByteArray(), true);
 		}
 	}
 

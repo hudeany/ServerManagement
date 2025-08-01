@@ -146,6 +146,9 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 				}
 			}
 
+			// open the preconfigured GUI
+			de.soderer.utilities.swing.SwingUtilities.setSystemLookAndFeel();
+
 			ServerManagementConfiguration serverManagementConfiguration = new ServerManagementConfiguration();
 
 			try {
@@ -160,9 +163,6 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 			} catch (final Exception e) {
 				new QuestionDialog(null, ServerManagement.APPLICATION_NAME, "Configuration file '" + ServerManagement.SERVERS_CONFIGURATION_FILE + "' is corrupt: \n" + e.getMessage(), LangResources.get("ok")).open();
 			}
-
-			// open the preconfigured GUI
-			de.soderer.utilities.swing.SwingUtilities.setSystemLookAndFeel();
 			try {
 				final ServerManagementGui serverManagementGui = new ServerManagementGui(serverManagementConfiguration);
 				SwingUtilities.invokeLater(new Runnable() {

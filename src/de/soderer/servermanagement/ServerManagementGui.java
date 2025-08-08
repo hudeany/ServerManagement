@@ -109,7 +109,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 		if (dailyUpdateCheckIsPending()) {
 			setDailyUpdateCheckStatus(true);
 			try {
-				if (ApplicationUpdateUtilities.checkForNewVersionAvailable(this, ServerManagement.VERSIONINFO_DOWNLOAD_URL, proxyConfiguration, ServerManagement.APPLICATION_NAME, VersionInfo.getApplicationVersion()) != null) {
+				if (ApplicationUpdateUtilities.checkForNewVersionAvailable(ServerManagement.VERSIONINFO_DOWNLOAD_URL, proxyConfiguration, ServerManagement.APPLICATION_NAME, VersionInfo.getApplicationVersion()) != null) {
 					ApplicationUpdateUtilities.executeUpdate(this, ServerManagement.VERSIONINFO_DOWNLOAD_URL, proxyConfiguration, ServerManagement.APPLICATION_NAME, ServerManagement.VERSION, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, null, null, "gui", true);
 				}
 			} catch (final Exception e) {

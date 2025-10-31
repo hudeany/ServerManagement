@@ -81,6 +81,8 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 	/** Trusted CA certificate for updates **/
 	public static String TRUSTED_UPDATE_CA_CERTIFICATES = null;
 	protected static int _main(final String[] args) {
+		ApplicationUpdateUtilities.removeUpdateLeftovers();
+
 		try (InputStream resourceStream = ServerManagement.class.getResourceAsStream(VERSION_RESOURCE_FILE)) {
 			// Try to fill the version and versioninfo download url
 			final List<String> versionInfoLines = Utilities.readLines(resourceStream, StandardCharsets.UTF_8);

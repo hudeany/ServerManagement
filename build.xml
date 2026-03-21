@@ -55,14 +55,14 @@
 			</fileset>
 		</path>
 
-		<javac debug="true" nowarn="true" deprecation="false" destdir="${buildPath}/bin" fork="yes" source="1.9" target="1.9" srcdir="src" includeantruntime="false" encoding="UTF-8" classpath="lib/*">			
+		<javac debug="true" nowarn="true" deprecation="false" destdir="${buildPath}/bin" fork="yes" source="15" target="15" srcdir="src" includeantruntime="false" encoding="UTF-8" classpath="lib/*">			
 			<classpath refid="build.classpath" />
 			<compilerarg value="-Xlint:unchecked" />
 			<compilerarg value="-parameters" />
 		</javac>
 
 		<copy todir="${buildPath}/bin">
-			<fileset dir="src">
+			<fileset dir="src/main/resources">
 				<include name="**/LanguageProperties*.properties" />
 				<include name="**/*.txt" />
 			</fileset>
@@ -75,8 +75,8 @@
 
 		<delete file="${buildPath}/bin/version.txt" />
 		<echo file="${buildPath}/bin/version.txt" append="false">${build.version}${line.separator}${buildTime}${line.separator}${VersionsUrl}${line.separator}${CaPublicKeyFileName}, ${CaPublicKeyFileNameOld}${line.separator}</echo>
-		<delete file="src/version.txt" />
-		<echo file="src/version.txt" append="false">${build.version}${line.separator}${buildTime}${line.separator}${VersionsUrl}${line.separator}${CaPublicKeyFileName}, ${CaPublicKeyFileNameOld}${line.separator}</echo>
+		<delete file="src/main/resources/version.txt" />
+		<echo file="src/main/resources/version.txt" append="false">${build.version}${line.separator}${buildTime}${line.separator}${VersionsUrl}${line.separator}${CaPublicKeyFileName}, ${CaPublicKeyFileNameOld}${line.separator}</echo>
 	</target>
 
 	<target name="create_jar" depends="compile, create_versionfile">
@@ -92,8 +92,8 @@
 			<zipfileset file="${CaPublicKey}" />
 			<zipfileset file="${CaPublicKeyOld}" />
 			<zipfileset dir="lib" includes="*.jar" excludes="*sources.jar" />
-			<zipfileset dir="src" includes="ServerManagement_Icon.png" />
-			<zipfileset dir="src" includes="ServerManagement.ico" />
+			<zipfileset dir="src/main/resources" includes="ServerManagement_Icon.png" />
+			<zipfileset dir="src/main/resources" includes="ServerManagement.ico" />
 		</jar>
 	</target>
 	

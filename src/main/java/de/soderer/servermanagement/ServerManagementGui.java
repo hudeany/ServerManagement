@@ -26,6 +26,10 @@ import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.WindowConstants;
 
+import de.soderer.json.JsonNode;
+import de.soderer.json.JsonObject;
+import de.soderer.json.JsonSerializer;
+import de.soderer.json.JsonWriter;
 import de.soderer.network.NetworkUtilities;
 import de.soderer.pac.utilities.ProxyConfiguration;
 import de.soderer.pac.utilities.ProxyConfiguration.ProxyConfigurationType;
@@ -41,10 +45,6 @@ import de.soderer.utilities.Result;
 import de.soderer.utilities.Utilities;
 import de.soderer.utilities.VersionInfo;
 import de.soderer.utilities.appupdate.ApplicationUpdateUtilities;
-import de.soderer.utilities.json.JsonNode;
-import de.soderer.utilities.json.JsonObject;
-import de.soderer.utilities.json.JsonSerializer;
-import de.soderer.utilities.json.JsonWriter;
 import de.soderer.utilities.swing.ApplicationConfigurationDialog;
 import de.soderer.utilities.swing.ProgressDialog;
 import de.soderer.utilities.swing.QuestionDialog;
@@ -383,7 +383,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 		try {
 			final JsonNode rootNode = JsonSerializer.serialize(serverManagementConfiguration);
 			try (JsonWriter writer = new JsonWriter(new FileOutputStream(ServerManagement.SERVERS_CONFIGURATION_FILE))) {
-				writer.add((JsonObject) rootNode.getValue());
+				writer.add((JsonObject) rootNode);
 			}
 		} catch (final Exception e) {
 			e.printStackTrace();

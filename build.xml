@@ -39,10 +39,13 @@
 		<get src="https://repo1.maven.org/maven2/org/bouncycastle/bcprov-jdk18on/1.80/bcprov-jdk18on-1.80.jar" dest="lib/" />
 		<get src="https://repo1.maven.org/maven2/com/github/mwiede/jsch/0.2.23/jsch-0.2.23.jar" dest="lib/" />
 
-		<get src="https://github.com/hudeany/json/releases/download/25.1.2/json-25.1.2.jar" dest="lib/" />
+		<property name="json.version" value="26.1.31" />
+		<get src="https://github.com/hudeany/json/releases/download/${json.version}/json-${json.version}.jar" dest="lib/" />
 		<get src="https://github.com/hudeany/SshKeyFormats/releases/download/25.1.5/sshkeyformats-25.1.5.jar" dest="lib/" />
-		<get src="https://github.com/hudeany/ProxyAutoConfig/releases/download/25.1.9/proxyautoconfig-25.1.9.jar" dest="lib/" />
-		<get src="https://github.com/hudeany/network/releases/download/25.1.2/network-25.1.2.jar" dest="lib/" />
+		<property name="ProxyAutoConfig.version" value="26.0.0" />
+		<get src="https://github.com/hudeany/ProxyAutoConfig/releases/download/${ProxyAutoConfig.version}/proxyautoconfig-${ProxyAutoConfig.version}.jar" dest="lib/" />
+		<property name="network.version" value="26.0.10" />
+		<get src="https://github.com/hudeany/network/releases/download/${network.version}/network-${network.version}.jar" dest="lib/" />
 
 		<property name="soderer-utilities.version" value="26.1.24" />
 		<get src="https://soderer.de/maven2/de/soderer/JavaUtilities/${soderer-utilities.version}/soderer-utilities-${soderer-utilities.version}.jar" dest="lib/" />

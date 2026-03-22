@@ -47,11 +47,13 @@ import javax.swing.event.ListSelectionListener;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 
+import de.soderer.json.JsonReader;
+import de.soderer.json.JsonValueString;
+import de.soderer.network.HttpMethod;
 import de.soderer.network.HttpRequest;
-import de.soderer.network.HttpRequest.HttpMethod;
 import de.soderer.network.HttpResponse;
 import de.soderer.network.HttpUtilities;
-import de.soderer.network.TrustManagerUtilities;
+import de.soderer.network.trustmanager.TrustManagerUtilities;
 import de.soderer.pac.utilities.ProxyConfiguration;
 import de.soderer.servermanagement.config.Admin;
 import de.soderer.servermanagement.config.KnownPublicSshKey;
@@ -67,8 +69,6 @@ import de.soderer.sshkeyformats.SshKeyWriter;
 import de.soderer.utilities.IoUtilities;
 import de.soderer.utilities.LangResources;
 import de.soderer.utilities.Utilities;
-import de.soderer.utilities.json.JsonReader;
-import de.soderer.utilities.json.JsonUtilities;
 import de.soderer.utilities.remote.SftpConnection;
 import de.soderer.utilities.swing.MultiInputDialog;
 import de.soderer.utilities.swing.QuestionDialog;
@@ -1302,9 +1302,9 @@ public class ServerManagementItem extends JPanel {
 				if (data != null) {
 					if (version.getPath().toLowerCase().startsWith("json:")) {
 						try (final JsonReader jsonReader = new JsonReader(new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)))) {
-							JsonUtilities.readUpToJsonPath(jsonReader, version.getPath().substring(5));
+							jsonReader.readUpToJsonPath(version.getPath().substring(5));
 							jsonReader.readNextJsonNode();
-							final String versionText = (String) jsonReader.getCurrentObject();
+							final String versionText = ((JsonValueString) jsonReader.getCurrentObject()).getValue();
 							setVersion(version.getName(), versionText);
 						} catch (@SuppressWarnings("unused") final Exception e) {
 							setVersion(version.getName(), "ERROR");

@@ -10,6 +10,10 @@ import java.util.List;
 
 import javax.swing.SwingUtilities;
 
+import de.soderer.json.JsonNode;
+import de.soderer.json.JsonObject;
+import de.soderer.json.JsonReader;
+import de.soderer.json.JsonSerializer;
 import de.soderer.pac.utilities.ProxyConfiguration;
 import de.soderer.pac.utilities.ProxyConfiguration.ProxyConfigurationType;
 import de.soderer.servermanagement.config.ServerManagementConfiguration;
@@ -22,10 +26,6 @@ import de.soderer.utilities.UpdateableConsoleApplication;
 import de.soderer.utilities.Utilities;
 import de.soderer.utilities.Version;
 import de.soderer.utilities.appupdate.ApplicationUpdateUtilities;
-import de.soderer.utilities.json.JsonNode;
-import de.soderer.utilities.json.JsonObject;
-import de.soderer.utilities.json.JsonReader;
-import de.soderer.utilities.json.JsonSerializer;
 import de.soderer.utilities.swing.ApplicationConfigurationDialog;
 import de.soderer.utilities.swing.QuestionDialog;
 import de.soderer.utilities.worker.WorkerParentDual;
@@ -164,7 +164,7 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 						rootNode = jsonReader.read();
 					}
 
-					serverManagementConfiguration = (ServerManagementConfiguration) JsonSerializer.deserialize(ServerManagementConfiguration.class, (JsonObject) rootNode.getValue());
+					serverManagementConfiguration = (ServerManagementConfiguration) JsonSerializer.deserialize(ServerManagementConfiguration.class, (JsonObject) rootNode);
 				}
 			} catch (final Exception e) {
 				new QuestionDialog(null, ServerManagement.APPLICATION_NAME, "Configuration file '" + ServerManagement.SERVERS_CONFIGURATION_FILE + "' is corrupt: \n" + e.getMessage(), LangResources.get("ok")).open();

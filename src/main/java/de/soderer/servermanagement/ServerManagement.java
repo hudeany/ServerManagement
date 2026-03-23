@@ -167,7 +167,8 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 					serverManagementConfiguration = (ServerManagementConfiguration) JsonSerializer.deserialize(ServerManagementConfiguration.class, (JsonObject) rootNode);
 				}
 			} catch (final Exception e) {
-				new QuestionDialog(null, ServerManagement.APPLICATION_NAME, "Configuration file '" + ServerManagement.SERVERS_CONFIGURATION_FILE + "' is corrupt: \n" + e.getMessage(), LangResources.get("ok")).open();
+				e.printStackTrace();
+				new QuestionDialog(null, ServerManagement.APPLICATION_NAME, "Configuration file '" + ServerManagement.SERVERS_CONFIGURATION_FILE + "' is invalid: \n" + e.getMessage(), LangResources.get("ok")).open();
 			}
 			try {
 				final ServerManagementGui serverManagementGui = new ServerManagementGui(serverManagementConfiguration);

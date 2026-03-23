@@ -39,7 +39,7 @@
 		<get src="https://repo1.maven.org/maven2/org/bouncycastle/bcprov-jdk18on/1.80/bcprov-jdk18on-1.80.jar" dest="lib/" />
 		<get src="https://repo1.maven.org/maven2/com/github/mwiede/jsch/0.2.23/jsch-0.2.23.jar" dest="lib/" />
 
-		<property name="json.version" value="26.1.31" />
+		<property name="json.version" value="26.1.32" />
 		<get src="https://github.com/hudeany/json/releases/download/${json.version}/json-${json.version}.jar" dest="lib/" />
 		<get src="https://github.com/hudeany/SshKeyFormats/releases/download/25.1.5/sshkeyformats-25.1.5.jar" dest="lib/" />
 		<property name="ProxyAutoConfig.version" value="26.0.0" />

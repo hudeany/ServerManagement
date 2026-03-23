@@ -4,7 +4,6 @@
 	<classpathentry kind="src" path="src/main/resources"/>
 	<classpathentry kind="lib" path="lib/bcpkix-jdk18on-1.80.jar"/>
 	<classpathentry kind="lib" path="lib/jsch-0.2.23.jar"/>
-	<classpathentry kind="lib" path="lib/json-26.1.31.jar"/>
 	<classpathentry kind="lib" path="lib/sshkeyformats-25.1.5.jar"/>
 	<classpathentry kind="lib" path="lib/bcprov-jdk18on-1.80.jar"/>
 	<classpathentry kind="lib" path="lib/proxyautoconfig-26.0.0.jar"/>
@@ -15,5 +14,6 @@
 			<attribute name="module" value="true"/>
 		</attributes>
 	</classpathentry>
+	<classpathentry kind="lib" path="lib/json-26.1.32.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

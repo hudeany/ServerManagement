@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Locale;
 
 import javax.imageio.ImageIO;
+import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
@@ -142,6 +143,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 		setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
 
 		setLayout(new BoxLayout(getContentPane(), BoxLayout.PAGE_AXIS));
+		((JPanel) getContentPane()).setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
 
 		final JPanel serverInformationPanel = addServerItemsPanel();
 
@@ -175,6 +177,8 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 		}
 
 		serverInformationScrollPane = new JScrollPane(serverInformationPanel);
+		serverInformationScrollPane.setBorder(null);
+		serverInformationScrollPane.setViewportBorder(null);
 		serverInformationScrollPane.setPreferredSize(new Dimension(750, 600));
 		serverInformationScrollPane.getVerticalScrollBar().setUnitIncrement(8);
 

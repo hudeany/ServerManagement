@@ -99,7 +99,8 @@ public class ServerManagementItem extends JPanel {
 	public ServerManagementItem(final ServerManagementGui serverManagementGui, final Server server, final ProxyConfiguration proxyConfiguration) throws Exception {
 		super();
 		setLayout(new BoxLayout(this, BoxLayout.PAGE_AXIS));
-		setBorder(BorderFactory.createLineBorder(Color.BLACK));
+		setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.BLACK),
+			BorderFactory.createEmptyBorder(5, 5, 5, 5)));
 
 		this.serverManagementGui = serverManagementGui;
 		serverManagementConfiguration = serverManagementGui.getServerManagementConfiguration();

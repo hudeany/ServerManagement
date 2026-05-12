@@ -1289,11 +1289,21 @@ public class ServerManagementItem extends JPanel {
 						cachedSftpConnectionString = sftpConnectionString;
 					}
 
-					try (InputStream inputStream = sftpConnection.downloadFile(filePath)) {
-						data = new String(IoUtilities.toByteArray(inputStream), StandardCharsets.UTF_8);
-					} catch (@SuppressWarnings("unused") final Exception e) {
-						setVersion(version.getName(), "ERROR");
-						status = "ERROR";
+
+					if (filePath.endsWith("/")) {
+						try {
+							data = Utilities.join(sftpConnection.listFiles(filePath), "\n");
+						} catch (@SuppressWarnings("unused") final Exception e) {
+							setVersion(version.getName(), "ERROR");
+							status = "ERROR";
+						}
+					} else {
+						try (InputStream inputStream = sftpConnection.downloadFile(filePath)) {
+							data = new String(IoUtilities.toByteArray(inputStream), StandardCharsets.UTF_8);
+						} catch (@SuppressWarnings("unused") final Exception e) {
+							setVersion(version.getName(), "ERROR");
+							status = "ERROR";
+						}
 					}
 				} else {
 					setVersion(version.getName(), "ERROR");
@@ -1321,6 +1331,7 @@ public class ServerManagementItem extends JPanel {
 							status = "ERROR";
 						}
 					} else if (version.getPath().toLowerCase().startsWith("regex(")) {
+						//Example: "regex(1): version: (.*)"
 						final Pattern regex = Pattern.compile(version.getPath().substring(version.getPath().indexOf(":") + 1));
 						final int group = Integer.parseInt(version.getPath().substring(6, version.getPath().indexOf(")")));
 						final Matcher matcher = regex.matcher(data);

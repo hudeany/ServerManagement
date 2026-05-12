@@ -1289,7 +1289,6 @@ public class ServerManagementItem extends JPanel {
 						cachedSftpConnectionString = sftpConnectionString;
 					}
 
-
 					if (filePath.endsWith("/")) {
 						try {
 							data = Utilities.join(sftpConnection.listFiles(filePath), "\n");

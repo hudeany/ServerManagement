@@ -1304,6 +1304,50 @@ public class ServerManagementItem extends JPanel {
 							status = "ERROR";
 						}
 					}
+				} else if (version.getLocation().toLowerCase().startsWith("ssh-cmd:")) {
+					String hostnameForSsh = server.getHost();
+					String usernameForSsh = server.getSshAdmin().getUsername();
+					File privateKeyFileForSsh = server.getSshAdmin().getPrivateKeyFile();
+					char[] passwordForSsh = server.getSshAdmin().getPasswordArray();
+
+					String command = version.getLocation().substring(8);
+
+					if (command.contains(":")) {
+						hostnameForSsh = command.substring(0, command.lastIndexOf(":"));
+						command = command.substring(command.lastIndexOf(":") + 1);
+					}
+
+					if (hostnameForSsh.contains("@")) {
+						usernameForSsh = hostnameForSsh.substring(0, hostnameForSsh.lastIndexOf("@"));
+						hostnameForSsh = hostnameForSsh.substring(hostnameForSsh.lastIndexOf("@") + 1);
+					}
+
+					if (usernameForSsh.contains(":")) {
+						privateKeyFileForSsh = null;
+						passwordForSsh = usernameForSsh.substring(usernameForSsh.lastIndexOf(":") + 1).toCharArray();
+						usernameForSsh = usernameForSsh.substring(0, usernameForSsh.lastIndexOf(":"));
+					}
+
+					final String sftpConnectionString = usernameForSsh + "@" + hostnameForSsh;
+
+					if (sftpConnection == null || !cachedSftpConnectionString.equals(sftpConnectionString)) {
+						if (sftpConnection != null) {
+							sftpConnection.close();
+						}
+						try {
+							sftpConnection = openSftpConnection(hostnameForSsh, usernameForSsh, privateKeyFileForSsh, passwordForSsh);
+						} catch (final Exception e) {
+							throw e;
+						}
+						cachedSftpConnectionString = sftpConnectionString;
+					}
+
+					try {
+						data = sftpConnection.executeCommand(command);
+					} catch (@SuppressWarnings("unused") final Exception e) {
+						setVersion(version.getName(), "ERROR");
+						status = "ERROR";
+					}
 				} else {
 					setVersion(version.getName(), "ERROR");
 					status = "ERROR";

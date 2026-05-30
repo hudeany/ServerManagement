@@ -51,8 +51,7 @@ import de.soderer.utilities.LangResources;
 import de.soderer.utilities.Utilities;
 
 public class SshLogViewerDialog extends JDialog {
-
-	private static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = 6355639543655800660L;
 
 	private final String host;
 	private final int port;
@@ -84,9 +83,9 @@ public class SshLogViewerDialog extends JDialog {
 	private Thread tailThread;
 	private Session jschSession;
 
-	public SshLogViewerDialog(final Window parent, final String title, final String host, final int port,
-			final String username, final File privateKeyFile, final char[] password, final String logFilePath) {
+	public SshLogViewerDialog(final Window parent, final String title, final String host, final int port, final String username, final File privateKeyFile, final char[] password, final String logFilePath) {
 		super(parent, LangResources.get("sshLogViewer.title") + " (" + title + ")", ModalityType.MODELESS);
+
 		this.host = host;
 		this.port = port;
 		this.username = username;
@@ -129,8 +128,7 @@ public class SshLogViewerDialog extends JDialog {
 	private JPanel buildToolbar() {
 		final JPanel bar = new JPanel(new GridBagLayout());
 		bar.setBackground(C_TOOLBAR_BG);
-		bar.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, C_BORDER),
-				BorderFactory.createEmptyBorder(6, 10, 6, 10)));
+		bar.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, C_BORDER), BorderFactory.createEmptyBorder(6, 10, 6, 10)));
 
 		final GridBagConstraints c = new GridBagConstraints();
 		c.insets = new Insets(0, 4, 0, 4);
@@ -152,8 +150,7 @@ public class SshLogViewerDialog extends JDialog {
 		infoField.setForeground(C_TEXT);
 		infoField.setFont(uiFont(11, Font.PLAIN));
 		infoField.setCaretPosition(0);
-		infoField.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(C_BORDER),
-				BorderFactory.createEmptyBorder(2, 6, 2, 6)));
+		infoField.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(C_BORDER), BorderFactory.createEmptyBorder(2, 6, 2, 6)));
 		c.gridx = 1;
 		c.weightx = 1;
 		bar.add(infoField, c);
@@ -208,8 +205,7 @@ public class SshLogViewerDialog extends JDialog {
 			scrollLocked.set(locked);
 			scrollLockButton.repaint();
 			final javax.swing.text.DefaultCaret caret = (javax.swing.text.DefaultCaret) logTextPane.getCaret();
-			caret.setUpdatePolicy(
-					locked ? javax.swing.text.DefaultCaret.NEVER_UPDATE : javax.swing.text.DefaultCaret.ALWAYS_UPDATE);
+			caret.setUpdatePolicy(locked ? javax.swing.text.DefaultCaret.NEVER_UPDATE : javax.swing.text.DefaultCaret.ALWAYS_UPDATE);
 		});
 		c.gridx = 4;
 		c.weightx = 0;
@@ -294,8 +290,7 @@ public class SshLogViewerDialog extends JDialog {
 				}
 
 				if (keyFileData != null) {
-					jsch.addIdentity(username, keyFileData, null,
-							password == null ? new byte[0] : new String(password).getBytes(StandardCharsets.UTF_8));
+					jsch.addIdentity(username, keyFileData, null, password == null ? new byte[0] : new String(password).getBytes(StandardCharsets.UTF_8));
 				} else if (password != null) {
 					jschSession.setPassword(new String(password));
 				} else {
@@ -320,7 +315,6 @@ public class SshLogViewerDialog extends JDialog {
 						SwingUtilities.invokeLater(() -> appendLine(finalLine));
 					}
 				}
-
 			} catch (final Exception ex) {
 				if (running.get()) {
 					SwingUtilities.invokeLater(() -> {
@@ -386,8 +380,7 @@ public class SshLogViewerDialog extends JDialog {
 
 	private static Color classifyLine(final String line) {
 		final String lower = line.toLowerCase();
-		if (lower.contains("error") || lower.contains("fatal") || lower.contains("exception")
-				|| lower.contains("critical") || lower.contains("crit")) {
+		if (lower.contains("error") || lower.contains("fatal") || lower.contains("exception") || lower.contains("critical") || lower.contains("crit")) {
 			return C_ERROR;
 		}
 		if (lower.contains("warn") || lower.contains("warning")) {
@@ -416,8 +409,7 @@ public class SshLogViewerDialog extends JDialog {
 			final Point ownerLoc = owner.getLocation();
 			final Dimension ownerSz = owner.getSize();
 			final Dimension mySize = getSize();
-			setLocation(ownerLoc.x + (ownerSz.width - mySize.width) / 2,
-					ownerLoc.y + (ownerSz.height - mySize.height) / 2);
+			setLocation(ownerLoc.x + (ownerSz.width - mySize.width) / 2, ownerLoc.y + (ownerSz.height - mySize.height) / 2);
 		} else {
 			setLocationRelativeTo(null);
 		}
@@ -425,8 +417,9 @@ public class SshLogViewerDialog extends JDialog {
 
 	private void cleanup() {
 		running.set(false);
-		if (jschSession != null && jschSession.isConnected())
+		if (jschSession != null && jschSession.isConnected()) {
 			jschSession.disconnect();
+		}
 	}
 
 	private static void styleButton(final JButton b) {
@@ -440,8 +433,7 @@ public class SshLogViewerDialog extends JDialog {
 
 	private static Font monospaceFont(final int size) {
 		final String[] candidates = { "Cascadia Code", "JetBrains Mono", "Consolas", "DejaVu Sans Mono", "Monospaced" };
-		final java.util.Set<String> availSet = new java.util.HashSet<>(
-				Arrays.asList(GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames()));
+		final java.util.Set<String> availSet = new java.util.HashSet<>(Arrays.asList(GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames()));
 		for (final String name : candidates) {
 			if (availSet.contains(name)) {
 				return new Font(name, Font.PLAIN, size);
@@ -449,5 +441,4 @@ public class SshLogViewerDialog extends JDialog {
 		}
 		return new Font(Font.MONOSPACED, Font.PLAIN, size);
 	}
-
 }

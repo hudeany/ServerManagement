@@ -84,6 +84,7 @@ public class ServerManagementItem extends JPanel {
 	private final Server server;
 	private final ProxyConfiguration proxyConfiguration;
 	private final TrustManager trustManager;
+	private final boolean deactivateHostnameVerification;
 
 	private JButton readAllUsersButton;
 	private JTable managedUserTable;
@@ -112,8 +113,10 @@ public class ServerManagementItem extends JPanel {
 
 		if (Utilities.isNotBlank(serverManagementConfiguration.getKeystore())) {
 			trustManager = TrustManagerUtilities.createTrustManagerForKeyStore(new File(serverManagementConfiguration.getKeystore()));
+			deactivateHostnameVerification = false;
 		} else {
 			trustManager = TrustManagerUtilities.createTrustAllTrustManager();
+			deactivateHostnameVerification = true;
 		}
 
 		createComponents();
@@ -1399,7 +1402,7 @@ public class ServerManagementItem extends JPanel {
 				try {
 					final HttpRequest request = new HttpRequest(HttpMethod.GET, url);
 					final LocalDateTime start = LocalDateTime.now();
-					final HttpResponse response = HttpUtilities.executeHttpRequest(request, proxyConfiguration.getProxy(request.getUrl()), trustManager);
+					final HttpResponse response = HttpUtilities.executeHttpRequest(request, proxyConfiguration.getProxy(request.getUrl()), trustManager, deactivateHostnameVerification);
 					final LocalDateTime end = LocalDateTime.now();
 					if (response.getHttpCode() == 200) {
 						setUrlTime(url, (int) ChronoUnit.SECONDS.between(start, end));
@@ -1436,7 +1439,7 @@ public class ServerManagementItem extends JPanel {
 						|| version.getLocation().toLowerCase().startsWith("https://")) {
 					try {
 						final HttpRequest request = new HttpRequest(HttpMethod.GET, version.getLocation());
-						final HttpResponse response = HttpUtilities.executeHttpRequest(request, proxyConfiguration.getProxy(request.getUrl()), trustManager);
+						final HttpResponse response = HttpUtilities.executeHttpRequest(request, proxyConfiguration.getProxy(request.getUrl()), trustManager, deactivateHostnameVerification);
 						if (response.getHttpCode() == 200) {
 							data = response.getContent();
 						} else {

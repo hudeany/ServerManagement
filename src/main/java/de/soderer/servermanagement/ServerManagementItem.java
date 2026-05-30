@@ -643,7 +643,7 @@ public class ServerManagementItem extends JPanel {
 								port = Integer.parseInt(host.substring(host.indexOf(":") + 1));
 								host = host.substring(0, host.indexOf(":"));
 							}
-							final SshLogViewerDialog dialog = new SshLogViewerDialog(serverManagementGui, logName, host, port, server.getSshAdmin().getUsername(), server.getSshAdmin().getPrivateKeyFile(), server.getSshAdmin().getPasswordArray(), path);
+							final SshLogViewerDialog dialog = new SshLogViewerDialog(serverManagementGui, server.getName() + " " + logName, host, port, server.getSshAdmin().getUsername(), server.getSshAdmin().getPrivateKeyFile(), server.getSshAdmin().getPasswordArray(), path);
 							dialog.open();
 						}
 					} catch (final Exception e) {

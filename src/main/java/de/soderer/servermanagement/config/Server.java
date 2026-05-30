@@ -10,6 +10,7 @@ public class Server {
 	private List<User> managedUsers = new ArrayList<>();
 	private List<String> urls = new ArrayList<>();
 	private List<Version> versions = new ArrayList<>();
+	private List<Log> logs = new ArrayList<>();
 
 	public String getName() {
 		return name;
@@ -62,6 +63,15 @@ public class Server {
 
 	public Server setVersions(final List<Version> versions) {
 		this.versions = versions;
+		return this;
+	}
+
+	public List<Log> getLogs() {
+		return logs;
+	}
+
+	public Server setLogs(final List<Log> logs) {
+		this.logs = logs;
 		return this;
 	}
 }

@@ -57,6 +57,7 @@ import de.soderer.network.trustmanager.TrustManagerUtilities;
 import de.soderer.pac.utilities.ProxyConfiguration;
 import de.soderer.servermanagement.config.Admin;
 import de.soderer.servermanagement.config.KnownPublicSshKey;
+import de.soderer.servermanagement.config.Log;
 import de.soderer.servermanagement.config.Server;
 import de.soderer.servermanagement.config.ServerManagementConfiguration;
 import de.soderer.servermanagement.config.User;
@@ -88,11 +89,13 @@ public class ServerManagementItem extends JPanel {
 	private JTable managedUserTable;
 	private JTable urlsTable;
 	private JTable versionsTable;
+	private JTable logsTable;
 	private String status = "OK";
 
 	private JButton removeUserButton;
 	private JButton removeUrlButton;
 	private JButton removeVersionButton;
+	private JButton removeLogButton;
 
 	private RefreshServerItemStatusWorker worker;
 
@@ -138,6 +141,11 @@ public class ServerManagementItem extends JPanel {
 			addVersionsPanel(server.getVersions());
 		}
 		addVersionsButtons();
+
+		if (Utilities.isNotEmpty(server.getLogs())) {
+			addLogsPanel(server.getLogs());
+		}
+		addLogsButtons();
 
 		validate();
 		updateUI();
@@ -575,6 +583,110 @@ public class ServerManagementItem extends JPanel {
 		add(Box.createRigidArea(new Dimension(5, 5)));
 	}
 
+	private void addLogsPanel(final List<Log> logs) {
+		final DefaultTableModel model = new DefaultTableModel();
+		model.addColumn(LangResources.get("logName"));
+		model.addColumn(LangResources.get("location"));
+		model.addColumn(LangResources.get("path"));
+
+		loadLogsData(model, logs);
+
+		logsTable = new JTable(model) {
+			@Override
+			public void changeSelection(final int rowIndex, final int columnIndex, final boolean toggle, final boolean extend) {
+				// Always toggle on single selection
+				super.changeSelection(rowIndex, columnIndex, !extend, extend);
+			}
+		};
+
+		logsTable.setDefaultEditor(Object.class, null);
+		logsTable.getColumnModel().getColumn(0).setPreferredWidth(50);
+
+		logsTable.getColumnModel().getColumn(1).setPreferredWidth(200);
+		final DefaultTableCellRenderer rightRenderer1 = new DefaultTableCellRenderer();
+		rightRenderer1.setHorizontalAlignment(SwingConstants.LEFT);
+		logsTable.getColumnModel().getColumn(1).setCellRenderer(rightRenderer1);
+
+		logsTable.getColumnModel().getColumn(2).setPreferredWidth(200);
+		final DefaultTableCellRenderer rightRenderer2 = new DefaultTableCellRenderer();
+		rightRenderer2.setHorizontalAlignment(SwingConstants.LEFT);
+		logsTable.getColumnModel().getColumn(2).setCellRenderer(rightRenderer2);
+
+		final ListSelectionModel selectionModel = logsTable.getSelectionModel();
+		selectionModel.addListSelectionListener(new ListSelectionListener() {
+			@Override
+			public void valueChanged(final ListSelectionEvent e) {
+				checkButtonStatus();
+			}
+		});
+
+		logsTable.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseClicked(final MouseEvent mouseEvent) {
+				if (mouseEvent.getClickCount() == 2) {
+					// Show log content on doubleclick
+					try {
+						final JTable table = (JTable) mouseEvent.getSource();
+						final int rowIndex = (table.convertRowIndexToModel(table.rowAtPoint(mouseEvent.getPoint())));
+
+						final String logName = (String) table.getModel().getValueAt(rowIndex, 0);
+						final String location = (String) table.getModel().getValueAt(rowIndex, 1);
+						final String path = (String) table.getModel().getValueAt(rowIndex, 2);
+
+						if (location.toLowerCase().startsWith("ssh://")) {
+							String host = location.substring(6);
+							int port = 22;
+							if (host.contains(":")) {
+								port = Integer.parseInt(host.substring(host.indexOf(":") + 1));
+								host = host.substring(0, host.indexOf(":"));
+							}
+							final SshLogViewerDialog dialog = new SshLogViewerDialog(serverManagementGui, logName, host, port, server.getSshAdmin().getUsername(), server.getSshAdmin().getPrivateKeyFile(), server.getSshAdmin().getPasswordArray(), path);
+							dialog.open();
+						}
+					} catch (final Exception e) {
+						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+					}
+				}
+			}
+		});
+
+		logsTable.setBorder(BorderFactory.createLineBorder(Color.BLACK));
+		logsTable.setRowHeight(20);
+
+		if (logsTable.getPreferredSize().getHeight() < 65) {
+			logsTable.setPreferredScrollableViewportSize(logsTable.getPreferredSize());
+		} else {
+			logsTable.setPreferredScrollableViewportSize(new Dimension((int) logsTable.getPreferredSize().getWidth(), 65));
+		}
+
+		final ServerManagementItem item = this;
+
+		final JScrollPane versionsScrollPane = new JScrollPane(logsTable);
+		versionsScrollPane.setBorder(BorderFactory.createEmptyBorder());
+		versionsScrollPane.addMouseWheelListener(
+				new MouseWheelListener() {
+					@Override
+					public void mouseWheelMoved(final MouseWheelEvent e) {
+						final boolean scrollDown = e.getWheelRotation() > 0;
+						final BoundedRangeModel verticalScrollBarModel = versionsScrollPane.getVerticalScrollBar().getModel();
+						if (!scrollDown && verticalScrollBarModel.getValue() <= verticalScrollBarModel.getMinimum()) {
+							versionsScrollPane.getParent().dispatchEvent(SwingUtilities.convertMouseEvent(versionsScrollPane, e, item));
+						} else if (scrollDown && verticalScrollBarModel.getValue() + verticalScrollBarModel.getExtent() >= verticalScrollBarModel.getMaximum()) {
+							versionsScrollPane.getParent().dispatchEvent(SwingUtilities.convertMouseEvent(versionsScrollPane, e, item));
+						}
+					}
+				}
+				);
+
+		final JPanel logsTablePanel = new JPanel();
+		logsTablePanel.setLayout(new BorderLayout());
+		logsTablePanel.add(versionsScrollPane);
+
+		add(logsTablePanel);
+
+		add(Box.createRigidArea(new Dimension(5, 5)));
+	}
+
 	private void addUrlsButtons() {
 		final JPanel buttonPanel = new JPanel();
 		buttonPanel.setLayout(new FlowLayout(FlowLayout.LEFT));
@@ -663,7 +775,7 @@ public class ServerManagementItem extends JPanel {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
 				try {
-					final String versionName = (String) versionsTable.getModel().getValueAt(versionsTable.getSelectedRow(), 0);
+					final String versionName = (String) logsTable.getModel().getValueAt(logsTable.getSelectedRow(), 0);
 					if (Utilities.isNotBlank(versionName)
 							&& new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("removeVersion"), LangResources.get("removeVersionQuestion", versionName), LangResources.get("ok"), LangResources.get("cancel")).open() == 0) {
 						for (int i = 0; i < server.getVersions().size(); i++) {
@@ -673,7 +785,7 @@ public class ServerManagementItem extends JPanel {
 							}
 						}
 
-						((DefaultTableModel) versionsTable.getModel()).removeRow(versionsTable.getSelectedRow());
+						((DefaultTableModel) logsTable.getModel()).removeRow(logsTable.getSelectedRow());
 
 						checkButtonStatus();
 						serverManagementGui.signalUnsavedChanges();
@@ -692,8 +804,8 @@ public class ServerManagementItem extends JPanel {
 				try {
 					refreshVersions();
 					String result = "";
-					for (int i = 0; i < versionsTable.getModel().getRowCount(); i++) {
-						result += versionsTable.getModel().getValueAt(i, 0) + ": " + versionsTable.getModel().getValueAt(i, 3) + "\n";
+					for (int i = 0; i < logsTable.getModel().getRowCount(); i++) {
+						result += logsTable.getModel().getValueAt(i, 0) + ": " + logsTable.getModel().getValueAt(i, 3) + "\n";
 					}
 					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " readVersions", result.trim()).open();
 				} catch (final Exception e) {
@@ -702,6 +814,65 @@ public class ServerManagementItem extends JPanel {
 			}
 		});
 		buttonPanel.add(readVersionsButton);
+
+		add(buttonPanel);
+	}
+
+	private void addLogsButtons() {
+		final JPanel buttonPanel = new JPanel();
+		buttonPanel.setLayout(new FlowLayout(FlowLayout.LEFT));
+
+		final JButton addLogButton = new JButton(LangResources.get("addLog"));
+		addLogButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(final ActionEvent event) {
+				try {
+					final List<String> dialogResult = new MultiInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addLog"), LangResources.get("addLog"),
+							LangResources.get("logName"),
+							LangResources.get("location"),
+							LangResources.get("path")).open();
+					if (dialogResult != null) {
+						final Log newLog = new Log().setName(dialogResult.get(0)).setLocation(dialogResult.get(1)).setPath(dialogResult.get(2));
+						server.getLogs().add(newLog);
+
+						createComponents();
+
+						checkButtonStatus();
+						serverManagementGui.signalUnsavedChanges();
+					}
+				} catch (final Exception e) {
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+				}
+			}
+		});
+		buttonPanel.add(addLogButton);
+
+		removeLogButton = new JButton(LangResources.get("removeLog"));
+		removeLogButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(final ActionEvent event) {
+				try {
+					final String versionName = (String) logsTable.getModel().getValueAt(logsTable.getSelectedRow(), 0);
+					if (Utilities.isNotBlank(versionName)
+							&& new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("removeLog"), LangResources.get("removeLogQuestion", versionName), LangResources.get("ok"), LangResources.get("cancel")).open() == 0) {
+						for (int i = 0; i < server.getLogs().size(); i++) {
+							if (server.getLogs().get(i).getName().equals(versionName)) {
+								server.getLogs().remove(i);
+								break;
+							}
+						}
+
+						((DefaultTableModel) logsTable.getModel()).removeRow(logsTable.getSelectedRow());
+
+						checkButtonStatus();
+						serverManagementGui.signalUnsavedChanges();
+					}
+				} catch (final Exception e) {
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+				}
+			}
+		});
+		buttonPanel.add(removeLogButton);
 
 		add(buttonPanel);
 	}
@@ -730,6 +901,15 @@ public class ServerManagementItem extends JPanel {
 		}
 		for (final Version version : versions) {
 			model.addRow(new String[] { version.getName(), version.getLocation(), version.getPath() });
+		}
+	}
+
+	private static void loadLogsData(final DefaultTableModel model, final List<Log> logs) {
+		for (int i = model.getRowCount() - 1; i >= 0; i--) {
+			model.removeRow(i);
+		}
+		for (final Log log : logs) {
+			model.addRow(new String[] { log.getName(), log.getLocation(), log.getPath() });
 		}
 	}
 
@@ -1045,6 +1225,8 @@ public class ServerManagementItem extends JPanel {
 			} else {
 				removeUserButton.setEnabled(false);
 			}
+		} else {
+			removeUserButton.setEnabled(false);
 		}
 
 		if (urlsTable != null) {
@@ -1053,6 +1235,8 @@ public class ServerManagementItem extends JPanel {
 			} else {
 				removeUrlButton.setEnabled(false);
 			}
+		} else {
+			removeUrlButton.setEnabled(false);
 		}
 
 		if (versionsTable != null) {
@@ -1061,6 +1245,18 @@ public class ServerManagementItem extends JPanel {
 			} else {
 				removeVersionButton.setEnabled(false);
 			}
+		} else {
+			removeVersionButton.setEnabled(false);
+		}
+
+		if (logsTable != null) {
+			if (logsTable.getSelectedRowCount() > 0) {
+				removeLogButton.setEnabled(true);
+			} else {
+				removeLogButton.setEnabled(false);
+			}
+		} else {
+			removeLogButton.setEnabled(false);
 		}
 	}
 

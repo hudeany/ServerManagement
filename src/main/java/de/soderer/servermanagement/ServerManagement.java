@@ -44,9 +44,9 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 	public static final String HELP_RESOURCE_FILE = "/help.txt";
 
 	/** The Constant CONFIGURATION_FILE. */
-	public static final File CONFIGURATION_FILE = new File(System.getProperty("user.home") + File.separator + "." + APPLICATION_NAME + ".config");
+	public static final File CONFIGURATION_FILE = new File(System.getProperty("user.home") + File.separator + "." + APPLICATION_NAME + File.separator + "." + APPLICATION_NAME + ".config");
 
-	public static File SERVERS_CONFIGURATION_FILE = new File(System.getProperty("user.home") + File.separator + "." + APPLICATION_NAME + ".servers.config");
+	public static File SERVERS_CONFIGURATION_FILE = new File(System.getProperty("user.home") + File.separator + "." + APPLICATION_NAME + File.separator + "." + APPLICATION_NAME + ".servers.config");
 
 	/** The version is filled in at application start from the version.txt file. */
 	public static Version VERSION = null;

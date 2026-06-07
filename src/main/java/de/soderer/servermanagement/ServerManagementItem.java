@@ -16,6 +16,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -46,6 +47,12 @@ import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathFactory;
+
+import org.w3c.dom.Document;
+import org.xml.sax.InputSource;
 
 import de.soderer.json.JsonReader;
 import de.soderer.json.JsonValueString;
@@ -1566,6 +1573,15 @@ public class ServerManagementItem extends JPanel {
 							jsonReader.readUpToJsonPath(version.getPath().substring(5));
 							jsonReader.readNextJsonNode();
 							final String versionText = ((JsonValueString) jsonReader.getCurrentObject()).getValue();
+							setVersion(version.getName(), versionText);
+						} catch (@SuppressWarnings("unused") final Exception e) {
+							setVersion(version.getName(), "ERROR");
+							status = "ERROR";
+						}
+					} else if (version.getPath().toLowerCase().startsWith("xml:")) {
+						try {
+							final Document document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new InputSource(new StringReader(data)));
+							final String versionText = (String) XPathFactory.newInstance().newXPath().evaluate(version.getPath().substring(4), document, XPathConstants.STRING);
 							setVersion(version.getName(), versionText);
 						} catch (@SuppressWarnings("unused") final Exception e) {
 							setVersion(version.getName(), "ERROR");

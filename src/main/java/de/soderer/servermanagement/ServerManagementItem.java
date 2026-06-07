@@ -807,8 +807,8 @@ public class ServerManagementItem extends JPanel {
 				try {
 					refreshVersions();
 					String result = "";
-					for (int i = 0; i < logsTable.getModel().getRowCount(); i++) {
-						result += logsTable.getModel().getValueAt(i, 0) + ": " + logsTable.getModel().getValueAt(i, 3) + "\n";
+					for (int i = 0; i < versionsTable.getModel().getRowCount(); i++) {
+						result += versionsTable.getModel().getValueAt(i, 0) + ": " + versionsTable.getModel().getValueAt(i, 3) + "\n";
 					}
 					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " readVersions", result.trim()).open();
 				} catch (final Exception e) {

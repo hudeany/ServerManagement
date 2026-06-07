@@ -463,14 +463,14 @@ public class ServerManagementItem extends JPanel {
 		add(Box.createRigidArea(new Dimension(5, 5)));
 	}
 
-	private void addVersionsPanel(final List<Version> urls) {
+	private void addVersionsPanel(final List<Version> versions) {
 		final DefaultTableModel model = new DefaultTableModel();
 		model.addColumn(LangResources.get("versionName"));
 		model.addColumn(LangResources.get("location"));
 		model.addColumn(LangResources.get("path"));
 		model.addColumn(LangResources.get("version"));
 
-		loadVersionsData(model, urls);
+		loadVersionsData(model, versions);
 
 		versionsTable = new JTable(model) {
 			private static final long serialVersionUID = -5447166999136247378L;
@@ -514,9 +514,15 @@ public class ServerManagementItem extends JPanel {
 					// Open Edit version on doubleclick
 					try {
 						final JTable table = (JTable) mouseEvent.getSource();
-						final int rowIndex = (table.convertRowIndexToModel(table.rowAtPoint(mouseEvent.getPoint())));
-
+						final int row = table.rowAtPoint(mouseEvent.getPoint());
+						if (row < 0) {
+							return;
+						}
+						final int rowIndex = table.convertRowIndexToModel(row);
 						final String versionName = (String) table.getModel().getValueAt(rowIndex, 0);
+						if (versionName == null || versionName.isBlank()) {
+							return;
+						}
 
 						final List<String> dialogResult = new MultiInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("editVersion"), LangResources.get("editVersion"),
 								LangResources.get("versionName"),
@@ -528,14 +534,14 @@ public class ServerManagementItem extends JPanel {
 										(String) table.getModel().getValueAt(rowIndex, 2)})
 								.open();
 						if (dialogResult != null) {
-							for (final Version version : server.getVersions()) {
-								if (versionName.equals(version.getName())) {
-									version.setName(dialogResult.get(0));
-									version.setLocation(dialogResult.get(1));
-									version.setPath(dialogResult.get(2));
-									break;
-								}
-							}
+							final Version version = server.getVersions().get(rowIndex);
+							version.setName(dialogResult.get(0));
+							version.setLocation(dialogResult.get(1));
+							version.setPath(dialogResult.get(2));
+
+							createComponents();
+							checkButtonStatus();
+							serverManagementGui.signalUnsavedChanges();
 
 							createComponents();
 
@@ -778,23 +784,25 @@ public class ServerManagementItem extends JPanel {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
 				try {
-					final String versionName = (String) logsTable.getModel().getValueAt(logsTable.getSelectedRow(), 0);
-					if (Utilities.isNotBlank(versionName)
-							&& new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("removeVersion"), LangResources.get("removeVersionQuestion", versionName), LangResources.get("ok"), LangResources.get("cancel")).open() == 0) {
-						for (int i = 0; i < server.getVersions().size(); i++) {
-							if (server.getVersions().get(i).getName().equals(versionName)) {
-								server.getVersions().remove(i);
-								break;
-							}
-						}
-
-						((DefaultTableModel) logsTable.getModel()).removeRow(logsTable.getSelectedRow());
+					final int selectedRow = versionsTable.getSelectedRow();
+					if (selectedRow < 0) {
+						return;
+					}
+					final int rowIndex = versionsTable.convertRowIndexToModel(selectedRow);
+					final String versionName = (String) versionsTable.getModel().getValueAt(rowIndex, 0);
+					if (Utilities.isNotBlank(versionName) && new QuestionDialog(serverManagementGui,
+							ServerManagement.APPLICATION_NAME + " " + LangResources.get("removeVersion"),
+							LangResources.get("removeVersionQuestion", versionName), LangResources.get("ok"),
+							LangResources.get("cancel")).open() == 0) {
+						server.getVersions().remove(rowIndex);
+						((DefaultTableModel) versionsTable.getModel()).removeRow(rowIndex);
 
 						checkButtonStatus();
 						serverManagementGui.signalUnsavedChanges();
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR",
+							"ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
 				}
 			}
 		});

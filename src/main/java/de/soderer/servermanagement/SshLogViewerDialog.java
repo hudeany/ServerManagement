@@ -25,7 +25,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
-import javax.swing.JDialog;
+import javax.swing.JCheckBox;
+import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
@@ -33,7 +34,6 @@ import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 import javax.swing.JTextPane;
-import javax.swing.JToggleButton;
 import javax.swing.SwingUtilities;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.SimpleAttributeSet;
@@ -50,7 +50,7 @@ import de.soderer.sshkeyformats.SshKeyWriter;
 import de.soderer.utilities.LangResources;
 import de.soderer.utilities.Utilities;
 
-public class SshLogViewerDialog extends JDialog {
+public class SshLogViewerDialog extends JFrame {
 	private static final long serialVersionUID = 6355639543655800660L;
 
 	private final String host;
@@ -64,7 +64,9 @@ public class SshLogViewerDialog extends JDialog {
 	private StyledDocument logDoc;
 	private JLabel statusLabel;
 	private JButton connectButton;
-	private JToggleButton scrollLockButton;
+	private JCheckBox scrollLockCheckBox;
+	private JCheckBox lineWrapCheckBox;
+	private JScrollPane logScrollPane;
 
 	private static final Color C_BACKGROUND = Color.WHITE;
 	private static final Color C_TEXT = Color.BLACK;
@@ -80,11 +82,12 @@ public class SshLogViewerDialog extends JDialog {
 
 	private final AtomicBoolean running = new AtomicBoolean(false);
 	private final AtomicBoolean scrollLocked = new AtomicBoolean(false);
+	private final AtomicBoolean lineWrap = new AtomicBoolean(true);
 	private Thread tailThread;
 	private Session jschSession;
 
 	public SshLogViewerDialog(final Window parent, final String title, final String host, final int port, final String username, final File privateKeyFile, final char[] password, final String logFilePath) {
-		super(parent, LangResources.get("sshLogViewer.title") + " (" + title + ")", ModalityType.MODELESS);
+		super(LangResources.get("sshLogViewer.title") + " (" + title + ")");
 
 		this.host = host;
 		this.port = port;
@@ -182,34 +185,34 @@ public class SshLogViewerDialog extends JDialog {
 		c.weightx = 0;
 		bar.add(clearButton, c);
 
-		scrollLockButton = new JToggleButton(LangResources.get("sshLogViewer.scrollLock")) {
-			@Override
-			protected void paintComponent(final java.awt.Graphics g) {
-				if (isSelected()) {
-					g.setColor(new Color(255, 200, 200));
-					g.fillRect(0, 0, getWidth(), getHeight());
-				} else {
-					g.setColor(C_TOOLBAR_BG);
-					g.fillRect(0, 0, getWidth(), getHeight());
-				}
-				super.paintComponent(g);
-			}
-		};
-		scrollLockButton.setContentAreaFilled(false);
-		scrollLockButton.setOpaque(false);
-		scrollLockButton.setForeground(new Color(60, 60, 60));
-		scrollLockButton.setFont(uiFont(11, Font.PLAIN));
-		scrollLockButton.setFocusPainted(false);
-		scrollLockButton.addItemListener(e -> {
+		scrollLockCheckBox = new JCheckBox(LangResources.get("sshLogViewer.scrollLock"));
+		scrollLockCheckBox.setBackground(C_TOOLBAR_BG);
+		scrollLockCheckBox.setForeground(new Color(60, 60, 60));
+		scrollLockCheckBox.setFont(uiFont(11, Font.PLAIN));
+		scrollLockCheckBox.setFocusPainted(false);
+		scrollLockCheckBox.addItemListener(e -> {
 			final boolean locked = e.getStateChange() == java.awt.event.ItemEvent.SELECTED;
 			scrollLocked.set(locked);
-			scrollLockButton.repaint();
 			final javax.swing.text.DefaultCaret caret = (javax.swing.text.DefaultCaret) logTextPane.getCaret();
 			caret.setUpdatePolicy(locked ? javax.swing.text.DefaultCaret.NEVER_UPDATE : javax.swing.text.DefaultCaret.ALWAYS_UPDATE);
 		});
 		c.gridx = 4;
 		c.weightx = 0;
-		bar.add(scrollLockButton, c);
+		bar.add(scrollLockCheckBox, c);
+
+		lineWrapCheckBox = new JCheckBox(LangResources.get("sshLogViewer.lineWrap"));
+		lineWrapCheckBox.setSelected(true);
+		lineWrapCheckBox.setBackground(C_TOOLBAR_BG);
+		lineWrapCheckBox.setForeground(new Color(60, 60, 60));
+		lineWrapCheckBox.setFont(uiFont(11, Font.PLAIN));
+		lineWrapCheckBox.setFocusPainted(false);
+		lineWrapCheckBox.addItemListener(e -> {
+			lineWrap.set(e.getStateChange() == java.awt.event.ItemEvent.SELECTED);
+			applyLineWrap();
+		});
+		c.gridx = 5;
+		c.weightx = 0;
+		bar.add(lineWrapCheckBox, c);
 
 		return bar;
 	}
@@ -239,9 +242,9 @@ public class SshLogViewerDialog extends JDialog {
 		ctx.add(selectAll);
 		logTextPane.setComponentPopupMenu(ctx);
 
-		final JScrollPane scroll = new JScrollPane(logTextPane);
-		scroll.setBorder(BorderFactory.createEmptyBorder());
-		return scroll;
+		logScrollPane = new JScrollPane(logTextPane);
+		logScrollPane.setBorder(BorderFactory.createEmptyBorder());
+		return logScrollPane;
 	}
 
 	private JPanel buildStatusBar() {
@@ -412,6 +415,17 @@ public class SshLogViewerDialog extends JDialog {
 			setLocation(ownerLoc.x + (ownerSz.width - mySize.width) / 2, ownerLoc.y + (ownerSz.height - mySize.height) / 2);
 		} else {
 			setLocationRelativeTo(null);
+		}
+	}
+
+	private void applyLineWrap() {
+		if (lineWrap.get()) {
+			logScrollPane.setViewportView(logTextPane);
+		} else {
+			final JPanel noWrapPanel = new JPanel(new BorderLayout());
+			noWrapPanel.setBackground(C_BACKGROUND);
+			noWrapPanel.add(logTextPane, BorderLayout.CENTER);
+			logScrollPane.setViewportView(noWrapPanel);
 		}
 	}
 

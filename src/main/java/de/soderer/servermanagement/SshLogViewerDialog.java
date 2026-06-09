@@ -15,6 +15,8 @@ import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -47,6 +49,7 @@ import javax.swing.text.StyledDocument;
 
 import com.jcraft.jsch.ChannelExec;
 import com.jcraft.jsch.JSch;
+import com.jcraft.jsch.JSchException;
 import com.jcraft.jsch.Session;
 
 import de.soderer.sshkeyformats.SshKey;
@@ -103,6 +106,9 @@ public class SshLogViewerDialog extends JFrame {
 	private boolean lastCaseSensitive = false;
 	private boolean lastRegex = false;
 
+	/**
+	 * @param parent
+	 */
 	public SshLogViewerDialog(final Window parent, final String title, final String host, final int port, final String username, final File privateKeyFile, final char[] password, final String logFilePath) {
 		super(LangResources.get("sshLogViewer.title") + " (" + title + ")");
 
@@ -121,6 +127,7 @@ public class SshLogViewerDialog extends JFrame {
 		if (logFilePath == null || logFilePath.isEmpty()) {
 			throw new Exception("No log file path configured");
 		}
+
 		checkRemoteFileExists();
 
 		setDefaultCloseOperation(DISPOSE_ON_CLOSE);
@@ -378,34 +385,9 @@ public class SshLogViewerDialog extends JFrame {
 		tailThread = new Thread(() -> {
 			ChannelExec channel = null;
 			try {
-				final JSch jsch = new JSch();
-				jschSession = jsch.getSession(username, host, port);
-
-				byte[] keyFileData = null;
-				if (privateKeyFile != null) {
-					try (InputStream inputStream = new FileInputStream(privateKeyFile)) {
-						final SshKey sshKey;
-						if (Utilities.isNotBlank(password)) {
-							sshKey = SshKeyReader.readKey(inputStream, password);
-						} else {
-							sshKey = SshKeyReader.readKey(inputStream, null);
-						}
-						final ByteArrayOutputStream keyDataStream = new ByteArrayOutputStream();
-						SshKeyWriter.writePuttyVersion2Key(keyDataStream, sshKey, null);
-						keyFileData = keyDataStream.toByteArray();
-					}
+				if (jschSession == null || !jschSession.isConnected()) {
+					createJschSession();
 				}
-
-				if (keyFileData != null) {
-					jsch.addIdentity(username, keyFileData, null, password == null ? new byte[0] : new String(password).getBytes(StandardCharsets.UTF_8));
-				} else if (password != null) {
-					jschSession.setPassword(new String(password));
-				} else {
-					throw new Exception("At least one of keyFileData or password is expected");
-				}
-
-				jschSession.setConfig("StrictHostKeyChecking", "no");
-				jschSession.connect(10_000);
 
 				channel = (ChannelExec) jschSession.openChannel("exec");
 				channel.setCommand("tail -n 500 -F " + logFilePath);
@@ -430,10 +412,9 @@ public class SshLogViewerDialog extends JFrame {
 					});
 				}
 			} finally {
-				if (channel != null && channel.isConnected())
+				if (channel != null && channel.isConnected()) {
 					channel.disconnect();
-				if (jschSession != null && jschSession.isConnected())
-					jschSession.disconnect();
+				}
 				SwingUtilities.invokeLater(() -> {
 					running.set(false);
 					updateConnectButton(false);
@@ -445,6 +426,37 @@ public class SshLogViewerDialog extends JFrame {
 		}, "ssh-tail-thread");
 		tailThread.setDaemon(true);
 		tailThread.start();
+	}
+
+	private void createJschSession() throws JSchException, Exception, IOException, FileNotFoundException {
+		final JSch jsch = new JSch();
+		jschSession = jsch.getSession(username, host, port);
+
+		byte[] keyFileData = null;
+		if (privateKeyFile != null) {
+			try (InputStream inputStream = new FileInputStream(privateKeyFile)) {
+				final SshKey sshKey;
+				if (Utilities.isNotBlank(password)) {
+					sshKey = SshKeyReader.readKey(inputStream, password);
+				} else {
+					sshKey = SshKeyReader.readKey(inputStream, null);
+				}
+				final ByteArrayOutputStream keyDataStream = new ByteArrayOutputStream();
+				SshKeyWriter.writePuttyVersion2Key(keyDataStream, sshKey, null);
+				keyFileData = keyDataStream.toByteArray();
+			}
+		}
+
+		if (keyFileData != null) {
+			jsch.addIdentity(username, keyFileData, null, password == null ? new byte[0] : new String(password).getBytes(StandardCharsets.UTF_8));
+		} else if (password != null) {
+			jschSession.setPassword(new String(password));
+		} else {
+			throw new Exception("At least one of keyFileData or password is expected");
+		}
+
+		jschSession.setConfig("StrictHostKeyChecking", "no");
+		jschSession.connect(10_000);
 	}
 
 	private void stopTailing() {
@@ -511,44 +523,21 @@ public class SshLogViewerDialog extends JFrame {
 	}
 
 	private void checkRemoteFileExists() throws Exception {
-		final JSch jsch = new JSch();
-		final Session session = jsch.getSession(username, host, port);
-
-		byte[] keyFileData = null;
-		if (privateKeyFile != null) {
-			try (InputStream inputStream = new FileInputStream(privateKeyFile)) {
-				final SshKey sshKey = Utilities.isNotBlank(password) ? SshKeyReader.readKey(inputStream, password) : SshKeyReader.readKey(inputStream, null);
-				final ByteArrayOutputStream keyDataStream = new ByteArrayOutputStream();
-				SshKeyWriter.writePuttyVersion2Key(keyDataStream, sshKey, null);
-				keyFileData = keyDataStream.toByteArray();
-			}
+		if (jschSession == null || !jschSession.isConnected()) {
+			createJschSession();
 		}
 
-		if (keyFileData != null) {
-			jsch.addIdentity(username, keyFileData, null, password == null ? new byte[0] : new String(password).getBytes(StandardCharsets.UTF_8));
-		} else if (password != null) {
-			session.setPassword(new String(password));
-		} else {
-			throw new Exception("At least one of keyFileData or password is expected");
+		final ChannelExec channel = (ChannelExec) jschSession.openChannel("exec");
+		channel.setCommand("test -e " + logFilePath + " && echo exists || echo missing");
+		final ByteArrayOutputStream out = new ByteArrayOutputStream();
+		channel.setOutputStream(out);
+		channel.connect();
+		while (!channel.isClosed()) {
+			Thread.sleep(100);
 		}
-
-		session.setConfig("StrictHostKeyChecking", "no");
-		session.connect(10_000);
-		try {
-			final ChannelExec channel = (ChannelExec) session.openChannel("exec");
-			channel.setCommand("test -e " + logFilePath + " && echo exists || echo missing");
-			final ByteArrayOutputStream out = new ByteArrayOutputStream();
-			channel.setOutputStream(out);
-			channel.connect();
-			while (!channel.isClosed()) {
-				Thread.sleep(100);
-			}
-			channel.disconnect();
-			if (!out.toString(StandardCharsets.UTF_8).trim().equals("exists")) {
-				throw new Exception("Remote log file not found: " + buildConnectionDisplay());
-			}
-		} finally {
-			session.disconnect();
+		channel.disconnect();
+		if (!out.toString(StandardCharsets.UTF_8).trim().equals("exists")) {
+			throw new Exception("Remote log file not found: " + buildConnectionDisplay());
 		}
 	}
 

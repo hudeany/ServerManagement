@@ -345,7 +345,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 						iconImage = ImageIO.read(getClass().getClassLoader().getResource("ServerManagement_Icon.png"));
 					}
 
-					final ApplicationConfigurationDialog applicationConfigurationDialog = new ApplicationConfigurationDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, ServerManagement.APPLICATION_STARTUPCLASS_NAME, ServerManagement.VERSION, ServerManagement.VERSION_BUILDTIME, applicationConfiguration, iconData, iconImage, ServerManagement.VERSIONINFO_DOWNLOAD_URL, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, ServerManagement.CONFIGURATION_FILE.getAbsolutePath());
+					final ApplicationConfigurationDialog applicationConfigurationDialog = new ApplicationConfigurationDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, ServerManagement.APPLICATION_STARTUPCLASS_NAME, ServerManagement.VERSION, ServerManagement.VERSION_BUILDTIME, applicationConfiguration, iconData, iconImage, ServerManagement.VERSIONINFO_DOWNLOAD_URL, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, ServerManagement.SERVERS_CONFIGURATION_FILE.getAbsolutePath());
 					final Result result = applicationConfigurationDialog.open();
 					if (result != null && result == Result.OK) {
 						applicationConfiguration.save();

@@ -105,6 +105,7 @@ public class SshLogViewerDialog extends JFrame {
 	private String lastSearchTerm = "";
 	private boolean lastCaseSensitive = false;
 	private boolean lastRegex = false;
+	private int lastDocLength = -1;
 
 	/**
 	 * @param parent
@@ -558,7 +559,8 @@ public class SshLogViewerDialog extends JFrame {
 		final boolean caseSensitive = caseSensitiveCheckBox.isSelected();
 		final boolean regex = regexCheckBox.isSelected();
 
-		final boolean paramsChanged = !term.equals(lastSearchTerm) || caseSensitive != lastCaseSensitive || regex != lastRegex;
+		final int currentDocLength = logDoc.getLength();
+		final boolean paramsChanged = !term.equals(lastSearchTerm) || caseSensitive != lastCaseSensitive || regex != lastRegex || currentDocLength != lastDocLength;
 		if (!paramsChanged && !searchMatches.isEmpty()) {
 			return;
 		}
@@ -566,6 +568,11 @@ public class SshLogViewerDialog extends JFrame {
 		lastSearchTerm = term;
 		lastCaseSensitive = caseSensitive;
 		lastRegex = regex;
+		lastDocLength = currentDocLength;
+
+		final int previousMatchOffset = (searchMatchIndex >= 0 && searchMatchIndex < searchMatches.size())
+				? searchMatches.get(searchMatchIndex)[0]
+				: -1;
 
 		final javax.swing.text.Highlighter highlighter = logTextPane.getHighlighter();
 		highlighter.removeAllHighlights();
@@ -588,6 +595,16 @@ public class SshLogViewerDialog extends JFrame {
 			while (matcher.find()) {
 				searchMatches.add(new int[] { matcher.start(), matcher.end() });
 				highlighter.addHighlight(matcher.start(), matcher.end(), normalPainter);
+			}
+
+			if (!searchMatches.isEmpty() && previousMatchOffset >= 0) {
+				int nearest = 0;
+				for (int i = 1; i < searchMatches.size(); i++) {
+					if (Math.abs(searchMatches.get(i)[0] - previousMatchOffset) < Math.abs(searchMatches.get(nearest)[0] - previousMatchOffset)) {
+						nearest = i;
+					}
+				}
+				searchMatchIndex = nearest;
 			}
 
 			searchField.setBackground(searchMatches.isEmpty() ? new Color(255, 210, 210) : C_FIELD_BG);

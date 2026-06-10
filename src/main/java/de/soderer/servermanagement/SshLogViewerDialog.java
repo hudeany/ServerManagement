@@ -99,6 +99,7 @@ public class SshLogViewerDialog extends JFrame {
 	private JTextField searchField;
 	private JCheckBox caseSensitiveCheckBox;
 	private JCheckBox regexCheckBox;
+	private JCheckBox filterModeCheckBox;
 	private JLabel searchResultLabel;
 	private final List<int[]> searchMatches = new ArrayList<>();
 	private int searchMatchIndex = -1;
@@ -106,6 +107,8 @@ public class SshLogViewerDialog extends JFrame {
 	private boolean lastCaseSensitive = false;
 	private boolean lastRegex = false;
 	private int lastDocLength = -1;
+	private final List<String> rawLines = new ArrayList<>();
+	private final AtomicBoolean filterMode = new AtomicBoolean(false);
 
 	/**
 	 * @param parent
@@ -217,6 +220,7 @@ public class SshLogViewerDialog extends JFrame {
 		final JButton clearButton = new JButton(LangResources.get("sshLogViewer.clear"));
 		styleButton(clearButton);
 		clearButton.addActionListener(e -> {
+			rawLines.clear();
 			try {
 				logDoc.remove(0, logDoc.getLength());
 			} catch (@SuppressWarnings("unused") final BadLocationException ex) {
@@ -305,24 +309,38 @@ public class SshLogViewerDialog extends JFrame {
 		c.weightx = 0;
 		bar.add(regexCheckBox, c);
 
+		filterModeCheckBox = new JCheckBox(LangResources.get("sshLogViewer.search.filterMode"));
+		filterModeCheckBox.setBackground(C_TOOLBAR_BG);
+		filterModeCheckBox.setForeground(new Color(60, 60, 60));
+		filterModeCheckBox.setFont(uiFont(11, Font.PLAIN));
+		filterModeCheckBox.setFocusPainted(false);
+		filterModeCheckBox.addItemListener(e -> {
+			filterMode.set(e.getStateChange() == java.awt.event.ItemEvent.SELECTED);
+			rebuildDocumentFromRawLines();
+			invalidateSearch();
+		});
+		c.gridx = 4;
+		c.weightx = 0;
+		bar.add(filterModeCheckBox, c);
+
 		final JButton searchUpButton = new JButton(LangResources.get("sshLogViewer.search.up"));
 		styleButton(searchUpButton);
 		searchUpButton.addActionListener(e -> searchPrev());
-		c.gridx = 4;
+		c.gridx = 5;
 		c.weightx = 0;
 		bar.add(searchUpButton, c);
 
 		final JButton searchDownButton = new JButton(LangResources.get("sshLogViewer.search.down"));
 		styleButton(searchDownButton);
 		searchDownButton.addActionListener(e -> searchNext());
-		c.gridx = 5;
+		c.gridx = 6;
 		c.weightx = 0;
 		bar.add(searchDownButton, c);
 
 		searchResultLabel = new JLabel();
 		searchResultLabel.setFont(uiFont(11, Font.PLAIN));
 		searchResultLabel.setForeground(new Color(100, 100, 100));
-		c.gridx = 6;
+		c.gridx = 7;
 		c.weightx = 0;
 		bar.add(searchResultLabel, c);
 
@@ -376,6 +394,7 @@ public class SshLogViewerDialog extends JFrame {
 		updateConnectButton(true);
 		setStatus(LangResources.get("sshLogViewer.status.connecting") + " " + host + ":" + port + " …", false);
 		SwingUtilities.invokeLater(() -> {
+			rawLines.clear();
 			try {
 				logDoc.remove(0, logDoc.getLength());
 			} catch (@SuppressWarnings("unused") final BadLocationException ex) {
@@ -470,6 +489,30 @@ public class SshLogViewerDialog extends JFrame {
 	}
 
 	private void appendLine(final String line) {
+		rawLines.add(line);
+		if (filterMode.get() && !lineMatchesFilter(line)) {
+			return;
+		}
+		appendLineToDoc(line);
+	}
+
+	private boolean lineMatchesFilter(final String line) {
+		final String term = lastSearchTerm;
+		if (term.isEmpty()) {
+			return true;
+		}
+		if (lastRegex) {
+			try {
+				final int flags = lastCaseSensitive ? 0 : Pattern.CASE_INSENSITIVE;
+				return Pattern.compile(term, flags).matcher(line).find();
+			} catch (@SuppressWarnings("unused") final PatternSyntaxException ex) {
+				return true;
+			}
+		}
+		return lastCaseSensitive ? line.contains(term) : line.toLowerCase().contains(term.toLowerCase());
+	}
+
+	private void appendLineToDoc(final String line) {
 		try {
 			final int lineCount = logDoc.getDefaultRootElement().getElementCount();
 			if (lineCount > 5000) {
@@ -496,6 +539,23 @@ public class SshLogViewerDialog extends JFrame {
 		} catch (@SuppressWarnings("unused") final BadLocationException e) {
 			// do nothing
 		}
+	}
+
+	private void rebuildDocumentFromRawLines() {
+		try {
+			logDoc.remove(0, logDoc.getLength());
+		} catch (@SuppressWarnings("unused") final BadLocationException ex) {
+			// do nothing
+		}
+		for (final String line : rawLines) {
+			if (!filterMode.get() || lineMatchesFilter(line)) {
+				appendLineToDoc(line);
+			}
+		}
+	}
+
+	private void invalidateSearch() {
+		lastDocLength = -1;
 	}
 
 	private static Color classifyLine(final String line) {

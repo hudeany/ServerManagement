@@ -109,6 +109,22 @@ public class SshLogViewerDialog extends JFrame {
 	private int lastDocLength = -1;
 	private final List<String> rawLines = new ArrayList<>();
 	private final AtomicBoolean filterMode = new AtomicBoolean(false);
+	private int showLastLinesAmount = -1;
+
+	/**
+	 * @param parent
+	 */
+	public SshLogViewerDialog(final Window parent, final String title, final String host, final int port, final String username, final File privateKeyFile, final char[] password, final String logFilePath, final int showLastLinesAmount) {
+		super(LangResources.get("sshLogViewer.title") + " (" + title + ")");
+
+		this.host = host;
+		this.port = port;
+		this.username = username;
+		this.privateKeyFile = privateKeyFile;
+		this.password = password;
+		this.logFilePath = logFilePath;
+		this.showLastLinesAmount = showLastLinesAmount;
+	}
 
 	/**
 	 * @param parent
@@ -122,6 +138,7 @@ public class SshLogViewerDialog extends JFrame {
 		this.privateKeyFile = privateKeyFile;
 		this.password = password;
 		this.logFilePath = logFilePath;
+		showLastLinesAmount = -1;
 	}
 
 	public void open() throws Exception {
@@ -410,7 +427,11 @@ public class SshLogViewerDialog extends JFrame {
 				}
 
 				channel = (ChannelExec) jschSession.openChannel("exec");
-				channel.setCommand("tail -n 500 -F " + logFilePath);
+				if (showLastLinesAmount >= 0) {
+					channel.setCommand("tail -n " + showLastLinesAmount + " -F " + logFilePath);
+				} else {
+					channel.setCommand("tail -n +1 -F " + logFilePath);
+				}
 				channel.connect();
 
 				setStatus(LangResources.get("sshLogViewer.status.connected") + " " + logFilePath, true);

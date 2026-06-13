@@ -680,19 +680,19 @@ public class ServerManagementItem extends JPanel {
 		final JScrollPane versionsScrollPane = new JScrollPane(logsTable);
 		versionsScrollPane.setBorder(BorderFactory.createEmptyBorder());
 		versionsScrollPane.addMouseWheelListener(
-				new MouseWheelListener() {
-					@Override
-					public void mouseWheelMoved(final MouseWheelEvent e) {
-						final boolean scrollDown = e.getWheelRotation() > 0;
-						final BoundedRangeModel verticalScrollBarModel = versionsScrollPane.getVerticalScrollBar().getModel();
-						if (!scrollDown && verticalScrollBarModel.getValue() <= verticalScrollBarModel.getMinimum()) {
-							versionsScrollPane.getParent().dispatchEvent(SwingUtilities.convertMouseEvent(versionsScrollPane, e, item));
-						} else if (scrollDown && verticalScrollBarModel.getValue() + verticalScrollBarModel.getExtent() >= verticalScrollBarModel.getMaximum()) {
-							versionsScrollPane.getParent().dispatchEvent(SwingUtilities.convertMouseEvent(versionsScrollPane, e, item));
-						}
+			new MouseWheelListener() {
+				@Override
+				public void mouseWheelMoved(final MouseWheelEvent e) {
+					final boolean scrollDown = e.getWheelRotation() > 0;
+					final BoundedRangeModel verticalScrollBarModel = versionsScrollPane.getVerticalScrollBar().getModel();
+					if (!scrollDown && verticalScrollBarModel.getValue() <= verticalScrollBarModel.getMinimum()) {
+						versionsScrollPane.getParent().dispatchEvent(SwingUtilities.convertMouseEvent(versionsScrollPane, e, item));
+					} else if (scrollDown && verticalScrollBarModel.getValue() + verticalScrollBarModel.getExtent() >= verticalScrollBarModel.getMaximum()) {
+						versionsScrollPane.getParent().dispatchEvent(SwingUtilities.convertMouseEvent(versionsScrollPane, e, item));
 					}
 				}
-				);
+			}
+		);
 
 		final JPanel logsTablePanel = new JPanel();
 		logsTablePanel.setLayout(new BorderLayout());

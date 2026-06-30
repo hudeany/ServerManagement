@@ -76,6 +76,7 @@ import de.soderer.sshkeyformats.SshKeyReader;
 import de.soderer.sshkeyformats.SshKeyWriter;
 import de.soderer.utilities.IoUtilities;
 import de.soderer.utilities.LangResources;
+import de.soderer.utilities.PropertiesReader;
 import de.soderer.utilities.Utilities;
 import de.soderer.utilities.remote.SftpConnection;
 import de.soderer.utilities.swing.MultiInputDialog;
@@ -1606,6 +1607,17 @@ public class ServerManagementItem extends JPanel {
 						} else {
 							setVersion(version.getName(), "ERROR");
 							status = "ERROR";
+						}
+					} else if (version.getPath().toLowerCase().startsWith("properties:")) {
+						final String propertyName = version.getPath().substring(11);
+						try (PropertiesReader reader = new PropertiesReader(new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)))) {
+							final Map<String, String> propertiesMap = reader.read();
+							String propertyValue = propertiesMap.get(propertyName);
+							if (propertyValue.startsWith("\"") && propertyValue.endsWith("\"")) {
+								propertyValue = propertyValue.substring(1, propertyValue.length() - 1);
+								propertyValue = Utilities.unescapeJavaString(propertyValue);
+							}
+							setVersion(version.getName(), propertyValue);
 						}
 					} else {
 						setVersion(version.getName(), "ERROR");

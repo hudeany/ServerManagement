@@ -43,8 +43,8 @@
 		<get src="https://github.com/hudeany/json/releases/download/${json.version}/json-${json.version}.jar" dest="lib/" />
 		<property name="sshkeyformats.version" value="25.1.5" />
 		<get src="https://github.com/hudeany/SshKeyFormats/releases/download/${sshkeyformats.version}/sshkeyformats-${sshkeyformats.version}.jar" dest="lib/" />
-		<property name="ProxyAutoConfig.version" value="26.0.1" />
-		<get src="https://github.com/hudeany/ProxyAutoConfig/releases/download/${ProxyAutoConfig.version}/proxyautoconfig-${ProxyAutoConfig.version}.jar" dest="lib/" />
+		<property name="proxyautoconfig.version" value="26.0.7" />
+		<get src="https://github.com/hudeany/ProxyAutoConfig/releases/download/${proxyautoconfig.version}/proxyautoconfig-${proxyautoconfig.version}.jar" dest="lib/" />
 		<property name="network.version" value="26.0.14" />
 		<get src="https://github.com/hudeany/network/releases/download/${network.version}/network-${network.version}.jar" dest="lib/" />
 

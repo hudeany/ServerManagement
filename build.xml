@@ -39,13 +39,13 @@
 		<get src="https://repo1.maven.org/maven2/org/bouncycastle/bcprov-jdk18on/1.80/bcprov-jdk18on-1.80.jar" dest="lib/" />
 		<get src="https://repo1.maven.org/maven2/com/github/mwiede/jsch/0.2.23/jsch-0.2.23.jar" dest="lib/" />
 
-		<property name="json.version" value="26.1.51" />
+		<property name="json.version" value="26.1.52" />
 		<get src="https://github.com/hudeany/json/releases/download/${json.version}/json-${json.version}.jar" dest="lib/" />
 		<property name="sshkeyformats.version" value="26.0.0" />
 		<get src="https://github.com/hudeany/SshKeyFormats/releases/download/${sshkeyformats.version}/sshkeyformats-${sshkeyformats.version}.jar" dest="lib/" />
 		<property name="proxyautoconfig.version" value="26.0.7" />
 		<get src="https://github.com/hudeany/ProxyAutoConfig/releases/download/${proxyautoconfig.version}/proxyautoconfig-${proxyautoconfig.version}.jar" dest="lib/" />
-		<property name="network.version" value="26.0.16" />
+		<property name="network.version" value="26.0.17" />
 		<get src="https://github.com/hudeany/network/releases/download/${network.version}/network-${network.version}.jar" dest="lib/" />
 
 		<property name="soderer-utilities.version" value="26.2.11" />

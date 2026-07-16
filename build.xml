@@ -45,7 +45,7 @@
 		<get src="https://github.com/hudeany/SshKeyFormats/releases/download/${sshkeyformats.version}/sshkeyformats-${sshkeyformats.version}.jar" dest="lib/" />
 		<property name="proxyautoconfig.version" value="26.0.7" />
 		<get src="https://github.com/hudeany/ProxyAutoConfig/releases/download/${proxyautoconfig.version}/proxyautoconfig-${proxyautoconfig.version}.jar" dest="lib/" />
-		<property name="network.version" value="26.0.15" />
+		<property name="network.version" value="26.0.16" />
 		<get src="https://github.com/hudeany/network/releases/download/${network.version}/network-${network.version}.jar" dest="lib/" />
 
 		<property name="soderer-utilities.version" value="26.2.11" />

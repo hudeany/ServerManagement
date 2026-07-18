@@ -39,7 +39,7 @@
 		<get src="https://repo1.maven.org/maven2/org/bouncycastle/bcprov-jdk18on/1.80/bcprov-jdk18on-1.80.jar" dest="lib/" />
 		<get src="https://repo1.maven.org/maven2/com/github/mwiede/jsch/0.2.23/jsch-0.2.23.jar" dest="lib/" />
 
-		<property name="json.version" value="26.1.53" />
+		<property name="json.version" value="26.1.54" />
 		<get src="https://github.com/hudeany/json/releases/download/${json.version}/json-${json.version}.jar" dest="lib/" />
 		<property name="sshkeyformats.version" value="26.0.1" />
 		<get src="https://github.com/hudeany/SshKeyFormats/releases/download/${sshkeyformats.version}/sshkeyformats-${sshkeyformats.version}.jar" dest="lib/" />
@@ -48,7 +48,7 @@
 		<property name="network.version" value="26.0.17" />
 		<get src="https://github.com/hudeany/network/releases/download/${network.version}/network-${network.version}.jar" dest="lib/" />
 
-		<property name="soderer-utilities.version" value="26.2.14" />
+		<property name="soderer-utilities.version" value="26.2.17" />
 		<get src="https://soderer.de/maven2/de/soderer/JavaUtilities/${soderer-utilities.version}/soderer-utilities-${soderer-utilities.version}.jar" dest="lib/" />
 		<get src="https://soderer.de/maven2/de/soderer/JavaUtilities/${soderer-utilities.version}/soderer-utilities-${soderer-utilities.version}-sources.jar" dest="lib/" />
 	</target>

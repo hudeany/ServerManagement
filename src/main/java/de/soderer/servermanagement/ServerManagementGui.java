@@ -111,7 +111,9 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 			setDailyUpdateCheckStatus(true);
 			try {
 				if (ApplicationUpdateUtilities.checkForNewVersionAvailable(ServerManagement.VERSIONINFO_DOWNLOAD_URL, proxyConfiguration, ServerManagement.APPLICATION_NAME, VersionInfo.getApplicationVersion()) != null) {
-					ApplicationUpdateUtilities.executeUpdate(this, ServerManagement.VERSIONINFO_DOWNLOAD_URL, proxyConfiguration, ServerManagement.APPLICATION_NAME, ServerManagement.VERSION, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, null, null, "gui", true, false);
+					final List<String> appParameters = new ArrayList<>();
+					appParameters.add(ServerManagement.SERVERS_CONFIGURATION_FILE.getAbsolutePath());
+					ApplicationUpdateUtilities.executeUpdate(this, ServerManagement.VERSIONINFO_DOWNLOAD_URL, proxyConfiguration, ServerManagement.APPLICATION_NAME, ServerManagement.VERSION, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, null, null, null, appParameters, true, false);
 				}
 			} catch (final Exception e) {
 				new QuestionDialog(this, ServerManagement.APPLICATION_NAME + " " + LangResources.get("updateCheck") + " ERROR", LangResources.get("error.cannotCheckForUpdate") + "\n" + "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
@@ -344,8 +346,9 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 					try (InputStream imageIconStream = getClass().getClassLoader().getResourceAsStream("ServerManagement_Icon.png")) {
 						iconImage = ImageIO.read(getClass().getClassLoader().getResource("ServerManagement_Icon.png"));
 					}
-
-					final ApplicationConfigurationDialog applicationConfigurationDialog = new ApplicationConfigurationDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, ServerManagement.APPLICATION_STARTUPCLASS_NAME, ServerManagement.VERSION, ServerManagement.VERSION_BUILDTIME, applicationConfiguration, iconData, iconImage, ServerManagement.VERSIONINFO_DOWNLOAD_URL, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, ServerManagement.SERVERS_CONFIGURATION_FILE.getAbsolutePath());
+					final List<String> appParameters = new ArrayList<>();
+					appParameters.add(ServerManagement.SERVERS_CONFIGURATION_FILE.getAbsolutePath());
+					final ApplicationConfigurationDialog applicationConfigurationDialog = new ApplicationConfigurationDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, ServerManagement.APPLICATION_STARTUPCLASS_NAME, ServerManagement.VERSION, ServerManagement.VERSION_BUILDTIME, applicationConfiguration, iconData, iconImage, ServerManagement.VERSIONINFO_DOWNLOAD_URL, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, null, appParameters);
 					final Result result = applicationConfigurationDialog.open();
 					if (result != null && result == Result.OK) {
 						applicationConfiguration.save();

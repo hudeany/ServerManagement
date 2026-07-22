@@ -135,13 +135,13 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 					} else if ("update".equalsIgnoreCase(arguments[i]) && arguments.length == 1) {
 						if (arguments.length > i + 2) {
 							final ServerManagement serverManagement = new ServerManagement();
-							ApplicationUpdateUtilities.executeUpdate(serverManagement, ServerManagement.VERSIONINFO_DOWNLOAD_URL, proxyConfiguration, ServerManagement.APPLICATION_NAME, ServerManagement.VERSION, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, arguments[i + 1], arguments[i + 2].toCharArray(), null, false, false);
+							ApplicationUpdateUtilities.executeUpdate(serverManagement, ServerManagement.VERSIONINFO_DOWNLOAD_URL, proxyConfiguration, ServerManagement.APPLICATION_NAME, ServerManagement.VERSION, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, arguments[i + 1], arguments[i + 2].toCharArray(), null, null, false, false);
 						} else if (arguments.length > i + 1) {
 							final ServerManagement serverManagement = new ServerManagement();
-							ApplicationUpdateUtilities.executeUpdate(serverManagement, ServerManagement.VERSIONINFO_DOWNLOAD_URL, proxyConfiguration, ServerManagement.APPLICATION_NAME, ServerManagement.VERSION, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, arguments[i + 1], null, null, false, false);
+							ApplicationUpdateUtilities.executeUpdate(serverManagement, ServerManagement.VERSIONINFO_DOWNLOAD_URL, proxyConfiguration, ServerManagement.APPLICATION_NAME, ServerManagement.VERSION, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, arguments[i + 1], null, null, null, false, false);
 						} else {
 							final ServerManagement serverManagement = new ServerManagement();
-							ApplicationUpdateUtilities.executeUpdate(serverManagement, ServerManagement.VERSIONINFO_DOWNLOAD_URL, proxyConfiguration, ServerManagement.APPLICATION_NAME, ServerManagement.VERSION, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, null, null, null, false, false);
+							ApplicationUpdateUtilities.executeUpdate(serverManagement, ServerManagement.VERSIONINFO_DOWNLOAD_URL, proxyConfiguration, ServerManagement.APPLICATION_NAME, ServerManagement.VERSION, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, null, null, null, null, false, false);
 						}
 						return 1;
 					}

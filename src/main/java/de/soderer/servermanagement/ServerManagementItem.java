@@ -61,7 +61,6 @@ import de.soderer.network.HttpRequest;
 import de.soderer.network.HttpResponse;
 import de.soderer.network.HttpUtilities;
 import de.soderer.network.trustmanager.TrustManagerUtilities;
-import de.soderer.pac.utilities.ProxyConfiguration;
 import de.soderer.servermanagement.config.Admin;
 import de.soderer.servermanagement.config.KnownPublicSshKey;
 import de.soderer.servermanagement.config.Log;
@@ -74,6 +73,7 @@ import de.soderer.sshkeyformats.AuthorizedKey;
 import de.soderer.sshkeyformats.SshKey;
 import de.soderer.sshkeyformats.SshKeyReader;
 import de.soderer.sshkeyformats.SshKeyWriter;
+import de.soderer.utilities.ConfigurationProperties;
 import de.soderer.utilities.IoUtilities;
 import de.soderer.utilities.LangResources;
 import de.soderer.utilities.PropertiesReader;
@@ -87,10 +87,11 @@ import de.soderer.utilities.swing.SwingColor;
 public class ServerManagementItem extends JPanel {
 	private static final long serialVersionUID = -8920980761735439684L;
 
+	private final ConfigurationProperties applicationConfiguration;
+
 	private final ServerManagementGui serverManagementGui;
 	private final ServerManagementConfiguration serverManagementConfiguration;
 	private final Server server;
-	private final ProxyConfiguration proxyConfiguration;
 	private final TrustManager trustManager;
 	private final boolean deactivateHostnameVerification;
 
@@ -108,16 +109,16 @@ public class ServerManagementItem extends JPanel {
 
 	private RefreshServerItemStatusWorker worker;
 
-	public ServerManagementItem(final ServerManagementGui serverManagementGui, final Server server, final ProxyConfiguration proxyConfiguration) throws Exception {
+	public ServerManagementItem(final ServerManagementGui serverManagementGui, final Server server, final ConfigurationProperties applicationConfiguration) throws Exception {
 		super();
 		setLayout(new BoxLayout(this, BoxLayout.PAGE_AXIS));
 		setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.BLACK),
 			BorderFactory.createEmptyBorder(5, 5, 5, 5)));
 
+		this.applicationConfiguration = applicationConfiguration;
 		this.serverManagementGui = serverManagementGui;
 		serverManagementConfiguration = serverManagementGui.getServerManagementConfiguration();
 		this.server = server;
-		this.proxyConfiguration = proxyConfiguration;
 
 		if (Utilities.isNotBlank(serverManagementConfiguration.getKeystore())) {
 			trustManager = TrustManagerUtilities.createTrustManagerForKeyStore(new File(serverManagementConfiguration.getKeystore()));
@@ -1418,7 +1419,7 @@ public class ServerManagementItem extends JPanel {
 				try {
 					final HttpRequest request = new HttpRequest(HttpMethod.GET, url);
 					final LocalDateTime start = LocalDateTime.now();
-					final HttpResponse response = HttpUtilities.executeHttpRequest(request, proxyConfiguration.getProxy(request.getUrl()), trustManager, deactivateHostnameVerification);
+					final HttpResponse response = HttpUtilities.executeHttpRequest(request, applicationConfiguration.getProxyConfiguration().getProxy(request.getUrl()), trustManager, deactivateHostnameVerification);
 					final LocalDateTime end = LocalDateTime.now();
 					if (response.getHttpCode() == 200) {
 						setUrlTime(url, (int) ChronoUnit.SECONDS.between(start, end));
@@ -1455,7 +1456,7 @@ public class ServerManagementItem extends JPanel {
 						|| version.getLocation().toLowerCase().startsWith("https://")) {
 					try {
 						final HttpRequest request = new HttpRequest(HttpMethod.GET, version.getLocation());
-						final HttpResponse response = HttpUtilities.executeHttpRequest(request, proxyConfiguration.getProxy(request.getUrl()), trustManager, deactivateHostnameVerification);
+						final HttpResponse response = HttpUtilities.executeHttpRequest(request, applicationConfiguration.getProxyConfiguration().getProxy(request.getUrl()), trustManager, deactivateHostnameVerification);
 						if (response.getHttpCode() == 200) {
 							data = response.getContent();
 						} else {

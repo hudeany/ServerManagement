@@ -14,8 +14,6 @@ import de.soderer.json.JsonNode;
 import de.soderer.json.JsonObject;
 import de.soderer.json.JsonReader;
 import de.soderer.json.JsonSerializer;
-import de.soderer.pac.utilities.ProxyConfiguration;
-import de.soderer.pac.utilities.ProxyConfiguration.ProxyConfigurationType;
 import de.soderer.servermanagement.config.ServerManagementConfiguration;
 import de.soderer.utilities.ConfigurationProperties;
 import de.soderer.utilities.DateUtilities;
@@ -26,7 +24,6 @@ import de.soderer.utilities.UpdateableConsoleApplication;
 import de.soderer.utilities.Utilities;
 import de.soderer.utilities.Version;
 import de.soderer.utilities.appupdate.ApplicationUpdateUtilities;
-import de.soderer.utilities.swing.ApplicationConfigurationDialog;
 import de.soderer.utilities.swing.QuestionDialog;
 import de.soderer.utilities.worker.WorkerParentDual;
 
@@ -111,10 +108,6 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 			return 1;
 		}
 
-		final ProxyConfigurationType proxyConfigurationType = ProxyConfigurationType.getFromString(applicationConfiguration.get(ApplicationConfigurationDialog.CONFIG_PROXY_CONFIGURATION_TYPE));
-		final String proxyUrl = applicationConfiguration.get(ApplicationConfigurationDialog.CONFIG_PROXY_URL);
-		final ProxyConfiguration proxyConfiguration = new ProxyConfiguration(proxyConfigurationType, proxyUrl);
-
 		try {
 			final String[] arguments = args;
 
@@ -135,13 +128,13 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 					} else if ("update".equalsIgnoreCase(arguments[i]) && arguments.length == 1) {
 						if (arguments.length > i + 2) {
 							final ServerManagement serverManagement = new ServerManagement();
-							ApplicationUpdateUtilities.executeUpdate(serverManagement, ServerManagement.VERSIONINFO_DOWNLOAD_URL, proxyConfiguration, ServerManagement.APPLICATION_NAME, ServerManagement.VERSION, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, arguments[i + 1], arguments[i + 2].toCharArray(), null, null, false, false);
+							ApplicationUpdateUtilities.executeUpdate(serverManagement, ServerManagement.VERSIONINFO_DOWNLOAD_URL, applicationConfiguration.getProxyConfiguration(), ServerManagement.APPLICATION_NAME, ServerManagement.VERSION, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, arguments[i + 1], arguments[i + 2].toCharArray(), null, null, false, false);
 						} else if (arguments.length > i + 1) {
 							final ServerManagement serverManagement = new ServerManagement();
-							ApplicationUpdateUtilities.executeUpdate(serverManagement, ServerManagement.VERSIONINFO_DOWNLOAD_URL, proxyConfiguration, ServerManagement.APPLICATION_NAME, ServerManagement.VERSION, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, arguments[i + 1], null, null, null, false, false);
+							ApplicationUpdateUtilities.executeUpdate(serverManagement, ServerManagement.VERSIONINFO_DOWNLOAD_URL, applicationConfiguration.getProxyConfiguration(), ServerManagement.APPLICATION_NAME, ServerManagement.VERSION, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, arguments[i + 1], null, null, null, false, false);
 						} else {
 							final ServerManagement serverManagement = new ServerManagement();
-							ApplicationUpdateUtilities.executeUpdate(serverManagement, ServerManagement.VERSIONINFO_DOWNLOAD_URL, proxyConfiguration, ServerManagement.APPLICATION_NAME, ServerManagement.VERSION, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, null, null, null, null, false, false);
+							ApplicationUpdateUtilities.executeUpdate(serverManagement, ServerManagement.VERSIONINFO_DOWNLOAD_URL, applicationConfiguration.getProxyConfiguration(), ServerManagement.APPLICATION_NAME, ServerManagement.VERSION, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, null, null, null, null, false, false);
 						}
 						return 1;
 					}

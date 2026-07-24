@@ -32,8 +32,6 @@ import de.soderer.json.JsonObject;
 import de.soderer.json.JsonSerializer;
 import de.soderer.json.JsonWriter;
 import de.soderer.network.NetworkUtilities;
-import de.soderer.pac.utilities.ProxyConfiguration;
-import de.soderer.pac.utilities.ProxyConfiguration.ProxyConfigurationType;
 import de.soderer.servermanagement.config.Server;
 import de.soderer.servermanagement.config.ServerManagementConfiguration;
 import de.soderer.servermanagement.worker.CheckAllServerStatusWorker;
@@ -71,7 +69,6 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 	public static final File KEYSTORE_FILE = new File(System.getProperty("user.home") + File.separator + "." + ServerManagement.APPLICATION_NAME + File.separator + "." + ServerManagement.APPLICATION_NAME + ".keystore");
 	public static final String CONFIG_DAILY_UPDATE_CHECK = "DailyUpdateCheck";
 	public static final String CONFIG_NEXT_DAILY_UPDATE_CHECK = "NextDailyUpdateCheck";
-	public static final ProxyConfiguration PROXYCONFIGURATION = new ProxyConfiguration(ProxyConfigurationType.WPAD, null);
 
 	private final ConfigurationProperties applicationConfiguration;
 	private final ServerManagementConfiguration serverManagementConfiguration;
@@ -97,23 +94,19 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 
 		applicationConfiguration = new ConfigurationProperties(ServerManagement.APPLICATION_NAME, true);
 		ServerManagementGui.setupDefaultConfig(applicationConfiguration);
-		if ("de".equalsIgnoreCase(applicationConfiguration.get(ApplicationConfigurationDialog.CONFIG_LANGUAGE))) {
+		if ("de".equalsIgnoreCase(applicationConfiguration.get(ConfigurationProperties.CONFIG_KEY_LANGUAGE))) {
 			Locale.setDefault(Locale.GERMAN);
 		} else {
 			Locale.setDefault(Locale.ENGLISH);
 		}
 
-		final ProxyConfigurationType proxyConfigurationType = ProxyConfigurationType.getFromString(applicationConfiguration.get(ApplicationConfigurationDialog.CONFIG_PROXY_CONFIGURATION_TYPE));
-		final String proxyUrl = applicationConfiguration.get(ApplicationConfigurationDialog.CONFIG_PROXY_URL);
-		final ProxyConfiguration proxyConfiguration = new ProxyConfiguration(proxyConfigurationType, proxyUrl);
-
 		if (dailyUpdateCheckIsPending()) {
 			setDailyUpdateCheckStatus(true);
 			try {
-				if (ApplicationUpdateUtilities.checkForNewVersionAvailable(ServerManagement.VERSIONINFO_DOWNLOAD_URL, proxyConfiguration, ServerManagement.APPLICATION_NAME, VersionInfo.getApplicationVersion()) != null) {
+				if (ApplicationUpdateUtilities.checkForNewVersionAvailable(ServerManagement.VERSIONINFO_DOWNLOAD_URL, applicationConfiguration.getProxyConfiguration(), ServerManagement.APPLICATION_NAME, VersionInfo.getApplicationVersion()) != null) {
 					final List<String> appParameters = new ArrayList<>();
 					appParameters.add(ServerManagement.SERVERS_CONFIGURATION_FILE.getAbsolutePath());
-					ApplicationUpdateUtilities.executeUpdate(this, ServerManagement.VERSIONINFO_DOWNLOAD_URL, proxyConfiguration, ServerManagement.APPLICATION_NAME, ServerManagement.VERSION, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, null, null, null, appParameters, true, false);
+					ApplicationUpdateUtilities.executeUpdate(this, ServerManagement.VERSIONINFO_DOWNLOAD_URL, applicationConfiguration.getProxyConfiguration(), ServerManagement.APPLICATION_NAME, ServerManagement.VERSION, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, null, null, null, appParameters, true, false);
 				}
 			} catch (final Exception e) {
 				new QuestionDialog(this, ServerManagement.APPLICATION_NAME + " " + LangResources.get("updateCheck") + " ERROR", LangResources.get("error.cannotCheckForUpdate") + "\n" + "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
@@ -172,7 +165,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 		serverInformationPanel.setLayout(new BoxLayout(serverInformationPanel, BoxLayout.PAGE_AXIS));
 
 		for (final Server server : serverManagementConfiguration.getServers()) {
-			final ServerManagementItem serverItem = new ServerManagementItem(this, server, PROXYCONFIGURATION);
+			final ServerManagementItem serverItem = new ServerManagementItem(this, server, applicationConfiguration);
 			serverInformationPanel.add(serverItem);
 			serverInformationPanel.add(Box.createRigidArea(new Dimension(10, 10)));
 			serverItems.add(serverItem);
@@ -223,7 +216,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 						if (host != null) {
 							final Server newServer = new Server().setName(servername).setHost(host);
 							serverManagementConfiguration.getServers().add(newServer);
-							final ServerManagementItem serverItem = new ServerManagementItem(serverManagementGui, newServer, PROXYCONFIGURATION);
+							final ServerManagementItem serverItem = new ServerManagementItem(serverManagementGui, newServer, applicationConfiguration);
 							serverInformationPanel.add(serverItem);
 							serverInformationPanel.add(Box.createRigidArea(new Dimension(10, 10)));
 							serverItems.add(serverItem);
@@ -465,9 +458,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 	}
 
 	public static void setupDefaultConfig(final ConfigurationProperties applicationConfiguration) {
-		if (Utilities.isBlank(applicationConfiguration.get(ApplicationConfigurationDialog.CONFIG_LANGUAGE))) {
-			applicationConfiguration.set(ApplicationConfigurationDialog.CONFIG_LANGUAGE, Locale.getDefault().getLanguage());
-		}
+		applicationConfiguration.setupDefaultConfig();
 	}
 
 	@Override

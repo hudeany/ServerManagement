@@ -462,7 +462,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 	@Override
 	protected void setDailyUpdateCheckStatus(final boolean checkboxStatus) {
 		applicationConfiguration.set(ConfigurationProperties.CONFIG_KEY_DAILY_UPDATE_CHECK, checkboxStatus);
-		applicationConfiguration.set(ConfigurationProperties.CONFIG_KEY_DAILY_UPDATE_CHECK, LocalDateTime.now().plusDays(1));
+		applicationConfiguration.set(ConfigurationProperties.CONFIG_KEY_NEXT_DAILY_UPDATE_CHECK, LocalDateTime.now().plusDays(1));
 		applicationConfiguration.save();
 	}
 

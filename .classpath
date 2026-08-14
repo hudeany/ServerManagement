@@ -14,6 +14,6 @@
 	<classpathentry kind="lib" path="lib/proxyautoconfig-26.1.0.jar"/>
 	<classpathentry kind="lib" path="lib/json-26.2.1.jar"/>
 	<classpathentry kind="lib" path="lib/sshkeyformats-26.1.0.jar"/>
-	<classpathentry combineaccessrules="false" kind="src" path="/JavaUtilities"/>
+	<classpathentry kind="lib" path="lib/soderer-utilities-26.2.39.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

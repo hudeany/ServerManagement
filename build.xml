@@ -28,11 +28,11 @@
 	<property name="bcpkix.version" value="1.80" />
 	<property name="bcprov.version" value="1.80" />
 	<property name="jsch.version" value="0.2.23" />
-	<property name="json.version" value="26.2.1" />
-	<property name="sshkeyformats.version" value="26.1.0" />
-	<property name="proxyautoconfig.version" value="26.1.0" />
-	<property name="network.version" value="26.0.30" />
-	<property name="soderer-utilities.version" value="26.2.48" />
+	<property name="json.version" value="26.2.3" />
+	<property name="sshkeyformats.version" value="26.1.1" />
+	<property name="proxyautoconfig.version" value="26.1.1" />
+	<property name="network.version" value="26.0.31" />
+	<property name="soderer-utilities.version" value="26.2.52" />
 
 	<available file="lib/bcpkix-jdk18on-${bcpkix.version}.jar" property="bcpkix.available" />
 	<target name="get_bcpkix" unless="bcpkix.available">

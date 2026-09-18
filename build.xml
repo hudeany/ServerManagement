@@ -32,7 +32,7 @@
 	<property name="sshkeyformats.version" value="26.1.1" />
 	<property name="proxyautoconfig.version" value="26.1.1" />
 	<property name="network.version" value="26.0.31" />
-	<property name="soderer-utilities.version" value="26.2.52" />
+	<property name="soderer-utilities.version" value="26.2.53" />
 
 	<available file="lib/bcpkix-jdk18on-${bcpkix.version}.jar" property="bcpkix.available" />
 	<target name="get_bcpkix" unless="bcpkix.available">

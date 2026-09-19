@@ -25,6 +25,8 @@
 		<mkdir dir="${buildPath}/bin" />
 	</target>
 
+	<property name="antbuildhelp.version" value="26.0.3" />
+
 	<property name="bcpkix.version" value="1.80" />
 	<property name="bcprov.version" value="1.80" />
 	<property name="jsch.version" value="0.2.23" />
@@ -34,88 +36,35 @@
 	<property name="network.version" value="26.0.31" />
 	<property name="soderer-utilities.version" value="26.2.53" />
 
-	<available file="lib/bcpkix-jdk18on-${bcpkix.version}.jar" property="bcpkix.available" />
-	<target name="get_bcpkix" unless="bcpkix.available">
-		<mkdir dir="lib/" />
+	<available file="lib_build/antbuildhelp-${antbuildhelp.version}.jar" property="antbuildhelp.available" />
+	<target name="get_antbuildhelp" unless="antbuildhelp.available">
+		<mkdir dir="lib_build/" />
 		<delete>
-			<fileset dir="lib" includes="bcpkix-jdk18on-*.jar" />
+			<fileset dir="lib_build" includes="antbuildhelp-*.jar" />
 		</delete>
-		<get src="https://repo1.maven.org/maven2/org/bouncycastle/bcpkix-jdk18on/${bcpkix.version}/bcpkix-jdk18on-${bcpkix.version}.jar" dest="lib/" />
+		<get src="https://github.com/hudeany/antbuildhelp/releases/download/${antbuildhelp.version}/antbuildhelp-${antbuildhelp.version}.jar" dest="lib_build/" />
 	</target>
 
-	<available file="lib/bcprov-jdk18on-${bcprov.version}.jar" property="bcprov.available" />
-	<target name="get_bcprov" unless="bcprov.available">
-		<mkdir dir="lib/" />
-		<delete>
-			<fileset dir="lib" includes="bcprov-jdk18on-*.jar" />
-		</delete>
-		<get src="https://repo1.maven.org/maven2/org/bouncycastle/bcprov-jdk18on/${bcprov.version}/bcprov-jdk18on-${bcprov.version}.jar" dest="lib/" />
+	<!-- typedef must run on every build (Ant doesn't remember task registrations between runs),
+	     so it lives in its own target with no "unless" - not inside get_antbuildhelp, which is
+	     skipped whenever the jar is already cached from a previous run. -->
+	<target name="register_antbuildhelp" depends="get_antbuildhelp">
+		<typedef resource="de/soderer/antbuildhelp/antlib.xml" classpath="lib_build/antbuildhelp-${antbuildhelp.version}.jar" />
 	</target>
 
-	<available file="lib/jsch-${jsch.version}.jar" property="jsch.available" />
-	<target name="get_jsch" unless="jsch.available">
-		<mkdir dir="lib/" />
-		<delete>
-			<fileset dir="lib" includes="jsch-*.jar" />
-		</delete>
-		<get src="https://repo1.maven.org/maven2/com/github/mwiede/jsch/${jsch.version}/jsch-${jsch.version}.jar" dest="lib/" />
-	</target>
+	<target name="download_dependencies" depends="register_antbuildhelp">
+		<getMavenDependency groupId="org.bouncycastle" artifactId="bcpkix-jdk18on" version="${bcpkix.version}" />
+		<getMavenDependency groupId="org.bouncycastle" artifactId="bcprov-jdk18on" version="${bcprov.version}" />
+		<getMavenDependency groupId="com.github.mwiede" artifactId="jsch" version="${jsch.version}" />
 
-	<available file="lib/json-${json.version}.jar" property="json.available" />
-	<target name="get_json" unless="json.available">
-		<mkdir dir="lib/" />
-		<delete>
-			<fileset dir="lib" includes="json-*.jar" />
-		</delete>
-		<get src="https://github.com/hudeany/json/releases/download/${json.version}/json-${json.version}.jar" dest="lib/" />
-	</target>
+		<getDependency name="json" version="${json.version}" url="https://github.com/hudeany/json/releases/download/{version}/json-{version}.jar" />
+		<getDependency name="sshkeyformats" version="${sshkeyformats.version}" url="https://github.com/hudeany/SshKeyFormats/releases/download/{version}/sshkeyformats-{version}.jar" />
+		<getDependency name="proxyautoconfig" version="${proxyautoconfig.version}" url="https://github.com/hudeany/ProxyAutoConfig/releases/download/{version}/proxyautoconfig-{version}.jar" />
+		<getDependency name="network" version="${network.version}" url="https://github.com/hudeany/network/releases/download/{version}/network-{version}.jar" />
 
-	<available file="lib/sshkeyformats-${sshkeyformats.version}.jar" property="sshkeyformats.available" />
-	<target name="get_sshkeyformats" unless="sshkeyformats.available">
-		<mkdir dir="lib/" />
-		<delete>
-			<fileset dir="lib" includes="sshkeyformats-*.jar" />
-		</delete>
-		<get src="https://github.com/hudeany/SshKeyFormats/releases/download/${sshkeyformats.version}/sshkeyformats-${sshkeyformats.version}.jar" dest="lib/" />
+		<getMavenDependency repositoryUrl="https://soderer.de/maven2" groupId="de.soderer" artifactId="soderer-utilities" version="${soderer-utilities.version}" />
+		<getMavenDependency repositoryUrl="https://soderer.de/maven2" groupId="de.soderer" artifactId="soderer-utilities" version="${soderer-utilities.version}" classifier="sources" />
 	</target>
-
-	<available file="lib/proxyautoconfig-${proxyautoconfig.version}.jar" property="proxyautoconfig.available" />
-	<target name="get_proxyautoconfig" unless="proxyautoconfig.available">
-		<mkdir dir="lib/" />
-		<delete>
-			<fileset dir="lib" includes="proxyautoconfig-*.jar" />
-		</delete>
-		<get src="https://github.com/hudeany/ProxyAutoConfig/releases/download/${proxyautoconfig.version}/proxyautoconfig-${proxyautoconfig.version}.jar" dest="lib/" />
-	</target>
-
-	<available file="lib/network-${network.version}.jar" property="network.available" />
-	<target name="get_network" unless="network.available">
-		<mkdir dir="lib/" />
-		<delete>
-			<fileset dir="lib" includes="network-*.jar" />
-		</delete>
-		<get src="https://github.com/hudeany/network/releases/download/${network.version}/network-${network.version}.jar" dest="lib/" />
-	</target>
-
-	<available file="lib/soderer-utilities-${soderer-utilities.version}.jar" property="soderer-utilities.available" />
-	<target name="get_soderer_utilities" unless="soderer-utilities.available">
-		<mkdir dir="lib/" />
-		<delete>
-			<fileset dir="lib" includes="soderer-utilities-*.jar" excludes="soderer-utilities-*-sources.jar" />
-		</delete>
-		<get src="https://soderer.de/maven2/de/soderer/soderer-utilities/${soderer-utilities.version}/soderer-utilities-${soderer-utilities.version}.jar" dest="lib/" />
-	</target>
-
-	<available file="lib/soderer-utilities-${soderer-utilities.version}-sources.jar" property="soderer-utilities-sources.available" />
-	<target name="get_soderer_utilities_sources" unless="soderer-utilities-sources.available">
-		<mkdir dir="lib/" />
-		<delete>
-			<fileset dir="lib" includes="soderer-utilities-*-sources.jar" />
-		</delete>
-		<get src="https://soderer.de/maven2/de/soderer/soderer-utilities/${soderer-utilities.version}/soderer-utilities-${soderer-utilities.version}-sources.jar" dest="lib/" />
-	</target>
-
-	<target name="download_dependencies" depends="get_bcpkix, get_bcprov, get_jsch, get_json, get_sshkeyformats, get_proxyautoconfig, get_network, get_soderer_utilities, get_soderer_utilities_sources" />
 
 	<target name="compile" depends="download_dependencies">
 		<path id="build.classpath">

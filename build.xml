@@ -34,7 +34,7 @@
 	<property name="sshkeyformats.version" value="26.1.1" />
 	<property name="proxyautoconfig.version" value="26.1.1" />
 	<property name="network.version" value="26.0.31" />
-	<property name="soderer-utilities.version" value="26.2.66" />
+	<property name="soderer-utilities.version" value="26.2.67" />
 
 	<available file="lib_build/antbuildhelp-${antbuildhelp.version}.jar" property="antbuildhelp.available" />
 	<target name="get_antbuildhelp" unless="antbuildhelp.available">

@@ -30,6 +30,7 @@
 	<property name="bcpkix.version" value="1.80" />
 	<property name="bcprov.version" value="1.80" />
 	<property name="jsch.version" value="0.2.23" />
+	<property name="csv.version" value="26.1.3" />
 	<property name="json.version" value="26.2.3" />
 	<property name="sshkeyformats.version" value="26.1.1" />
 	<property name="proxyautoconfig.version" value="26.1.1" />
@@ -57,6 +58,7 @@
 		<getMavenDependency groupId="org.bouncycastle" artifactId="bcprov-jdk18on" version="${bcprov.version}" />
 		<getMavenDependency groupId="com.github.mwiede" artifactId="jsch" version="${jsch.version}" />
 
+		<getDependency name="csv" version="${csv.version}" url="https://github.com/hudeany/csv/releases/download/{version}/csv-{version}.jar" />
 		<getDependency name="json" version="${json.version}" url="https://github.com/hudeany/json/releases/download/{version}/json-{version}.jar" />
 		<getDependency name="sshkeyformats" version="${sshkeyformats.version}" url="https://github.com/hudeany/SshKeyFormats/releases/download/{version}/sshkeyformats-{version}.jar" />
 		<getDependency name="proxyautoconfig" version="${proxyautoconfig.version}" url="https://github.com/hudeany/ProxyAutoConfig/releases/download/{version}/proxyautoconfig-{version}.jar" />

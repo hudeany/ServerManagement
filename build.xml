@@ -25,7 +25,7 @@
 		<mkdir dir="${buildPath}/bin" />
 	</target>
 
-	<property name="antbuildhelp.version" value="26.0.5" />
+	<property name="antbuildhelp.version" value="26.0.6" />
 
 	<property name="bcpkix.version" value="1.80" />
 	<property name="bcprov.version" value="1.80" />
@@ -35,7 +35,7 @@
 	<property name="sshkeyformats.version" value="26.1.2" />
 	<property name="proxyautoconfig.version" value="26.1.2" />
 	<property name="network.version" value="26.0.33" />
-	<property name="soderer-utilities.version" value="26.2.90" />
+	<property name="soderer-utilities.version" value="26.2.91" />
 
 	<available file="lib_build/antbuildhelp-${antbuildhelp.version}.jar" property="antbuildhelp.available" />
 	<target name="get_antbuildhelp" unless="antbuildhelp.available">

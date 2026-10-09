@@ -18,7 +18,7 @@ public class CheckAllServerStatusWorker extends WorkerSimple<List<String>> {
 
 	@Override
 	public List<String> work() throws Exception {
-		List<String> errorneousServers = new ArrayList<>();
+		List<String> erroneousServers = new ArrayList<>();
 		
 		itemsToDo = serverItems.size();
 		itemsDone = 0;
@@ -29,6 +29,10 @@ public class CheckAllServerStatusWorker extends WorkerSimple<List<String>> {
 		
 		boolean allDone = false;
 		while (!allDone) {
+			// Before, the cancel button had no effect and a hanging server check (e.g. SSH connect) blocked forever
+			if (cancel) {
+				return erroneousServers;
+			}
 			Thread.sleep(500);
 			allDone = true;
 			
@@ -38,7 +42,7 @@ public class CheckAllServerStatusWorker extends WorkerSimple<List<String>> {
 					allDone = false;
 				} else {
 					if ("ERROR".equals(serverItem.getStatus())) {
-						errorneousServers.add(serverItem.getServerName());
+						erroneousServers.add(serverItem.getServerName());
 					}
 					iter.remove();
 					itemsDone++;
@@ -47,6 +51,6 @@ public class CheckAllServerStatusWorker extends WorkerSimple<List<String>> {
 			}
 		}
 		
-		return errorneousServers;
+		return erroneousServers;
 	}
 }

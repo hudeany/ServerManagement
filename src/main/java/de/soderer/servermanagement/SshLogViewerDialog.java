@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -111,12 +112,21 @@ public class SshLogViewerDialog extends JFrame {
 	private final AtomicBoolean filterMode = new AtomicBoolean(false);
 	private int showLastLinesAmount = -1;
 
+	/** The window to center on (a JFrame has no owner, so getOwner() was always null) */
+	private final Window parentWindow;
+
+	/** Identifies the current tail thread, so a finished old thread does not stop a newly started one */
+	private final AtomicInteger tailGeneration = new AtomicInteger(0);
+
+	/** Maximum number of buffered raw lines (the document itself is limited to 5000 lines) */
+	private static final int MAX_RAW_LINES = 50_000;
+
 	/**
 	 * @param parent
 	 */
 	public SshLogViewerDialog(final Window parent, final String title, final String host, final int port, final String username, final File privateKeyFile, final char[] password, final String logFilePath, final int showLastLinesAmount) {
 		super(LangResources.get("sshLogViewer.title") + " (" + title + ")");
-
+		parentWindow = parent;
 		this.host = host;
 		this.port = port;
 		this.username = username;
@@ -131,7 +141,7 @@ public class SshLogViewerDialog extends JFrame {
 	 */
 	public SshLogViewerDialog(final Window parent, final String title, final String host, final int port, final String username, final File privateKeyFile, final char[] password, final String logFilePath) {
 		super(LangResources.get("sshLogViewer.title") + " (" + title + ")");
-
+		parentWindow = parent;
 		this.host = host;
 		this.port = port;
 		this.username = username;
@@ -149,7 +159,13 @@ public class SshLogViewerDialog extends JFrame {
 			throw new Exception("No log file path configured");
 		}
 
-		checkRemoteFileExists();
+		try {
+			checkRemoteFileExists();
+		} catch (final Exception e) {
+			// Before, the SSH session stayed open, because the window (and its cleanup) was never shown
+			cleanup();
+			throw e;
+		}
 
 		setDefaultCloseOperation(DISPOSE_ON_CLOSE);
 		setSize(1000, 700);
@@ -407,6 +423,7 @@ public class SshLogViewerDialog extends JFrame {
 	}
 
 	private void startTailing() {
+		final int generation = tailGeneration.incrementAndGet();
 		running.set(true);
 		updateConnectButton(true);
 		setStatus(LangResources.get("sshLogViewer.status.connecting") + " " + host + ":" + port + " …", false);
@@ -428,9 +445,9 @@ public class SshLogViewerDialog extends JFrame {
 
 				channel = (ChannelExec) jschSession.openChannel("exec");
 				if (showLastLinesAmount >= 0) {
-					channel.setCommand("tail -n " + showLastLinesAmount + " -F " + logFilePath);
+					channel.setCommand("tail -n " + showLastLinesAmount + " -F " + shellQuote(logFilePath));
 				} else {
-					channel.setCommand("tail -n +1 -F " + logFilePath);
+					channel.setCommand("tail -n +1 -F " + shellQuote(logFilePath));
 				}
 				channel.connect();
 
@@ -440,13 +457,13 @@ public class SshLogViewerDialog extends JFrame {
 						BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
 
 					String line;
-					while (running.get() && (line = reader.readLine()) != null) {
+					while (isCurrentTail(generation) && (line = reader.readLine()) != null) {
 						final String finalLine = line;
 						SwingUtilities.invokeLater(() -> appendLine(finalLine));
 					}
 				}
 			} catch (final Exception ex) {
-				if (running.get()) {
+				if (isCurrentTail(generation)) {
 					SwingUtilities.invokeLater(() -> {
 						setStatus(LangResources.get("sshLogViewer.status.error") + " " + ex.getMessage(), false);
 						appendLine("[ERROR] " + ex.getMessage());
@@ -457,10 +474,13 @@ public class SshLogViewerDialog extends JFrame {
 					channel.disconnect();
 				}
 				SwingUtilities.invokeLater(() -> {
-					running.set(false);
-					updateConnectButton(false);
-					if (statusLabel.getForeground().equals(C_STATUS_OK)) {
-						setStatus(LangResources.get("sshLogViewer.status.disconnected"), false);
+					// After a disconnect and a quick reconnect, the old thread must not stop the new one
+					if (generation == tailGeneration.get()) {
+						running.set(false);
+						updateConnectButton(false);
+						if (statusLabel.getForeground().equals(C_STATUS_OK)) {
+							setStatus(LangResources.get("sshLogViewer.status.disconnected"), false);
+						}
 					}
 				});
 			}
@@ -500,6 +520,22 @@ public class SshLogViewerDialog extends JFrame {
 		jschSession.connect(10_000);
 	}
 
+	private boolean isCurrentTail(final int generation) {
+		return running.get() && generation == tailGeneration.get();
+	}
+
+	/**
+	 * Quotes a text for the remote shell. Before, the log file path was used unquoted, so paths with blanks or shell
+	 * characters failed (or were interpreted by the shell).
+	 */
+	private static String shellQuote(final String text) {
+		if (text.startsWith("~/")) {
+			// Keep the expansion of the home directory, which is not done within quotes
+			return "~/" + shellQuote(text.substring(2));
+		}
+		return "'" + text.replace("'", "'\\''") + "'";
+	}
+
 	private void stopTailing() {
 		running.set(false);
 		if (jschSession != null && jschSession.isConnected()) {
@@ -511,6 +547,10 @@ public class SshLogViewerDialog extends JFrame {
 
 	private void appendLine(final String line) {
 		rawLines.add(line);
+		// Before, the raw lines grew without limit while tailing (only the document was limited)
+		if (rawLines.size() > MAX_RAW_LINES) {
+			rawLines.subList(0, rawLines.size() - MAX_RAW_LINES).clear();
+		}
 		if (filterMode.get() && !lineMatchesFilter(line)) {
 			return;
 		}
@@ -610,7 +650,7 @@ public class SshLogViewerDialog extends JFrame {
 		}
 
 		final ChannelExec channel = (ChannelExec) jschSession.openChannel("exec");
-		channel.setCommand("test -e " + logFilePath + " && echo exists || echo missing");
+		channel.setCommand("test -e " + shellQuote(logFilePath) + " && echo exists || echo missing");
 		final ByteArrayOutputStream out = new ByteArrayOutputStream();
 		channel.setOutputStream(out);
 		channel.connect();
@@ -624,7 +664,7 @@ public class SshLogViewerDialog extends JFrame {
 	}
 
 	private void centerOnParent() {
-		final Window owner = getOwner();
+		final Window owner = parentWindow;
 		if (owner != null) {
 			final Point ownerLoc = owner.getLocation();
 			final Dimension ownerSz = owner.getSize();

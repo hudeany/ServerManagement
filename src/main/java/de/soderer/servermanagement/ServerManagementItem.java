@@ -245,14 +245,15 @@ public class ServerManagementItem extends JPanel {
 				managedUserTable.getModel().setValueAt(Integer.toString(currentAuthKeys), i, 2);
 				managedUserTable.getModel().setValueAt(Integer.toString(surplusAuthKeys), i, 3);
 
+				// Only raise the color and status, so a later OK user does not hide an error of an earlier user
 				if (currentAuthKeys != expectedAuthKeys) {
-					managedUserTable.setBackground(CustomizedColor.RED);
-					status = "ERROR";
-				} else if (surplusAuthKeys > 0 && "OK".equals(status)) {
-					managedUserTable.setBackground(CustomizedColor.YELLOW);
-					status = "WARNING";
+					raiseTableColor(managedUserTable, CustomizedColor.RED);
+					raiseStatus("ERROR");
+				} else if (surplusAuthKeys > 0) {
+					raiseTableColor(managedUserTable, CustomizedColor.YELLOW);
+					raiseStatus("WARNING");
 				} else {
-					managedUserTable.setBackground(CustomizedColor.GREEN);
+					raiseTableColor(managedUserTable, CustomizedColor.GREEN);
 				}
 
 				break;
@@ -264,17 +265,18 @@ public class ServerManagementItem extends JPanel {
 		urlsTable.clearSelection();
 		for (int i = 0; i < urlsTable.getModel().getRowCount(); i++) {
 			if (urlsTable.getModel().getValueAt(i, 0).equals(url)) {
+				// Only raise the color and status (before, a slow URL turned an ERROR status into WARNING)
 				if (timeInSeconds < 0) {
 					urlsTable.getModel().setValueAt("ERROR", i, 1);
-					urlsTable.setBackground(CustomizedColor.RED);
-					status = "ERROR";
+					raiseTableColor(urlsTable, CustomizedColor.RED);
+					raiseStatus("ERROR");
 				} else if (timeInSeconds > 5) {
 					urlsTable.getModel().setValueAt(Integer.toString(timeInSeconds) + " sec", i, 1);
-					urlsTable.setBackground(CustomizedColor.YELLOW);
-					status = "WARNING";
+					raiseTableColor(urlsTable, CustomizedColor.YELLOW);
+					raiseStatus("WARNING");
 				} else {
 					urlsTable.getModel().setValueAt(Integer.toString(timeInSeconds) + " sec", i, 1);
-					urlsTable.setBackground(CustomizedColor.GREEN);
+					raiseTableColor(urlsTable, CustomizedColor.GREEN);
 				}
 
 				break;
@@ -287,10 +289,12 @@ public class ServerManagementItem extends JPanel {
 		for (int i = 0; i < versionsTable.getModel().getRowCount(); i++) {
 			if (versionsTable.getModel().getValueAt(i, 0).equals(name)) {
 				versionsTable.getModel().setValueAt(versionText, i, 3);
-				if (versionsTable.getBackground().equals(Color.WHITE)) {
-					versionsTable.setBackground(CustomizedColor.GREEN);
-				} else if ("ERROR".equals(versionText)) {
-					versionsTable.setBackground(CustomizedColor.RED);
+				// Before, the first version always turned the table green, even for "ERROR"
+				if ("ERROR".equals(versionText)) {
+					raiseTableColor(versionsTable, CustomizedColor.RED);
+					raiseStatus("ERROR");
+				} else {
+					raiseTableColor(versionsTable, CustomizedColor.GREEN);
 				}
 				break;
 			}
@@ -341,7 +345,10 @@ public class ServerManagementItem extends JPanel {
 					// Open Edit user on doubleclick
 					try {
 						final JTable table = (JTable) mouseEvent.getSource();
-						editUser(table.convertRowIndexToModel(table.rowAtPoint(mouseEvent.getPoint())));
+						final int row = table.rowAtPoint(mouseEvent.getPoint());
+						if (row >= 0) {
+							editUser(table.convertRowIndexToModel(row));
+						}
 					} catch (final Exception e) {
 						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
 					}
@@ -547,13 +554,7 @@ public class ServerManagementItem extends JPanel {
 							version.setName(dialogResult.get(0));
 							version.setLocation(dialogResult.get(1));
 							version.setPath(dialogResult.get(2));
-
 							createComponents();
-							checkButtonStatus();
-							serverManagementGui.signalUnsavedChanges();
-
-							createComponents();
-
 							checkButtonStatus();
 							serverManagementGui.signalUnsavedChanges();
 						}
@@ -645,21 +646,29 @@ public class ServerManagementItem extends JPanel {
 					// Show log content on doubleclick
 					try {
 						final JTable table = (JTable) mouseEvent.getSource();
-						final int rowIndex = (table.convertRowIndexToModel(table.rowAtPoint(mouseEvent.getPoint())));
+						final int row = table.rowAtPoint(mouseEvent.getPoint());
+						if (row < 0) {
+							return;
+						}
+						final int rowIndex = table.convertRowIndexToModel(row);
 
 						final String logName = (String) table.getModel().getValueAt(rowIndex, 0);
 						final String location = (String) table.getModel().getValueAt(rowIndex, 1);
 						final String path = (String) table.getModel().getValueAt(rowIndex, 2);
 
-						if (location.toLowerCase().startsWith("ssh://")) {
+						if (location != null && location.toLowerCase().startsWith("ssh://")) {
 							String host = location.substring(6);
 							int port = 22;
 							if (host.contains(":")) {
 								port = Integer.parseInt(host.substring(host.indexOf(":") + 1));
 								host = host.substring(0, host.indexOf(":"));
 							}
-							final SshLogViewerDialog dialog = new SshLogViewerDialog(serverManagementGui, server.getName() + " " + logName, host, port, server.getSshAdmin().getUsername(), server.getSshAdmin().getPrivateKeyFile(), server.getSshAdmin().getPasswordArray(), path);
+							final Admin sshAdmin = getSshAdminChecked();
+							final SshLogViewerDialog dialog = new SshLogViewerDialog(serverManagementGui, server.getName() + " " + logName, host, port, sshAdmin.getUsername(), sshAdmin.getPrivateKeyFile(), sshAdmin.getPasswordArray(), path);
 							dialog.open();
+						} else {
+							// Before, nothing happened for other locations
+							throw new Exception("Unsupported log location '" + location + "', expected 'ssh://host[:port]'");
 						}
 					} catch (final Exception e) {
 						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
@@ -956,7 +965,7 @@ public class ServerManagementItem extends JPanel {
 						}
 						server.getSshAdmin().setUsername(dialog.getUsername());
 						server.getSshAdmin().setPrivateKeyPath(dialog.getPrivateKeyFilePath());
-						server.getSshAdmin().setPassword(new String(dialog.getPassword()));
+						server.getSshAdmin().setPassword(dialog.getPassword() == null || dialog.getPassword().length == 0 ? null : new String(dialog.getPassword()));
 						serverManagementGui.signalUnsavedChanges();
 					}
 				} catch (final Exception e) {
@@ -1033,7 +1042,7 @@ public class ServerManagementItem extends JPanel {
 
 	private static KnownPublicSshKey getKeyFromKnownKeysByKeyId(final String keyId, final List<KnownPublicSshKey> knownPublicSshKeys) {
 		for (final KnownPublicSshKey knownPublicSshKey : knownPublicSshKeys) {
-			if (knownPublicSshKey.getKeyId().equals(keyId)) {
+			if (keyId != null && keyId.equals(knownPublicSshKey.getKeyId())) {
 				return knownPublicSshKey;
 			}
 		}
@@ -1043,7 +1052,8 @@ public class ServerManagementItem extends JPanel {
 	private void editUser(final int clickedRow) throws Exception {
 		final User user = server.getManagedUsers().get(clickedRow);
 		final String username = user.getUsername();
-
+		// Before, a missing admin caused a NullPointerException with the message "null"
+		getSshAdminChecked();
 		final String adminKeyHash = getAdminKeyHash(server.getSshAdmin().getPrivateKeyFile(), server.getSshAdmin().getPasswordArray());
 
 		List<AuthorizedKey> existingAuthorizedKeys;
@@ -1061,7 +1071,10 @@ public class ServerManagementItem extends JPanel {
 		final Map<String, String> configuredKeys = new HashMap<>();
 		for (final String keyId : user.getAuthorized_key_ids()) {
 			final KnownPublicSshKey key = getKeyFromKnownKeysByKeyId(keyId, serverManagementGui.getServerManagementConfiguration().getKnownPublicSshKeys());
-			configuredKeys.put(key.getHash(), keyId);
+			// A configured key id without known key (e.g. after editing the configuration file) caused a NullPointerException
+			if (key != null) {
+				configuredKeys.put(key.getHash(), keyId);
+			}
 		}
 
 		final Map<String, String> knownKeys = new HashMap<>();
@@ -1116,7 +1129,8 @@ public class ServerManagementItem extends JPanel {
 				}
 				for (final String keyHash : userPublicKeysDialog.getConfiguredKeys().keySet()) {
 					final String keyId = keyIdByHash.get(keyHash);
-					if (!user.getAuthorized_key_ids().contains(keyId)) {
+					// Only known keys can be configured, otherwise a null key id was stored
+					if (keyId != null && !user.getAuthorized_key_ids().contains(keyId)) {
 						user.getAuthorized_key_ids().add(keyId);
 					}
 				}
@@ -1165,19 +1179,19 @@ public class ServerManagementItem extends JPanel {
 					}
 				}
 
+				// The configuration was already changed above, so it must be marked as unsaved even if the upload fails
+				serverManagementGui.signalUnsavedChanges();
+
 				if (!compareAuthorizedKeysLists(existingAuthorizedKeys, newAuthorizedKeys)) {
 					try {
 						AuthorizedKeysHelper.storeAuthorizedKeys(server.getHost(), server.getSshAdmin().getUsername(), server.getSshAdmin().getPrivateKeyFile(), server.getSshAdmin().getPasswordArray(), user.getUsername(), newAuthorizedKeys);
 						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, LangResources.get("succesfullyUpdatedSshUserKeys")).open();
 					} catch (final Exception e) {
 						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
-						return;
 					}
 				} else {
 					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, LangResources.get("noServerChangeNeeded")).open();
 				}
-
-				serverManagementGui.signalUnsavedChanges();
 				loadUsersData((DefaultTableModel) managedUserTable.getModel(), server.getManagedUsers());
 			} catch (final Exception e) {
 				new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
@@ -1282,14 +1296,16 @@ public class ServerManagementItem extends JPanel {
 
 	public void refreshStatusAsync() {
 		synchronized (this) {
-			if (worker == null) {
+			// A finished worker, which was not yet collected by refreshStatusIsDone() (e.g. after a canceled check), must
+			// not block a new refresh, otherwise the old status was reported again
+			if (worker == null || worker.isDone()) {
 				worker = new RefreshServerItemStatusWorker(null, this);
 				new Thread(worker).start();
 			}
 		}
 	}
 
-	public boolean refreshStatusIsDone() {
+	public synchronized boolean refreshStatusIsDone() {
 		if (worker != null) {
 			if (!worker.isDone()) {
 				return false;
@@ -1410,7 +1426,7 @@ public class ServerManagementItem extends JPanel {
 					setManagedUserCurrentAuthKeys(username, expectedKeyNames.size(), expectedKeyNames.size() - missingKeyNames.size(), surplusKeys.size());
 				} catch (@SuppressWarnings("unused") final Exception e) {
 					setManagedUserCurrentAuthKeys(username, -1, 0, 0);
-					status = "ERROR";
+					raiseStatus("ERROR");
 				}
 			}
 
@@ -1432,7 +1448,6 @@ public class ServerManagementItem extends JPanel {
 					}
 				} catch (@SuppressWarnings("unused") final Exception e) {
 					setUrlTime(url, -1);
-					status = "ERROR";
 				}
 
 			}
@@ -1451,180 +1466,188 @@ public class ServerManagementItem extends JPanel {
 
 		try {
 			for (final Version version : server.getVersions()) {
-				String data = null;
-				if (version.getLocation().toLowerCase().startsWith("http://")
-						|| version.getLocation().toLowerCase().startsWith("https://")) {
-					try {
-						final HttpRequest request = new HttpRequest(HttpMethod.GET, version.getLocation());
-						final HttpResponse response = HttpUtilities.executeHttpRequest(request, applicationConfiguration.getProxyConfiguration().getProxy(request.getUrl()), trustManager, deactivateHostnameVerification);
-						if (response.getHttpCode() == 200) {
-							data = response.getContent();
-						} else {
-							setVersion(version.getName(), "ERROR");
-							status = "ERROR";
-						}
-					} catch (@SuppressWarnings("unused") final Exception e) {
-						setVersion(version.getName(), "ERROR");
-						status = "ERROR";
-					}
-				} else if (version.getLocation().toLowerCase().startsWith("ssh://")) {
-					String hostnameForSsh = server.getHost();
-					String usernameForSsh = server.getSshAdmin().getUsername();
-					File privateKeyFileForSsh = server.getSshAdmin().getPrivateKeyFile();
-					char[] passwordForSsh = server.getSshAdmin().getPasswordArray();
-
-					String filePath = version.getLocation().substring(6);
-
-					if (filePath.contains(":")) {
-						hostnameForSsh = filePath.substring(0, filePath.lastIndexOf(":"));
-						filePath = filePath.substring(filePath.lastIndexOf(":") + 1);
-					}
-
-					if (hostnameForSsh.contains("@")) {
-						usernameForSsh = hostnameForSsh.substring(0, hostnameForSsh.lastIndexOf("@"));
-						hostnameForSsh = hostnameForSsh.substring(hostnameForSsh.lastIndexOf("@") + 1);
-					}
-
-					if (usernameForSsh.contains(":")) {
-						privateKeyFileForSsh = null;
-						passwordForSsh = usernameForSsh.substring(usernameForSsh.lastIndexOf(":") + 1).toCharArray();
-						usernameForSsh = usernameForSsh.substring(0, usernameForSsh.lastIndexOf(":"));
-					}
-
-					final String sftpConnectionString = usernameForSsh + "@" + hostnameForSsh;
-
-					if (sftpConnection == null || !cachedSftpConnectionString.equals(sftpConnectionString)) {
-						if (sftpConnection != null) {
-							sftpConnection.close();
-						}
+				// Each version separately: before, a failing SSH connection, an invalid regex or a missing property aborted
+				// the check of all further versions of this server
+				try {
+					String data = null;
+					if (version.getLocation().toLowerCase().startsWith("http://")
+							|| version.getLocation().toLowerCase().startsWith("https://")) {
 						try {
-							sftpConnection = openSftpConnection(hostnameForSsh, usernameForSsh, privateKeyFileForSsh, passwordForSsh);
-						} catch (final Exception e) {
-							throw e;
-						}
-						cachedSftpConnectionString = sftpConnectionString;
-					}
-
-					if (filePath.endsWith("/")) {
-						try {
-							data = Utilities.join(sftpConnection.listFiles(filePath), "\n");
-						} catch (@SuppressWarnings("unused") final Exception e) {
-							setVersion(version.getName(), "ERROR");
-							status = "ERROR";
-						}
-					} else {
-						try (InputStream inputStream = sftpConnection.downloadFile(filePath)) {
-							data = new String(IoUtilities.toByteArray(inputStream), StandardCharsets.UTF_8);
-						} catch (@SuppressWarnings("unused") final Exception e) {
-							setVersion(version.getName(), "ERROR");
-							status = "ERROR";
-						}
-					}
-				} else if (version.getLocation().toLowerCase().startsWith("ssh-cmd:")) {
-					String hostnameForSsh = server.getHost();
-					String usernameForSsh = server.getSshAdmin().getUsername();
-					File privateKeyFileForSsh = server.getSshAdmin().getPrivateKeyFile();
-					char[] passwordForSsh = server.getSshAdmin().getPasswordArray();
-
-					String command = version.getLocation().substring(8);
-
-					if (command.contains(":")) {
-						hostnameForSsh = command.substring(0, command.lastIndexOf(":"));
-						command = command.substring(command.lastIndexOf(":") + 1);
-					}
-
-					if (hostnameForSsh.contains("@")) {
-						usernameForSsh = hostnameForSsh.substring(0, hostnameForSsh.lastIndexOf("@"));
-						hostnameForSsh = hostnameForSsh.substring(hostnameForSsh.lastIndexOf("@") + 1);
-					}
-
-					if (usernameForSsh.contains(":")) {
-						privateKeyFileForSsh = null;
-						passwordForSsh = usernameForSsh.substring(usernameForSsh.lastIndexOf(":") + 1).toCharArray();
-						usernameForSsh = usernameForSsh.substring(0, usernameForSsh.lastIndexOf(":"));
-					}
-
-					final String sftpConnectionString = usernameForSsh + "@" + hostnameForSsh;
-
-					if (sftpConnection == null || !cachedSftpConnectionString.equals(sftpConnectionString)) {
-						if (sftpConnection != null) {
-							sftpConnection.close();
-						}
-						try {
-							sftpConnection = openSftpConnection(hostnameForSsh, usernameForSsh, privateKeyFileForSsh, passwordForSsh);
-						} catch (final Exception e) {
-							throw e;
-						}
-						cachedSftpConnectionString = sftpConnectionString;
-					}
-
-					try {
-						data = sftpConnection.executeCommand(command);
-					} catch (@SuppressWarnings("unused") final Exception e) {
-						setVersion(version.getName(), "ERROR");
-						status = "ERROR";
-					}
-				} else {
-					setVersion(version.getName(), "ERROR");
-					status = "ERROR";
-				}
-
-				if (data != null) {
-					if (version.getPath().toLowerCase().startsWith("json:")) {
-						try (final JsonReader jsonReader = new JsonReader(new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)))) {
-							jsonReader.readUpToJsonPath(version.getPath().substring(5));
-							jsonReader.readNextJsonNode();
-							final String versionText = ((JsonValueString) jsonReader.getCurrentObject()).getValue();
-							setVersion(version.getName(), versionText);
-						} catch (@SuppressWarnings("unused") final Exception e) {
-							setVersion(version.getName(), "ERROR");
-							status = "ERROR";
-						}
-					} else if (version.getPath().toLowerCase().startsWith("xml:")) {
-						try {
-							final Document document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new InputSource(new StringReader(data)));
-							final String versionText = (String) XPathFactory.newInstance().newXPath().evaluate(version.getPath().substring(4), document, XPathConstants.STRING);
-							setVersion(version.getName(), versionText);
-						} catch (@SuppressWarnings("unused") final Exception e) {
-							setVersion(version.getName(), "ERROR");
-							status = "ERROR";
-						}
-					} else if (version.getPath().toLowerCase().startsWith("regex:")) {
-						final Pattern regex = Pattern.compile(version.getPath().substring(6));
-						final Matcher matcher = regex.matcher(data);
-						if (matcher.find()) {
-							setVersion(version.getName(), matcher.group());
-						} else {
-							setVersion(version.getName(), "ERROR");
-							status = "ERROR";
-						}
-					} else if (version.getPath().toLowerCase().startsWith("regex(")) {
-						//Example: "regex(1): version: (.*)"
-						final Pattern regex = Pattern.compile(version.getPath().substring(version.getPath().indexOf(":") + 1));
-						final int group = Integer.parseInt(version.getPath().substring(6, version.getPath().indexOf(")")));
-						final Matcher matcher = regex.matcher(data);
-						if (matcher.find()) {
-							setVersion(version.getName(), matcher.group(group));
-						} else {
-							setVersion(version.getName(), "ERROR");
-							status = "ERROR";
-						}
-					} else if (version.getPath().toLowerCase().startsWith("properties:")) {
-						final String propertyName = version.getPath().substring(11);
-						try (PropertiesReader reader = new PropertiesReader(new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)))) {
-							final Map<String, String> propertiesMap = reader.read();
-							String propertyValue = propertiesMap.get(propertyName);
-							if (propertyValue.startsWith("\"") && propertyValue.endsWith("\"")) {
-								propertyValue = propertyValue.substring(1, propertyValue.length() - 1);
-								propertyValue = Utilities.unescapeJavaString(propertyValue);
+							final HttpRequest request = new HttpRequest(HttpMethod.GET, version.getLocation());
+							final HttpResponse response = HttpUtilities.executeHttpRequest(request, applicationConfiguration.getProxyConfiguration().getProxy(request.getUrl()), trustManager, deactivateHostnameVerification);
+							if (response.getHttpCode() == 200) {
+								data = response.getContent();
+							} else {
+								setVersion(version.getName(), "ERROR");
+								status = "ERROR";
 							}
-							setVersion(version.getName(), propertyValue);
+						} catch (@SuppressWarnings("unused") final Exception e) {
+							setVersion(version.getName(), "ERROR");
+							status = "ERROR";
+						}
+					} else if (version.getLocation().toLowerCase().startsWith("ssh://")) {
+						String hostnameForSsh = server.getHost();
+						String usernameForSsh = server.getSshAdmin().getUsername();
+						File privateKeyFileForSsh = server.getSshAdmin().getPrivateKeyFile();
+						char[] passwordForSsh = server.getSshAdmin().getPasswordArray();
+
+						String filePath = version.getLocation().substring(6);
+
+						if (filePath.contains(":")) {
+							hostnameForSsh = filePath.substring(0, filePath.lastIndexOf(":"));
+							filePath = filePath.substring(filePath.lastIndexOf(":") + 1);
+						}
+
+						if (hostnameForSsh.contains("@")) {
+							usernameForSsh = hostnameForSsh.substring(0, hostnameForSsh.lastIndexOf("@"));
+							hostnameForSsh = hostnameForSsh.substring(hostnameForSsh.lastIndexOf("@") + 1);
+						}
+
+						if (usernameForSsh.contains(":")) {
+							privateKeyFileForSsh = null;
+							passwordForSsh = usernameForSsh.substring(usernameForSsh.lastIndexOf(":") + 1).toCharArray();
+							usernameForSsh = usernameForSsh.substring(0, usernameForSsh.lastIndexOf(":"));
+						}
+
+						final String sftpConnectionString = usernameForSsh + "@" + hostnameForSsh;
+
+						if (sftpConnection == null || !cachedSftpConnectionString.equals(sftpConnectionString)) {
+							if (sftpConnection != null) {
+								sftpConnection.close();
+								// Must not be used again, if the new connection fails
+								sftpConnection = null;
+								cachedSftpConnectionString = "";
+							}
+							sftpConnection = openSftpConnection(hostnameForSsh, usernameForSsh, privateKeyFileForSsh, passwordForSsh);
+							cachedSftpConnectionString = sftpConnectionString;
+						}
+
+						if (filePath.endsWith("/")) {
+							try {
+								data = Utilities.join(sftpConnection.listFiles(filePath), "\n");
+							} catch (@SuppressWarnings("unused") final Exception e) {
+								setVersion(version.getName(), "ERROR");
+								status = "ERROR";
+							}
+						} else {
+							try (InputStream inputStream = sftpConnection.downloadFile(filePath)) {
+								data = new String(IoUtilities.toByteArray(inputStream), StandardCharsets.UTF_8);
+							} catch (@SuppressWarnings("unused") final Exception e) {
+								setVersion(version.getName(), "ERROR");
+								status = "ERROR";
+							}
+						}
+					} else if (version.getLocation().toLowerCase().startsWith("ssh-cmd:")) {
+						String hostnameForSsh = server.getHost();
+						String usernameForSsh = server.getSshAdmin().getUsername();
+						File privateKeyFileForSsh = server.getSshAdmin().getPrivateKeyFile();
+						char[] passwordForSsh = server.getSshAdmin().getPasswordArray();
+
+						String command = version.getLocation().substring(8);
+
+						if (command.contains(":")) {
+							hostnameForSsh = command.substring(0, command.lastIndexOf(":"));
+							command = command.substring(command.lastIndexOf(":") + 1);
+						}
+
+						if (hostnameForSsh.contains("@")) {
+							usernameForSsh = hostnameForSsh.substring(0, hostnameForSsh.lastIndexOf("@"));
+							hostnameForSsh = hostnameForSsh.substring(hostnameForSsh.lastIndexOf("@") + 1);
+						}
+
+						if (usernameForSsh.contains(":")) {
+							privateKeyFileForSsh = null;
+							passwordForSsh = usernameForSsh.substring(usernameForSsh.lastIndexOf(":") + 1).toCharArray();
+							usernameForSsh = usernameForSsh.substring(0, usernameForSsh.lastIndexOf(":"));
+						}
+
+						final String sftpConnectionString = usernameForSsh + "@" + hostnameForSsh;
+
+						if (sftpConnection == null || !cachedSftpConnectionString.equals(sftpConnectionString)) {
+							if (sftpConnection != null) {
+								sftpConnection.close();
+								// Must not be used again, if the new connection fails
+								sftpConnection = null;
+								cachedSftpConnectionString = "";
+							}
+							sftpConnection = openSftpConnection(hostnameForSsh, usernameForSsh, privateKeyFileForSsh, passwordForSsh);
+							cachedSftpConnectionString = sftpConnectionString;
+						}
+
+						try {
+							data = sftpConnection.executeCommand(command);
+						} catch (@SuppressWarnings("unused") final Exception e) {
+							setVersion(version.getName(), "ERROR");
+							status = "ERROR";
 						}
 					} else {
 						setVersion(version.getName(), "ERROR");
 						status = "ERROR";
 					}
-				} else {
+
+					if (data != null) {
+						if (version.getPath().toLowerCase().startsWith("json:")) {
+							try (final JsonReader jsonReader = new JsonReader(new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)))) {
+								jsonReader.readUpToJsonPath(version.getPath().substring(5));
+								jsonReader.readNextJsonNode();
+								final String versionText = ((JsonValueString) jsonReader.getCurrentObject()).getValue();
+								setVersion(version.getName(), versionText);
+							} catch (@SuppressWarnings("unused") final Exception e) {
+								setVersion(version.getName(), "ERROR");
+								status = "ERROR";
+							}
+						} else if (version.getPath().toLowerCase().startsWith("xml:")) {
+							try {
+								final Document document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new InputSource(new StringReader(data)));
+								final String versionText = (String) XPathFactory.newInstance().newXPath().evaluate(version.getPath().substring(4), document, XPathConstants.STRING);
+								setVersion(version.getName(), versionText);
+							} catch (@SuppressWarnings("unused") final Exception e) {
+								setVersion(version.getName(), "ERROR");
+								status = "ERROR";
+							}
+						} else if (version.getPath().toLowerCase().startsWith("regex:")) {
+							final Pattern regex = Pattern.compile(version.getPath().substring(6));
+							final Matcher matcher = regex.matcher(data);
+							if (matcher.find()) {
+								setVersion(version.getName(), matcher.group());
+							} else {
+								setVersion(version.getName(), "ERROR");
+								status = "ERROR";
+							}
+						} else if (version.getPath().toLowerCase().startsWith("regex(")) {
+							//Example: "regex(1): version: (.*)"
+							final Pattern regex = Pattern.compile(version.getPath().substring(version.getPath().indexOf(":") + 1));
+							final int group = Integer.parseInt(version.getPath().substring(6, version.getPath().indexOf(")")));
+							final Matcher matcher = regex.matcher(data);
+							if (matcher.find()) {
+								setVersion(version.getName(), matcher.group(group));
+							} else {
+								setVersion(version.getName(), "ERROR");
+								status = "ERROR";
+							}
+						} else if (version.getPath().toLowerCase().startsWith("properties:")) {
+							final String propertyName = version.getPath().substring(11);
+							try (PropertiesReader reader = new PropertiesReader(new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)))) {
+								final Map<String, String> propertiesMap = reader.read();
+								String propertyValue = propertiesMap.get(propertyName);
+								if (propertyValue == null) {
+									throw new Exception("Property '" + propertyName + "' not found");
+								}
+								if (propertyValue.startsWith("\"") && propertyValue.endsWith("\"")) {
+									propertyValue = propertyValue.substring(1, propertyValue.length() - 1);
+									propertyValue = Utilities.unescapeJavaString(propertyValue);
+								}
+								setVersion(version.getName(), propertyValue);
+							}
+						} else {
+							setVersion(version.getName(), "ERROR");
+							status = "ERROR";
+						}
+					} else {
+						setVersion(version.getName(), "ERROR");
+						status = "ERROR";
+					}
+				} catch (@SuppressWarnings("unused") final Exception e) {
 					setVersion(version.getName(), "ERROR");
 					status = "ERROR";
 				}
@@ -1640,31 +1663,48 @@ public class ServerManagementItem extends JPanel {
 		return status;
 	}
 
-	private static SftpConnection openSftpConnection(String hostname, final String sshAccessUsername, final File sshAccessPrivateKeyFile, final char[] sshAccessPassword) throws Exception, IOException {
-		int port = 22;
-		if (hostname.contains(":")) {
-			port = Integer.parseInt(hostname.substring(hostname.lastIndexOf(":" + 1)));
-			hostname = hostname.substring(0, hostname.lastIndexOf(":"));
-		}
+	private static SftpConnection openSftpConnection(final String hostname, final String sshAccessUsername, final File sshAccessPrivateKeyFile, final char[] sshAccessPassword) throws Exception, IOException {
+		// Same implementation as for the authorized keys (this copy had the same port parsing bug)
+		return AuthorizedKeysHelper.openSftpConnection(hostname, sshAccessUsername, sshAccessPrivateKeyFile, sshAccessPassword);
+	}
 
-		if (sshAccessPrivateKeyFile != null) {
-			byte[] sshKeyData;
-			try (InputStream inputStream = new FileInputStream(sshAccessPrivateKeyFile)) {
-				SshKey sshKey;
-				if (Utilities.isNotBlank(sshAccessPassword)) {
-					sshKey = SshKeyReader.readKey(inputStream, sshAccessPassword);
-				} else {
-					sshKey = SshKeyReader.readKey(inputStream, null);
-				}
-				final ByteArrayOutputStream keyDataStream = new ByteArrayOutputStream();
-				SshKeyWriter.writePuttyVersion2Key(keyDataStream, sshKey, null);
-				sshKeyData = keyDataStream.toByteArray();
-			}
-			return new SftpConnection(hostname, sshAccessUsername, sshKeyData, null, port, null);
-		} else if (Utilities.isNotBlank(sshAccessPassword)) {
-			return new SftpConnection(hostname, sshAccessUsername, null, sshAccessPassword, port, null);
+	/**
+	 * Severity of a table status color: none (white) &lt; green &lt; yellow &lt; red.
+	 */
+	private static int getColorSeverity(final Color color) {
+		if (CustomizedColor.RED.equals(color)) {
+			return 3;
+		} else if (CustomizedColor.YELLOW.equals(color)) {
+			return 2;
+		} else if (CustomizedColor.GREEN.equals(color)) {
+			return 1;
 		} else {
-			throw new Exception("No supported authentification method available for host '" + hostname + "'");
+			return 0;
 		}
+	}
+
+	/**
+	 * The background of a table shows the worst status of its rows, so a later good row must not hide an earlier error.
+	 */
+	private static void raiseTableColor(final JTable table, final Color color) {
+		if (getColorSeverity(color) > getColorSeverity(table.getBackground())) {
+			table.setBackground(color);
+		}
+	}
+
+	/**
+	 * The status of the server item is the worst status of all checks (OK &lt; WARNING &lt; ERROR).
+	 */
+	private void raiseStatus(final String newStatus) {
+		if ("ERROR".equals(newStatus) || ("WARNING".equals(newStatus) && "OK".equals(status))) {
+			status = newStatus;
+		}
+	}
+
+	private Admin getSshAdminChecked() throws Exception {
+		if (server.getSshAdmin() == null || Utilities.isBlank(server.getSshAdmin().getUsername())) {
+			throw new Exception("No SSH admin configured for server '" + server.getName() + "'");
+		}
+		return server.getSshAdmin();
 	}
 }

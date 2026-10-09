@@ -7,6 +7,8 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 import javax.swing.SwingUtilities;
 
@@ -25,6 +27,7 @@ import de.soderer.utilities.Utilities;
 import de.soderer.utilities.Version;
 import de.soderer.utilities.appupdate.ApplicationUpdateUtilities;
 import de.soderer.utilities.swing.QuestionDialog;
+import de.soderer.utilities.swing.SwingColor;
 import de.soderer.utilities.worker.WorkerParentDual;
 
 public class ServerManagement extends UpdateableConsoleApplication implements WorkerParentDual {
@@ -63,16 +66,32 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 	/** The usage message. **/
 	private static String getUsageMessage() {
 		try (InputStream helpInputStream = ServerManagement.class.getResourceAsStream(HELP_RESOURCE_FILE)) {
-			return APPLICATION_NAME + " (by Andreas Soderer, mail: " + APPLICATION_NAME.toLowerCase() + "@soderer.de)\n"
-					+ "VERSION: " + VERSION.toString() + " (" + DateUtilities.formatDate(DateUtilities.YYYY_MM_DD_HHMMSS, VERSION_BUILDTIME) + ")" + "\n\n"
+			return APPLICATION_NAME + " (by Andreas Soderer, mail: " + APPLICATION_NAME.toLowerCase(Locale.ROOT) + "@soderer.de)\n"
+					+ "VERSION: " + VERSION.toString() + getBuildTimeText() + "\n\n"
 					+ new String(IoUtilities.toByteArray(helpInputStream), StandardCharsets.UTF_8);
 		} catch (@SuppressWarnings("unused") final Exception e) {
 			return "Help info is missing";
 		}
 	}
 
+	/**
+	 * Returns the build time for the version output, e.g. " (2026-10-09 21:13:22)".
+	 * The build time is optional in version.txt, so it must not break the help output (NullPointerException before).
+	 */
+	public static String getBuildTimeText() {
+		return VERSION_BUILDTIME == null ? "" : " (" + DateUtilities.formatDate(DateUtilities.YYYY_MM_DD_HHMMSS, VERSION_BUILDTIME) + ")";
+	}
+
+	/** Lower case keywords for the help text, only recognized as single argument */
+	private static final Set<String> HELP_KEYWORDS = Set.of("help", "-help", "--help", "-h", "--h", "-?", "--?");
+
 	public static void main(final String[] args) {
-		_main(args);
+		// The return code was ignored, so the exit code was always 0 (also for errors).
+		// A negative return code means that the GUI was started and keeps running.
+		final int returnCode = _main(args);
+		if (returnCode >= 0) {
+			System.exit(returnCode);
+		}
 	}
 
 	/** Trusted CA certificate for updates **/
@@ -116,33 +135,35 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 				if (GraphicsEnvironment.isHeadless()) {
 					throw new ServerManagementException("Headless mode not supported");
 				}
-			} else {
-				for (int i = 0; i < arguments.length; i++) {
-					if ("help".equalsIgnoreCase(arguments[i]) || "-help".equalsIgnoreCase(arguments[i]) || "--help".equalsIgnoreCase(arguments[i]) || "-h".equalsIgnoreCase(arguments[i]) || "--h".equalsIgnoreCase(arguments[i])
-							|| "-?".equalsIgnoreCase(arguments[i]) || "--?".equalsIgnoreCase(arguments[i])) {
-						System.out.println(getUsageMessage());
-						return 1;
-					} else if ("version".equalsIgnoreCase(arguments[i]) && arguments.length == 1) {
-						System.out.println(VERSION);
-						return 1;
-					} else if ("update".equalsIgnoreCase(arguments[i]) && arguments.length == 1) {
-						if (arguments.length > i + 2) {
-							final ServerManagement serverManagement = new ServerManagement();
-							ApplicationUpdateUtilities.executeUpdate(serverManagement, ServerManagement.VERSIONINFO_DOWNLOAD_URL, applicationConfiguration.getProxyConfiguration(), ServerManagement.APPLICATION_NAME, ServerManagement.VERSION, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, arguments[i + 1], arguments[i + 2].toCharArray(), null, false, false);
-						} else if (arguments.length > i + 1) {
-							final ServerManagement serverManagement = new ServerManagement();
-							ApplicationUpdateUtilities.executeUpdate(serverManagement, ServerManagement.VERSIONINFO_DOWNLOAD_URL, applicationConfiguration.getProxyConfiguration(), ServerManagement.APPLICATION_NAME, ServerManagement.VERSION, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, arguments[i + 1], null, null, false, false);
-						} else {
-							final ServerManagement serverManagement = new ServerManagement();
-							ApplicationUpdateUtilities.executeUpdate(serverManagement, ServerManagement.VERSIONINFO_DOWNLOAD_URL, applicationConfiguration.getProxyConfiguration(), ServerManagement.APPLICATION_NAME, ServerManagement.VERSION, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, null, null, null, false, false);
-						}
-						return 1;
-					}
-
-					if (new File(arguments[i]).exists()) {
-						SERVERS_CONFIGURATION_FILE = new File(arguments[i]);
-					}
+			} else if (arguments.length == 1 && HELP_KEYWORDS.contains(arguments[0].toLowerCase(Locale.ROOT))) {
+				// Only as single argument (before, a help keyword was recognized at any position)
+				System.out.println(getUsageMessage());
+				return 1;
+			} else if (arguments.length == 1 && "version".equalsIgnoreCase(arguments[0])) {
+				System.out.println(VERSION);
+				return 1;
+			} else if ("update".equalsIgnoreCase(arguments[0]) && arguments.length <= 3) {
+				// Only as first argument with optional username and password. Before, "update" was only accepted as
+				// single argument, so the username and password branches were unreachable and "update user password"
+				// silently opened the GUI.
+				final ServerManagement serverManagement = new ServerManagement();
+				final String username = arguments.length > 1 ? arguments[1] : null;
+				final char[] updatePassword = arguments.length > 2 ? arguments[2].toCharArray() : null;
+				ApplicationUpdateUtilities.executeUpdate(serverManagement, ServerManagement.VERSIONINFO_DOWNLOAD_URL, applicationConfiguration.getProxyConfiguration(), ServerManagement.APPLICATION_NAME, ServerManagement.VERSION, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, username, updatePassword, null, false, false);
+				return 1;
+			} else if (arguments.length == 1) {
+				// The only other parameter is the servers configuration file. Before, a not existing file (e.g. a typo)
+				// was silently ignored and the default configuration file was opened instead.
+				final File serversConfigurationFile = new File(Utilities.replaceUsersHome(arguments[0]));
+				if (!serversConfigurationFile.exists()) {
+					throw new ParameterException(arguments[0], "Servers configuration file does not exist: " + arguments[0]);
+				} else if (serversConfigurationFile.isDirectory()) {
+					throw new ParameterException(arguments[0], "Servers configuration file is a directory: " + arguments[0]);
 				}
+				SERVERS_CONFIGURATION_FILE = serversConfigurationFile;
+			} else {
+				// Before, any further parameters were silently ignored
+				throw new ParameterException(Utilities.join(arguments, " "), "Invalid parameters");
 			}
 
 			// open the preconfigured GUI
@@ -160,8 +181,11 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 					serverManagementConfiguration = (ServerManagementConfiguration) JsonSerializer.deserialize(ServerManagementConfiguration.class, (JsonObject) rootNode);
 				}
 			} catch (final Exception e) {
+				// Before, the GUI was opened with an empty configuration, so saving overwrote the existing (only
+				// slightly broken) configuration file with an empty one
 				e.printStackTrace();
-				new QuestionDialog(null, ServerManagement.APPLICATION_NAME, "Configuration file '" + ServerManagement.SERVERS_CONFIGURATION_FILE + "' is invalid: \n" + e.getMessage(), LangResources.get("ok")).open();
+				new QuestionDialog(null, ServerManagement.APPLICATION_NAME, "Configuration file '" + ServerManagement.SERVERS_CONFIGURATION_FILE + "' is invalid: \n" + (e.getMessage() != null ? e.getMessage() : e.toString()), LangResources.get("ok")).setBackgroundColor(SwingColor.LightRed).open();
+				return 1;
 			}
 			try {
 				final ServerManagementGui serverManagementGui = new ServerManagementGui(serverManagementConfiguration);
@@ -182,7 +206,7 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 			System.err.println(getUsageMessage());
 			return 1;
 		} catch (final Exception e) {
-			System.err.println(e.getMessage());
+			System.err.println(e.getMessage() != null ? e.getMessage() : e.toString());
 			return 1;
 		}
 	}

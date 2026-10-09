@@ -67,10 +67,26 @@ public class AuthorizedKeysHelper {
 		}
 	}
 
-	private static SftpConnection openSftpConnection(String hostname, final String sshAccessUsername, final File sshAccessPrivateKeyFile, final char[] sshAccessPassword) throws Exception, IOException {
+	/**
+	 * Opens a SFTP connection. The hostname may contain a port ("host:port", default port 22).
+	 * Also used by ServerManagementItem, so there is only one implementation of the host and port parsing.
+	 */
+	static SftpConnection openSftpConnection(String hostname, final String sshAccessUsername, final File sshAccessPrivateKeyFile, final char[] sshAccessPassword) throws Exception, IOException {
+		if (Utilities.isBlank(hostname)) {
+			throw new Exception("No host configured");
+		} else if (Utilities.isBlank(sshAccessUsername)) {
+			throw new Exception("No SSH admin configured for host '" + hostname + "'");
+		}
+
 		int port = 22;
 		if (hostname.contains(":")) {
-			port = Integer.parseInt(hostname.substring(hostname.lastIndexOf(":" + 1)));
+			// Before, lastIndexOf(":" + 1) searched for the text ":1", so every host with a port failed
+			final String portText = hostname.substring(hostname.lastIndexOf(":") + 1).trim();
+			try {
+				port = Integer.parseInt(portText);
+			} catch (@SuppressWarnings("unused") final NumberFormatException e) {
+				throw new Exception("Invalid port '" + portText + "' for host '" + hostname + "'");
+			}
 			hostname = hostname.substring(0, hostname.lastIndexOf(":"));
 		}
 
@@ -91,7 +107,7 @@ public class AuthorizedKeysHelper {
 		} else if (Utilities.isNotBlank(sshAccessPassword)) {
 			return new SftpConnection(hostname, sshAccessUsername, null, sshAccessPassword, port, null);
 		} else {
-			throw new Exception("No supported authentification method available for host '" + hostname + "'");
+			throw new Exception("No supported authentication method available for host '" + hostname + "'");
 		}
 	}
 }

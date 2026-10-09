@@ -55,6 +55,8 @@ public class KnownPublicSshKey {
 	
 	public KnownPublicSshKey setKey(String key) {
 		this.key = key;
+		// The cached hash belongs to the old key
+		hash = null;
 		return this;
 	}
 
@@ -62,6 +64,9 @@ public class KnownPublicSshKey {
 		if (hash == null) {
 			try (InputStream inputStream = new ByteArrayInputStream(key.getBytes(StandardCharsets.UTF_8))) {
 				List<SshKey> sshKeys = SshKeyReader.readAllPublicKeys(inputStream);
+				if (sshKeys.isEmpty()) {
+					throw new Exception("Invalid public key data for key '" + keyId + "'");
+				}
 				hash = sshKeys.get(0).getMd5Fingerprint().replace(":", "");
 			}
 		}

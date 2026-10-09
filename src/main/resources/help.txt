@@ -1,1 +1,14 @@
-Usage: java -jar ServerManagement.jar
+Usage: java -jar ServerManagement.jar [serversConfigurationFile]
+
+Opens the GUI to manage the SSH users and authorized keys, the URL checks, the version checks and the logs of servers.
+
+Parameters:
+	serversConfigurationFile
+		Optional path of the servers configuration file (JSON)
+		Default: ~/.ServerManagement/.ServerManagement.servers.config
+		The file must exist. Without this parameter, the default file is created on the first save.
+
+Global parameters:
+	help: Show this help (only as single parameter)
+	version: Show the installed version (only as single parameter)
+	update [username [password]]: Check for an online update and install it after confirmation (only as first parameter)

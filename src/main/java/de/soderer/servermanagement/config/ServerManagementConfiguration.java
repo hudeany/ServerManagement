@@ -14,6 +14,10 @@ public class ServerManagementConfiguration {
 		return keystore;
 	}
 
+	public void setKeystore(final String keystore) {
+		this.keystore = keystore;
+	}
+
 	public List<Server> getServers() {
 		return servers;
 	}

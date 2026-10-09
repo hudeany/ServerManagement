@@ -10,9 +10,12 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -209,15 +212,17 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 			public void actionPerformed(final ActionEvent event) {
 				try {
 					final String servername = new SimpleInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addServer"), LangResources.get("enterServerName")).open();
-					if (servername != null) {
+					if (Utilities.isNotBlank(servername)) {
 						final String host = new SimpleInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addServer"), LangResources.get("enterHost")).open();
-						if (host != null) {
-							final Server newServer = new Server().setName(servername).setHost(host);
+						if (Utilities.isNotBlank(host)) {
+							final Server newServer = new Server().setName(servername.trim()).setHost(host.trim());
 							serverManagementConfiguration.getServers().add(newServer);
 							final ServerManagementItem serverItem = new ServerManagementItem(serverManagementGui, newServer, applicationConfiguration);
 							serverInformationPanel.add(serverItem);
 							serverInformationPanel.add(Box.createRigidArea(new Dimension(10, 10)));
 							serverItems.add(serverItem);
+							// Before, a new server was lost without warning when closing the application
+							serverManagementGui.signalUnsavedChanges();
 
 							serverManagementGui.pack();
 
@@ -261,11 +266,22 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 							for (final ServerManagementItem serverItem : serverItems) {
 								if (serverItem.getServerName().equals(servername)) {
 									serverItems.remove(serverItem);
+									// Before, the server stayed in the configuration, so it was saved again and came back on the next start
+									serverManagementConfiguration.getServers().remove(serverItem.getServer());
+									// Also remove the spacing area after the item
+									final int componentIndex = Arrays.asList(serverInformationPanel.getComponents()).indexOf(serverItem);
+									if (componentIndex >= 0 && componentIndex + 1 < serverInformationPanel.getComponentCount() && serverInformationPanel.getComponent(componentIndex + 1) instanceof Box.Filler) {
+										serverInformationPanel.remove(componentIndex + 1);
+									}
 									serverInformationPanel.remove(serverItem);
 									break;
 								}
 							}
 						}
+
+						// Without this the removed items stayed visible until the next repaint
+						serverInformationPanel.revalidate();
+						serverInformationPanel.repaint();
 
 						// Scroll to start
 						final JScrollBar verticalScrollBar = serverInformationScrollPane.getVerticalScrollBar();
@@ -311,8 +327,10 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
 				try {
-					saveSettings(serverManagementGui);
-					hasUnsavedChanges = false;
+					// Only reset the flag if the settings were really saved (not on "no" or an error)
+					if (saveSettings(serverManagementGui)) {
+						hasUnsavedChanges = false;
+					}
 				} catch (final Exception e) {
 					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
 				}
@@ -335,7 +353,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 
 					Image iconImage;
 					try (InputStream imageIconStream = getClass().getClassLoader().getResourceAsStream("ServerManagement_Icon.png")) {
-						iconImage = ImageIO.read(getClass().getClassLoader().getResource("ServerManagement_Icon.png"));
+						iconImage = ImageIO.read(imageIconStream);
 					}
 					final List<String> appParameters = new ArrayList<>();
 					appParameters.add(ServerManagement.SERVERS_CONFIGURATION_FILE.getAbsolutePath());
@@ -372,20 +390,37 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 		serverManagementGui.add(buttonPanel);
 	}
 
-	private void saveSettings(final ServerManagementGui serverManagementGui) {
+	/**
+	 * Saves the server configuration.
+	 *
+	 * @return true, if the configuration was saved, false, if the user declined to overwrite the existing file
+	 * @throws Exception if the configuration could not be written (before, this was only printed to the console)
+	 */
+	private boolean saveSettings(final ServerManagementGui serverManagementGui) throws Exception {
 		if (ServerManagement.SERVERS_CONFIGURATION_FILE.exists()
 				&& new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, LangResources.get("overwriteServerSettings"), LangResources.get("yes"), LangResources.get("no")).open() != 0) {
-			return;
+			return false;
 		}
 
+		final File configurationFile = ServerManagement.SERVERS_CONFIGURATION_FILE.getAbsoluteFile();
+		// The directory is missing on the first start
+		if (configurationFile.getParentFile() != null && !configurationFile.getParentFile().exists()) {
+			Files.createDirectories(configurationFile.getParentFile().toPath());
+		}
+
+		// Write into a temporary file first, so a failing write does not destroy the existing configuration
+		final File temporaryFile = new File(configurationFile.getAbsolutePath() + ".tmp");
 		try {
 			final JsonNode rootNode = JsonSerializer.serialize(serverManagementConfiguration);
-			try (JsonWriter writer = new JsonWriter(new FileOutputStream(ServerManagement.SERVERS_CONFIGURATION_FILE))) {
+			try (JsonWriter writer = new JsonWriter(new FileOutputStream(temporaryFile))) {
 				writer.add((JsonObject) rootNode);
 			}
+			Files.move(temporaryFile.toPath(), configurationFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
 		} catch (final Exception e) {
-			e.printStackTrace();
+			Files.deleteIfExists(temporaryFile.toPath());
+			throw new Exception("Cannot save server settings to '" + configurationFile.getAbsolutePath() + "': " + (e.getMessage() != null ? e.getMessage() : e.toString()), e);
 		}
+		return true;
 	}
 
 	/**
@@ -434,7 +469,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 				String resultText = LangResources.get("start") + ": " + DateUtilities.formatDate(DateUtilities.YYYY_MM_DD_HHMMSS, start) + "\n" + LangResources.get("end") + ": " + DateUtilities.formatDate(DateUtilities.YYYY_MM_DD_HHMMSS, end) + "\n" + LangResources.get("timeelapsed") + ": "
 						+ DateUtilities.getHumanReadableTimespan(Duration.between(start, end), true);
 
-				resultText += "\n" + LangResources.get("servers found") + ": " + Utilities.getHumanReadableInteger(worker.getItemsDone(), null, Locale.getDefault());
+				resultText += "\n" + LangResources.get("serversChecked") + ": " + Utilities.getHumanReadableInteger(worker.getItemsDone(), null, Locale.getDefault());
 
 				final boolean showResult = false;
 				if (showResult) {

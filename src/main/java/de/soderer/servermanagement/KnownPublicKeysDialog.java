@@ -101,51 +101,66 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 			public void actionPerformed(final ActionEvent event) {
 				final String homePath = System.getProperty("user.home") + File.separator + ".ssh" + File.separator;
 				final File newPublicKeyFile = selectFile(homePath, LangResources.get("addPublicKey"));
-				if (newPublicKeyFile != null) {
-					try (FileInputStream fileInputStream = new FileInputStream(newPublicKeyFile)) {
-						final List<SshKey> keys = SshKeyReader.readAllPublicKeys(fileInputStream);
-						for (final SshKey key : keys) {
-							final String authKeyString = key.encodePublicKeyForAuthorizedKeys();
-							final String[] authKeyStringParts = authKeyString.split(" ");
-
-							for (final KnownPublicSshKey existingKey : serverManagementConfiguration.getKnownPublicSshKeys()) {
-								if (existingKey.getKey().equals(authKeyStringParts[1])) {
-									new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\nKey already exists").setBackgroundColor(SwingColor.LightRed).open();
-									return;
-								}
-							}
-
-
-							final KnownPublicSshKey newKey = new KnownPublicSshKey();
-							newKey.setKeyTypeString(authKeyStringParts[0]);
-							newKey.setKey(authKeyStringParts[1]);
-
-							final SimpleInputDialog keyInputDialog = new SimpleInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addPublicKey"), LangResources.get("enterKeyId"));
-							if (key.getComment() != null) {
-								keyInputDialog.setDefaultText(key.getComment());
-							}
-							final String keyId = keyInputDialog.open();
-							if (Utilities.isNotBlank(keyId)) {
-								newKey.setKeyId(keyId);
-							}
-
-							final String keyName = new SimpleInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addPublicKey"), LangResources.get("enterKeyName")).open();
-							if (Utilities.isNotBlank(keyName)) {
-								newKey.setName(keyName);
-								serverManagementConfiguration.getKnownPublicSshKeys().add(newKey);
-							}
-						}
-					} catch (final Exception e) {
-						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
-						return;
-					}
+				if (newPublicKeyFile == null) {
+					// Before, canceling the file selection also marked the configuration as changed
+					return;
 				}
 
-				loadPublicKeysInTable(model, serverManagementConfiguration);
+				boolean keysAdded = false;
+				try (FileInputStream fileInputStream = new FileInputStream(newPublicKeyFile)) {
+					final List<SshKey> keys = SshKeyReader.readAllPublicKeys(fileInputStream);
+					for (final SshKey key : keys) {
+						final String authKeyString = key.encodePublicKeyForAuthorizedKeys();
+						final String[] authKeyStringParts = authKeyString.split(" ");
 
-				returnValue = true;
+						boolean alreadyExists = false;
+						for (final KnownPublicSshKey existingKey : serverManagementConfiguration.getKnownPublicSshKeys()) {
+							if (authKeyStringParts[1].equals(existingKey.getKey())) {
+								alreadyExists = true;
+								break;
+							}
+						}
+						if (alreadyExists) {
+							// Before, this returned immediately, so the further keys of the file were skipped and the
+							// keys added so far were neither shown nor marked as unsaved changes
+							new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\nKey already exists" + (key.getComment() != null ? ": " + key.getComment() : "")).setBackgroundColor(SwingColor.LightRed).open();
+							continue;
+						}
 
-				serverManagementGui.signalUnsavedChanges();
+						final KnownPublicSshKey newKey = new KnownPublicSshKey();
+						newKey.setKeyTypeString(authKeyStringParts[0]);
+						newKey.setKey(authKeyStringParts[1]);
+
+						final SimpleInputDialog keyInputDialog = new SimpleInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addPublicKey"), LangResources.get("enterKeyId"));
+						if (key.getComment() != null) {
+							keyInputDialog.setDefaultText(key.getComment());
+						}
+						final String keyId = keyInputDialog.open();
+						if (Utilities.isBlank(keyId)) {
+							// The key id is the reference used by the users, so a key without id could never be configured
+							continue;
+						} else if (serverManagementConfiguration.getKnownPublicSshKeyByKeyId(keyId.trim()) != null) {
+							new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\nKey id already exists: " + keyId.trim()).setBackgroundColor(SwingColor.LightRed).open();
+							continue;
+						}
+						newKey.setKeyId(keyId.trim());
+
+						final String keyName = new SimpleInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addPublicKey"), LangResources.get("enterKeyName")).open();
+						if (Utilities.isNotBlank(keyName)) {
+							newKey.setName(keyName);
+							serverManagementConfiguration.getKnownPublicSshKeys().add(newKey);
+							keysAdded = true;
+						}
+					}
+				} catch (final Exception e) {
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+				}
+
+				if (keysAdded) {
+					loadPublicKeysInTable(model, serverManagementConfiguration);
+					returnValue = true;
+					serverManagementGui.signalUnsavedChanges();
+				}
 			}
 		});
 		buttonPanel2.add(addPublicKeyButton);

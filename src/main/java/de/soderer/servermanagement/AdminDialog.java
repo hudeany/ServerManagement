@@ -6,8 +6,6 @@ import java.awt.FlowLayout;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
 import java.io.File;
 import java.text.MessageFormat;
 import java.util.Locale;
@@ -22,6 +20,8 @@ import javax.swing.JPasswordField;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 
 import de.soderer.utilities.LangResources;
 import de.soderer.utilities.Utilities;
@@ -91,13 +91,11 @@ public class AdminDialog extends ModalDialog<Integer> {
 		userField.setPreferredSize(new Dimension(400, userField.getPreferredSize().height));
 		userField.setText("");
 		username = "";
-		userField.addKeyListener(new KeyAdapter() {
-			@Override
-			public void keyReleased(final KeyEvent event) {
-				username = userField.getText();
-				checkButtonStatus();
-			}
-		});
+		// DocumentListener instead of KeyListener, so pasting with the mouse and setText() are also recognized
+		userField.getDocument().addDocumentListener(new TextChangeListener(() -> {
+			username = userField.getText();
+			checkButtonStatus();
+		}));
 		userPanel.add(userField);
 		panel.add(userPanel);
 
@@ -107,22 +105,14 @@ public class AdminDialog extends ModalDialog<Integer> {
 		final JLabel trustStoreFilePathLabel = new JLabel(LangResources.get("privateKeyFilePath"));
 		privateKeyFilePathPanel.add(trustStoreFilePathLabel);
 		privateKeyFilePathField = new JTextField();
-		privateKeyFilePathField.setToolTipText(LangResources.get("trustStoreFile_help"));
+		privateKeyFilePathField.setToolTipText(LangResources.get("privateKeyFilePath_help"));
 		privateKeyFilePathField.setPreferredSize(new Dimension(375, privateKeyFilePathField.getPreferredSize().height));
-		privateKeyFilePathField.addKeyListener(new KeyAdapter() {
-			@Override
-			public void keyReleased(final KeyEvent event) {
-				privateKeyFilePath = privateKeyFilePathField.getText();
-
-				privateKeyFilePath = new File(privateKeyFilePath).getAbsolutePath();
-				if (privateKeyFilePath.startsWith(System.getProperty("user.home"))) {
-					privateKeyFilePath = privateKeyFilePath.replace(System.getProperty("user.home"), "$HOME");
-					privateKeyFilePathField.setText(privateKeyFilePath);
-				}
-
-				checkButtonStatus();
-			}
-		});
+		// Before, every key stroke converted the text into an absolute path, so an emptied field became the current
+		// working directory (and the key path could never be removed) and a relative path jumped while typing
+		privateKeyFilePathField.getDocument().addDocumentListener(new TextChangeListener(() -> {
+			privateKeyFilePath = Utilities.isBlank(privateKeyFilePathField.getText()) ? null : privateKeyFilePathField.getText().trim();
+			checkButtonStatus();
+		}));
 		privateKeyFilePathPanel.add(privateKeyFilePathField);
 
 		final JButton privateKeyFileButton = new JButton("...");
@@ -131,18 +121,14 @@ public class AdminDialog extends ModalDialog<Integer> {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
 				try {
-					final File trustStoreFile = selectFile(privateKeyFilePathField.getText(), LangResources.get("trustStoreFile"));
-					if (trustStoreFile != null) {
-						privateKeyFilePathField.setText(trustStoreFile.getAbsolutePath());
-						privateKeyFilePath = privateKeyFilePathField.getText();
-
-						privateKeyFilePath = new File(privateKeyFilePath).getAbsolutePath();
-						if (privateKeyFilePath.startsWith(System.getProperty("user.home"))) {
-							privateKeyFilePath = privateKeyFilePath.replace(System.getProperty("user.home"), "$HOME");
-							privateKeyFilePathField.setText(privateKeyFilePath);
+					final File privateKeyFile = selectFile(Utilities.replaceUsersHome(privateKeyFilePathField.getText()), LangResources.get("privateKeyFilePath"));
+					if (privateKeyFile != null) {
+						String selectedPath = privateKeyFile.getAbsolutePath();
+						if (selectedPath.startsWith(System.getProperty("user.home"))) {
+							selectedPath = "$HOME" + selectedPath.substring(System.getProperty("user.home").length());
 						}
-
-						checkButtonStatus();
+						// The DocumentListener updates privateKeyFilePath and the button status
+						privateKeyFilePathField.setText(selectedPath);
 					}
 				} catch (final Exception e) {
 					new QuestionDialog((ServerManagementGui) getParent(), ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
@@ -161,13 +147,10 @@ public class AdminDialog extends ModalDialog<Integer> {
 		passwordField.setPreferredSize(new Dimension(400, passwordField.getPreferredSize().height));
 		passwordField.setText("");
 		password = "".toCharArray();
-		passwordField.addKeyListener(new KeyAdapter() {
-			@Override
-			public void keyReleased(final KeyEvent event) {
-				password = passwordField.getText().toCharArray();
-				checkButtonStatus();
-			}
-		});
+		passwordField.getDocument().addDocumentListener(new TextChangeListener(() -> {
+			password = passwordField.getText().toCharArray();
+			checkButtonStatus();
+		}));
 		passwordPanel.add(passwordField);
 		panel.add(passwordPanel);
 
@@ -239,18 +222,22 @@ public class AdminDialog extends ModalDialog<Integer> {
 	public AdminDialog setUsername(final String username) {
 		this.username = username;
 		userField.setText(username);
+		// Before, the OK button stayed disabled for an existing admin until a key was typed
+		checkButtonStatus();
 		return this;
 	}
 
 	public AdminDialog setPassword(final char[] password) {
 		this.password = password;
-		passwordField.setText(new String(password));
+		passwordField.setText(password == null ? "" : new String(password));
+		checkButtonStatus();
 		return this;
 	}
 
 	public AdminDialog setPrivateKeyFilePath(final String privateKeyFilePath) {
 		this.privateKeyFilePath = privateKeyFilePath;
 		privateKeyFilePathField.setText(privateKeyFilePath);
+		checkButtonStatus();
 		return this;
 	}
 
@@ -295,6 +282,32 @@ public class AdminDialog extends ModalDialog<Integer> {
 			return fileChooser.getSelectedFile();
 		} else {
 			return null;
+		}
+	}
+
+	/**
+	 * Calls the given action for every change of a text field document.
+	 */
+	private static class TextChangeListener implements DocumentListener {
+		private final Runnable action;
+
+		TextChangeListener(final Runnable action) {
+			this.action = action;
+		}
+
+		@Override
+		public void insertUpdate(final DocumentEvent event) {
+			action.run();
+		}
+
+		@Override
+		public void removeUpdate(final DocumentEvent event) {
+			action.run();
+		}
+
+		@Override
+		public void changedUpdate(final DocumentEvent event) {
+			action.run();
 		}
 	}
 }

@@ -29,11 +29,11 @@ import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableModel;
 import javax.swing.table.TableRowSorter;
 
+import de.soderer.swing.ModalDialog;
+import de.soderer.swing.QuestionDialog;
+import de.soderer.swing.SwingColor;
 import de.soderer.utilities.LangResources;
 import de.soderer.utilities.Utilities;
-import de.soderer.utilities.swing.ModalDialog;
-import de.soderer.utilities.swing.QuestionDialog;
-import de.soderer.utilities.swing.SwingColor;
 
 public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 	private static final long serialVersionUID = -3359111126746373988L;

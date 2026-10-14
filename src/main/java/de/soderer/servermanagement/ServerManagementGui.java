@@ -30,6 +30,9 @@ import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.WindowConstants;
 
+import de.soderer.applicationbase.ApplicationConfigurationDialog;
+import de.soderer.applicationbase.ApplicationUpdateUtilities;
+import de.soderer.applicationbase.UpdateableGuiApplication;
 import de.soderer.json.JsonNode;
 import de.soderer.json.JsonObject;
 import de.soderer.json.JsonSerializer;
@@ -38,6 +41,11 @@ import de.soderer.network.NetworkUtilities;
 import de.soderer.servermanagement.config.Server;
 import de.soderer.servermanagement.config.ServerManagementConfiguration;
 import de.soderer.servermanagement.worker.CheckAllServerStatusWorker;
+import de.soderer.swing.ProgressDialog;
+import de.soderer.swing.QuestionDialog;
+import de.soderer.swing.SelectableTableDialog;
+import de.soderer.swing.SimpleInputDialog;
+import de.soderer.swing.SwingColor;
 import de.soderer.utilities.ConfigurationProperties;
 import de.soderer.utilities.DateUtilities;
 import de.soderer.utilities.ExceptionUtilities;
@@ -46,14 +54,6 @@ import de.soderer.utilities.LangResources;
 import de.soderer.utilities.Result;
 import de.soderer.utilities.Utilities;
 import de.soderer.utilities.VersionInfo;
-import de.soderer.utilities.appupdate.ApplicationUpdateUtilities;
-import de.soderer.utilities.swing.ApplicationConfigurationDialog;
-import de.soderer.utilities.swing.ProgressDialog;
-import de.soderer.utilities.swing.QuestionDialog;
-import de.soderer.utilities.swing.SelectableTableDialog;
-import de.soderer.utilities.swing.SimpleInputDialog;
-import de.soderer.utilities.swing.SwingColor;
-import de.soderer.utilities.swing.UpdateableGuiApplication;
 
 /**
  * TODO:

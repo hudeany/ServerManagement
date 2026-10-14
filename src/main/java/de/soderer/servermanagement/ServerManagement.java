@@ -12,22 +12,22 @@ import java.util.Set;
 
 import javax.swing.SwingUtilities;
 
+import de.soderer.applicationbase.ApplicationUpdateUtilities;
+import de.soderer.applicationbase.UpdateableConsoleApplication;
 import de.soderer.json.JsonNode;
 import de.soderer.json.JsonObject;
 import de.soderer.json.JsonReader;
 import de.soderer.json.JsonSerializer;
 import de.soderer.servermanagement.config.ServerManagementConfiguration;
+import de.soderer.swing.QuestionDialog;
+import de.soderer.swing.SwingColor;
 import de.soderer.utilities.ConfigurationProperties;
 import de.soderer.utilities.DateUtilities;
 import de.soderer.utilities.IoUtilities;
 import de.soderer.utilities.LangResources;
 import de.soderer.utilities.ParameterException;
-import de.soderer.utilities.UpdateableConsoleApplication;
 import de.soderer.utilities.Utilities;
 import de.soderer.utilities.Version;
-import de.soderer.utilities.appupdate.ApplicationUpdateUtilities;
-import de.soderer.utilities.swing.QuestionDialog;
-import de.soderer.utilities.swing.SwingColor;
 import de.soderer.utilities.worker.WorkerParentDual;
 
 public class ServerManagement extends UpdateableConsoleApplication implements WorkerParentDual {
@@ -167,7 +167,7 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 			}
 
 			// open the preconfigured GUI
-			de.soderer.utilities.swing.SwingUtilities.setSystemLookAndFeel();
+			de.soderer.swing.SwingUtilities.setSystemLookAndFeel();
 
 			ServerManagementConfiguration serverManagementConfiguration = new ServerManagementConfiguration();
 

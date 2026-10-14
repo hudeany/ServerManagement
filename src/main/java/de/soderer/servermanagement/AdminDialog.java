@@ -23,11 +23,11 @@ import javax.swing.JTextField;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 
+import de.soderer.swing.ModalDialog;
+import de.soderer.swing.QuestionDialog;
+import de.soderer.swing.SwingColor;
 import de.soderer.utilities.LangResources;
 import de.soderer.utilities.Utilities;
-import de.soderer.utilities.swing.ModalDialog;
-import de.soderer.utilities.swing.QuestionDialog;
-import de.soderer.utilities.swing.SwingColor;
 
 public class AdminDialog extends ModalDialog<Integer> {
 	private static final long serialVersionUID = 2020023796052296409L;

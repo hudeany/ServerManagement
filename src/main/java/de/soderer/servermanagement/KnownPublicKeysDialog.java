@@ -28,12 +28,12 @@ import de.soderer.servermanagement.config.User;
 import de.soderer.sshkeyformats.SshKey;
 import de.soderer.sshkeyformats.SshKeyReader;
 import de.soderer.sshkeyformats.data.Algorithm;
+import de.soderer.swing.ModalDialog;
+import de.soderer.swing.QuestionDialog;
+import de.soderer.swing.SimpleInputDialog;
+import de.soderer.swing.SwingColor;
 import de.soderer.utilities.LangResources;
 import de.soderer.utilities.Utilities;
-import de.soderer.utilities.swing.ModalDialog;
-import de.soderer.utilities.swing.QuestionDialog;
-import de.soderer.utilities.swing.SimpleInputDialog;
-import de.soderer.utilities.swing.SwingColor;
 
 public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 	private static final long serialVersionUID = -1512808290727321131L;

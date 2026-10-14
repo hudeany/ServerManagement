@@ -71,16 +71,16 @@ import de.soderer.servermanagement.worker.RefreshServerItemStatusWorker;
 import de.soderer.sshkeyformats.AuthorizedKey;
 import de.soderer.sshkeyformats.SshKey;
 import de.soderer.sshkeyformats.SshKeyReader;
+import de.soderer.swing.MultiInputDialog;
+import de.soderer.swing.QuestionDialog;
+import de.soderer.swing.SimpleInputDialog;
+import de.soderer.swing.SwingColor;
 import de.soderer.utilities.ConfigurationProperties;
 import de.soderer.utilities.IoUtilities;
 import de.soderer.utilities.LangResources;
 import de.soderer.utilities.PropertiesReader;
 import de.soderer.utilities.Utilities;
 import de.soderer.utilities.remote.SftpConnection;
-import de.soderer.utilities.swing.MultiInputDialog;
-import de.soderer.utilities.swing.QuestionDialog;
-import de.soderer.utilities.swing.SimpleInputDialog;
-import de.soderer.utilities.swing.SwingColor;
 
 public class ServerManagementItem extends JPanel {
 	private static final long serialVersionUID = -8920980761735439684L;

@@ -6,7 +6,7 @@
 	<classpathentry kind="lib" path="lib/jsch-0.2.23.jar"/>
 	<classpathentry kind="lib" path="lib/bcprov-jdk18on-1.80.jar"/>
 	<classpathentry kind="lib" path="lib/csv-26.1.9.jar"/>
-	<classpathentry kind="lib" path="lib/soderer-applicationbase-26.0.1.jar"/>
+	<classpathentry kind="lib" path="lib/soderer-applicationbase-26.0.2.jar"/>
 	<classpathentry kind="lib" path="lib/soderer-console-26.0.1.jar"/>
 	<classpathentry kind="lib" path="lib/soderer-swing-26.0.2.jar"/>
 	<classpathentry kind="lib" path="lib/soderer-utilities-26.2.105.jar"/>

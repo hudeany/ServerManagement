@@ -365,7 +365,7 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 		for (final int rowIndex1 : sourceTable.getSelectedRows()) {
 			final String keyHash = (String) sourceTable.getValueAt(rowIndex1, 1);
 			if (!keyHash.equalsIgnoreCase(adminKeyHash)
-					|| 0 == new QuestionDialog(this, ServerManagement.APPLICATION_NAME, LangResources.get("adminKeyRemoval"), LangResources.get("yes"), LangResources.get("no")).setBackgroundColor(SwingColor.Yellow).open()) {
+					|| 0 == new QuestionDialog(this, ServerManagement.APPLICATION_NAME, LangResources.get("adminKeyRemoval"), LangResources.get("yes"), LangResources.get("no")).withBackgroundColor(SwingColor.Yellow).open()) {
 				for (final Map<String, String> destinationMap : destinationMaps) {
 					destinationMap.remove(keyHash);
 				}

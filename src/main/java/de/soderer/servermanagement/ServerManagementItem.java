@@ -348,7 +348,7 @@ public class ServerManagementItem extends JPanel {
 							editUser(table.convertRowIndexToModel(row));
 						}
 					} catch (final Exception e) {
-						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 					}
 				}
 			}
@@ -542,7 +542,7 @@ public class ServerManagementItem extends JPanel {
 								LangResources.get("versionName"),
 								LangResources.get("location"),
 								LangResources.get("path"))
-								.setDefaultTexts(new String[] {
+								.withDefaultTexts(new String[] {
 										versionName,
 										(String) table.getModel().getValueAt(rowIndex, 1),
 										(String) table.getModel().getValueAt(rowIndex, 2)})
@@ -557,7 +557,7 @@ public class ServerManagementItem extends JPanel {
 							serverManagementGui.signalUnsavedChanges();
 						}
 					} catch (final Exception e) {
-						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 					}
 				}
 			}
@@ -669,7 +669,7 @@ public class ServerManagementItem extends JPanel {
 							throw new Exception("Unsupported log location '" + location + "', expected 'ssh://host[:port]'");
 						}
 					} catch (final Exception e) {
-						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 					}
 				}
 			}
@@ -731,7 +731,7 @@ public class ServerManagementItem extends JPanel {
 						serverManagementGui.signalUnsavedChanges();
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 				}
 			}
 		});
@@ -757,7 +757,7 @@ public class ServerManagementItem extends JPanel {
 						serverManagementGui.signalUnsavedChanges();
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 				}
 			}
 		});
@@ -789,7 +789,7 @@ public class ServerManagementItem extends JPanel {
 						serverManagementGui.signalUnsavedChanges();
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 				}
 			}
 		});
@@ -818,7 +818,7 @@ public class ServerManagementItem extends JPanel {
 					}
 				} catch (final Exception e) {
 					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR",
-							"ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+							"ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 				}
 			}
 		});
@@ -836,7 +836,7 @@ public class ServerManagementItem extends JPanel {
 					}
 					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " readVersions", result.trim()).open();
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 				}
 			}
 		});
@@ -868,7 +868,7 @@ public class ServerManagementItem extends JPanel {
 						serverManagementGui.signalUnsavedChanges();
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 				}
 			}
 		});
@@ -895,7 +895,7 @@ public class ServerManagementItem extends JPanel {
 						serverManagementGui.signalUnsavedChanges();
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 				}
 			}
 		});
@@ -967,7 +967,7 @@ public class ServerManagementItem extends JPanel {
 						serverManagementGui.signalUnsavedChanges();
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 				}
 			}
 		});
@@ -1001,7 +1001,7 @@ public class ServerManagementItem extends JPanel {
 						serverManagementGui.signalUnsavedChanges();
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 				}
 			}
 		});
@@ -1028,7 +1028,7 @@ public class ServerManagementItem extends JPanel {
 						serverManagementGui.signalUnsavedChanges();
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 				}
 			}
 		});
@@ -1058,7 +1058,7 @@ public class ServerManagementItem extends JPanel {
 		try {
 			existingAuthorizedKeys = AuthorizedKeysHelper.readAuthorizedKeys(server.getHost(), server.getSshAdmin().getUsername(), server.getSshAdmin().getPrivateKeyFile(), server.getSshAdmin().getPasswordArray(), user.getUsername());
 		} catch (final Exception e) {
-			new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+			new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 			return;
 		}
 		final Map<String, String> existingKeys = new HashMap<>();
@@ -1172,7 +1172,7 @@ public class ServerManagementItem extends JPanel {
 							newKey.setComment(foundInKnownKeys.getKeyId());
 							newAuthorizedKeys.add(newKey);
 						} else {
-							new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "Cannot find authorized key for storage. Hash: " + hash).setBackgroundColor(SwingColor.LightRed).open();
+							new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "Cannot find authorized key for storage. Hash: " + hash).withBackgroundColor(SwingColor.LightRed).open();
 						}
 					}
 				}
@@ -1185,14 +1185,14 @@ public class ServerManagementItem extends JPanel {
 						AuthorizedKeysHelper.storeAuthorizedKeys(server.getHost(), server.getSshAdmin().getUsername(), server.getSshAdmin().getPrivateKeyFile(), server.getSshAdmin().getPasswordArray(), user.getUsername(), newAuthorizedKeys);
 						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, LangResources.get("succesfullyUpdatedSshUserKeys")).open();
 					} catch (final Exception e) {
-						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 					}
 				} else {
 					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, LangResources.get("noServerChangeNeeded")).open();
 				}
 				loadUsersData((DefaultTableModel) managedUserTable.getModel(), server.getManagedUsers());
 			} catch (final Exception e) {
-				new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+				new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 			}
 		}
 	}

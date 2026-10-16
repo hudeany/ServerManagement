@@ -184,7 +184,7 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 				// Before, the GUI was opened with an empty configuration, so saving overwrote the existing (only
 				// slightly broken) configuration file with an empty one
 				e.printStackTrace();
-				new QuestionDialog(null, ServerManagement.APPLICATION_NAME, "Configuration file '" + ServerManagement.SERVERS_CONFIGURATION_FILE + "' is invalid: \n" + (e.getMessage() != null ? e.getMessage() : e.toString()), LangResources.get("ok")).setBackgroundColor(SwingColor.LightRed).open();
+				new QuestionDialog(null, ServerManagement.APPLICATION_NAME, "Configuration file '" + ServerManagement.SERVERS_CONFIGURATION_FILE + "' is invalid: \n" + (e.getMessage() != null ? e.getMessage() : e.toString()), LangResources.get("ok")).withBackgroundColor(SwingColor.LightRed).open();
 				return 1;
 			}
 			try {

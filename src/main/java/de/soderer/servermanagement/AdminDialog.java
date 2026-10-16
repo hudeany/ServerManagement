@@ -131,7 +131,7 @@ public class AdminDialog extends ModalDialog<Integer> {
 						privateKeyFilePathField.setText(selectedPath);
 					}
 				} catch (final Exception e) {
-					new QuestionDialog((ServerManagementGui) getParent(), ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog((ServerManagementGui) getParent(), ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 				}
 			}
 		});

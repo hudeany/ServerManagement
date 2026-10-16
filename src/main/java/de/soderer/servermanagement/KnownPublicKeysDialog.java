@@ -123,7 +123,7 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 						if (alreadyExists) {
 							// Before, this returned immediately, so the further keys of the file were skipped and the
 							// keys added so far were neither shown nor marked as unsaved changes
-							new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\nKey already exists" + (key.getComment() != null ? ": " + key.getComment() : "")).setBackgroundColor(SwingColor.LightRed).open();
+							new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\nKey already exists" + (key.getComment() != null ? ": " + key.getComment() : "")).withBackgroundColor(SwingColor.LightRed).open();
 							continue;
 						}
 
@@ -140,7 +140,7 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 							// The key id is the reference used by the users, so a key without id could never be configured
 							continue;
 						} else if (serverManagementConfiguration.getKnownPublicSshKeyByKeyId(keyId.trim()) != null) {
-							new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\nKey id already exists: " + keyId.trim()).setBackgroundColor(SwingColor.LightRed).open();
+							new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\nKey id already exists: " + keyId.trim()).withBackgroundColor(SwingColor.LightRed).open();
 							continue;
 						}
 						newKey.setKeyId(keyId.trim());
@@ -153,7 +153,7 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 						}
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 				}
 
 				if (keysAdded) {

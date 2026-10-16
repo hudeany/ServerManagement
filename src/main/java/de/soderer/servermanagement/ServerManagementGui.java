@@ -110,7 +110,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 					ApplicationUpdateUtilities.executeUpdate(this, ServerManagement.VERSIONINFO_DOWNLOAD_URL, applicationConfiguration.getProxyConfiguration(), ServerManagement.APPLICATION_NAME, ServerManagement.VERSION, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, null, null, appParameters, true, false);
 				}
 			} catch (final Exception e) {
-				new QuestionDialog(this, ServerManagement.APPLICATION_NAME + " " + LangResources.get("updateCheck") + " ERROR", LangResources.get("error.cannotCheckForUpdate") + "\n" + "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+				new QuestionDialog(this, ServerManagement.APPLICATION_NAME + " " + LangResources.get("updateCheck") + " ERROR", LangResources.get("error.cannotCheckForUpdate") + "\n" + "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 			}
 		}
 
@@ -198,7 +198,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 				try {
 					checkServerStatus(serverManagementGui);
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 				}
 			}
 		});
@@ -232,7 +232,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 						}
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 				}
 			}
 		});
@@ -290,7 +290,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 						serverManagementGui.signalUnsavedChanges();
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 				}
 			}
 		});
@@ -308,7 +308,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 						serverManagementGui.signalUnsavedChanges();
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 				}
 			}
 		});
@@ -332,7 +332,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 						hasUnsavedChanges = false;
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 				}
 			}
 		});
@@ -363,7 +363,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 						applicationConfiguration.save();
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 				}
 			}
 		});
@@ -452,14 +452,14 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 			result = progressDialog.open();
 
 			if (result == Result.CANCELED) {
-				new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, LangResources.get("error.canceledbyuser")).setBackgroundColor(SwingColor.Yellow).open();
+				new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, LangResources.get("error.canceledbyuser")).withBackgroundColor(SwingColor.Yellow).open();
 			} else if (result == Result.ERROR) {
 				final Exception e = worker.getError();
 				if (e instanceof ServerManagementException) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 				} else {
 					final String stacktrace = ExceptionUtilities.getStackTrace(e);
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getClass().getSimpleName() + ":\n" + e.getMessage() + "\n\n" + stacktrace).setBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getClass().getSimpleName() + ":\n" + e.getMessage() + "\n\n" + stacktrace).withBackgroundColor(SwingColor.LightRed).open();
 				}
 			} else {
 				final LocalDateTime start = worker.getStartTime();
@@ -482,11 +482,11 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 					for (final String errorneousServer : errorneousServers) {
 						errorneousServerText += errorneousServer + "\n";
 					}
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, errorneousServerText).setBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, errorneousServerText).withBackgroundColor(SwingColor.LightRed).open();
 				}
 			}
 		} catch (final Exception e) {
-			new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).setBackgroundColor(SwingColor.LightRed).open();
+			new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
 		}
 	}
 

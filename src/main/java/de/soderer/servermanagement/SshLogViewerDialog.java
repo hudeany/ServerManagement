@@ -19,6 +19,8 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -509,15 +511,40 @@ public class SshLogViewerDialog extends JFrame {
 		}
 
 		if (keyFileData != null) {
-			jsch.addIdentity(username, keyFileData, null, password == null ? new byte[0] : new String(password).getBytes(StandardCharsets.UTF_8));
+			final byte[] passphraseBytes = password == null ? new byte[0] : toUtf8Bytes(password);
+			try {
+				// JSch copies the passphrase and decrypts the key immediately, so both arrays can be wiped right away
+				jsch.addIdentity(username, keyFileData, null, passphraseBytes);
+			} finally {
+				Arrays.fill(passphraseBytes, (byte) 0);
+				// The converted key data is stored unencrypted, so do not leave it in memory
+				Arrays.fill(keyFileData, (byte) 0);
+			}
 		} else if (password != null) {
-			jschSession.setPassword(new String(password));
+			final byte[] passwordBytes = toUtf8Bytes(password);
+			try {
+				// JSch copies the password and wipes its own copy after connect
+				jschSession.setPassword(passwordBytes);
+			} finally {
+				Arrays.fill(passwordBytes, (byte) 0);
+			}
 		} else {
 			throw new Exception("At least one of keyFileData or password is expected");
 		}
 
 		jschSession.setConfig("StrictHostKeyChecking", "no");
 		jschSession.connect(10_000);
+	}
+
+	/**
+	 * Encodes a password as UTF-8 without creating an immutable String that cannot be wiped.
+	 */
+	private static byte[] toUtf8Bytes(final char[] chars) {
+		final ByteBuffer byteBuffer = StandardCharsets.UTF_8.encode(CharBuffer.wrap(chars));
+		final byte[] bytes = Arrays.copyOfRange(byteBuffer.array(), byteBuffer.position(), byteBuffer.limit());
+		// Wipe the encoder's internal buffer as well
+		Arrays.fill(byteBuffer.array(), (byte) 0);
+		return bytes;
 	}
 
 	private boolean isCurrentTail(final int generation) {

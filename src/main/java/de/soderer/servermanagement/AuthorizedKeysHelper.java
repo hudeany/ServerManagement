@@ -9,23 +9,22 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
+import de.soderer.remote.DirectoryListing;
+import de.soderer.remote.FilePermissions;
+import de.soderer.remote.FolderInfo;
+import de.soderer.remote.SftpConnection;
 import de.soderer.sshkeyformats.AuthorizedKey;
 import de.soderer.sshkeyformats.SshKey;
 import de.soderer.sshkeyformats.SshKeyReader;
 import de.soderer.sshkeyformats.SshKeyWriter;
-import de.soderer.utilities.Tuple;
 import de.soderer.utilities.Utilities;
-import de.soderer.utilities.remote.FileInfo;
-import de.soderer.utilities.remote.FilePermissions;
-import de.soderer.utilities.remote.FolderInfo;
-import de.soderer.utilities.remote.SftpConnection;
 
 public class AuthorizedKeysHelper {
 	public static List<String> readUsernames(final String hostname, final String sshAccessUsername, final File sshAccessPrivateKeyFile, final char[] sshAccessPassword) throws Exception, Exception {
 		try (SftpConnection sftpConnection = openSftpConnection(hostname, sshAccessUsername, sshAccessPrivateKeyFile, sshAccessPassword)) {
 			final List<String> usernames = new ArrayList<>();
-			final Tuple<List<FolderInfo>, List<FileInfo>> directoryInfo = sftpConnection.getDirectory("/home");
-			for (final FolderInfo homeFolder : directoryInfo.getFirst()) {
+			final DirectoryListing directoryInfo = sftpConnection.getDirectory("/home");
+			for (final FolderInfo homeFolder : directoryInfo.folders()) {
 				usernames.add(homeFolder.getFolderName());
 			}
 			return usernames;

@@ -12,6 +12,7 @@ import java.util.Set;
 
 import javax.swing.SwingUtilities;
 
+import de.soderer.applicationbase.ApplicationConfigurationProperties;
 import de.soderer.applicationbase.ApplicationUpdateUtilities;
 import de.soderer.applicationbase.UpdateableConsoleApplication;
 import de.soderer.json.JsonNode;
@@ -21,7 +22,6 @@ import de.soderer.json.JsonSerializer;
 import de.soderer.servermanagement.config.ServerManagementConfiguration;
 import de.soderer.swing.QuestionDialog;
 import de.soderer.swing.SwingColor;
-import de.soderer.utilities.ConfigurationProperties;
 import de.soderer.utilities.DateUtilities;
 import de.soderer.utilities.IoUtilities;
 import de.soderer.utilities.LangResources;
@@ -118,9 +118,9 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 			return 1;
 		}
 
-		ConfigurationProperties applicationConfiguration;
+		ApplicationConfigurationProperties applicationConfiguration;
 		try {
-			applicationConfiguration = new ConfigurationProperties(ServerManagement.APPLICATION_NAME, true);
+			applicationConfiguration = new ApplicationConfigurationProperties(ServerManagement.APPLICATION_NAME, true);
 			ServerManagementGui.setupDefaultConfig(applicationConfiguration);
 		} catch (@SuppressWarnings("unused") final Exception e) {
 			System.err.println("Invalid application configuration");

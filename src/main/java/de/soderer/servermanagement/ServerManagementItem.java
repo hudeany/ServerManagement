@@ -53,6 +53,7 @@ import javax.xml.xpath.XPathFactory;
 import org.w3c.dom.Document;
 import org.xml.sax.InputSource;
 
+import de.soderer.applicationbase.ApplicationConfigurationProperties;
 import de.soderer.json.JsonReader;
 import de.soderer.json.JsonValueString;
 import de.soderer.network.HttpMethod;
@@ -60,6 +61,7 @@ import de.soderer.network.HttpRequest;
 import de.soderer.network.HttpResponse;
 import de.soderer.network.HttpUtilities;
 import de.soderer.network.trustmanager.TrustManagerUtilities;
+import de.soderer.remote.SftpConnection;
 import de.soderer.servermanagement.config.Admin;
 import de.soderer.servermanagement.config.KnownPublicSshKey;
 import de.soderer.servermanagement.config.Log;
@@ -75,17 +77,15 @@ import de.soderer.swing.MultiInputDialog;
 import de.soderer.swing.QuestionDialog;
 import de.soderer.swing.SimpleInputDialog;
 import de.soderer.swing.SwingColor;
-import de.soderer.utilities.ConfigurationProperties;
 import de.soderer.utilities.IoUtilities;
 import de.soderer.utilities.LangResources;
 import de.soderer.utilities.PropertiesReader;
 import de.soderer.utilities.Utilities;
-import de.soderer.utilities.remote.SftpConnection;
 
 public class ServerManagementItem extends JPanel {
 	private static final long serialVersionUID = -8920980761735439684L;
 
-	private final ConfigurationProperties applicationConfiguration;
+	private final ApplicationConfigurationProperties applicationConfiguration;
 
 	private final ServerManagementGui serverManagementGui;
 	private final ServerManagementConfiguration serverManagementConfiguration;
@@ -107,7 +107,7 @@ public class ServerManagementItem extends JPanel {
 
 	private RefreshServerItemStatusWorker worker;
 
-	public ServerManagementItem(final ServerManagementGui serverManagementGui, final Server server, final ConfigurationProperties applicationConfiguration) throws Exception {
+	public ServerManagementItem(final ServerManagementGui serverManagementGui, final Server server, final ApplicationConfigurationProperties applicationConfiguration) throws Exception {
 		super();
 		setLayout(new BoxLayout(this, BoxLayout.PAGE_AXIS));
 		setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.BLACK),

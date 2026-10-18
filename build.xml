@@ -12,7 +12,7 @@
 	<property name="jsch.version" value="2.28.8" />
 	<property name="csv.version" value="26.1.11" />
 	<property name="json.version" value="26.2.11" />
-	<property name="sshkeyformats.version" value="26.1.9" />
+	<property name="sshkeyformats.version" value="26.1.10" />
 	<property name="proxyautoconfig.version" value="26.1.5" />
 	<property name="network.version" value="26.0.39" />
 	<property name="soderer-console.version" value="26.0.9" />

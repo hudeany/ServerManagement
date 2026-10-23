@@ -1523,7 +1523,7 @@ public class ServerManagementItem extends JPanel {
 
 						if (filePath.endsWith("/")) {
 							try {
-								data = Utilities.join(sftpConnection.listFiles(filePath), "\n");
+								data = StringUtilities.join(sftpConnection.listFiles(filePath), "\n");
 							} catch (@SuppressWarnings("unused") final Exception e) {
 								setVersion(version.getName(), "ERROR");
 								status = "ERROR";

@@ -26,6 +26,7 @@ import de.soderer.utilities.DateUtilities;
 import de.soderer.utilities.IoUtilities;
 import de.soderer.utilities.LangResources;
 import de.soderer.utilities.ParameterException;
+import de.soderer.utilities.StringUtilities;
 import de.soderer.utilities.Utilities;
 import de.soderer.utilities.Version;
 import de.soderer.utilities.worker.WorkerParentDual;
@@ -163,7 +164,7 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 				SERVERS_CONFIGURATION_FILE = serversConfigurationFile;
 			} else {
 				// Before, any further parameters were silently ignored
-				throw new ParameterException(Utilities.join(arguments, " "), "Invalid parameters");
+				throw new ParameterException(StringUtilities.join(arguments, " "), "Invalid parameters");
 			}
 
 			// open the preconfigured GUI

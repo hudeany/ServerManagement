@@ -34,7 +34,6 @@ import de.soderer.swing.QuestionDialog;
 import de.soderer.swing.SwingColor;
 import de.soderer.utilities.LangResources;
 import de.soderer.utilities.StringUtilities;
-import de.soderer.utilities.Utilities;
 
 public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 	private static final long serialVersionUID = -3359111126746373988L;
@@ -430,7 +429,7 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 				case "password": pattern = "Passwort"; break;
 				case "ok": pattern = "OK"; break;
 				case "cancel": pattern = "Abbrechen"; break;
-				default: pattern = "MessageKey unbekannt: " + resourceKey + (arguments != null && arguments.length > 0 ? " Argumente: " + Utilities.join(arguments, ", ") : "");
+				default: pattern = "MessageKey unbekannt: " + resourceKey + (arguments != null && arguments.length > 0 ? " Argumente: " + StringUtilities.join(arguments, ", ") : "");
 			}
 			return MessageFormat.format(pattern, arguments);
 		} else {
@@ -440,7 +439,7 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 				case "password": pattern = "Password"; break;
 				case "ok": pattern = "OK"; break;
 				case "cancel": pattern = "Cancel"; break;
-				default: pattern = "MessageKey unknown: " + resourceKey + (arguments != null && arguments.length > 0 ? " arguments: " + Utilities.join(arguments, ", ") : "");
+				default: pattern = "MessageKey unknown: " + resourceKey + (arguments != null && arguments.length > 0 ? " arguments: " + StringUtilities.join(arguments, ", ") : "");
 			}
 			return MessageFormat.format(pattern, arguments);
 		}

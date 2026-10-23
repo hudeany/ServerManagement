@@ -53,6 +53,7 @@ import de.soderer.utilities.ExceptionUtilities;
 import de.soderer.utilities.IoUtilities;
 import de.soderer.utilities.LangResources;
 import de.soderer.utilities.Result;
+import de.soderer.utilities.StringUtilities;
 import de.soderer.utilities.Utilities;
 import de.soderer.utilities.VersionInfo;
 
@@ -213,9 +214,9 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 			public void actionPerformed(final ActionEvent event) {
 				try {
 					final String servername = new SimpleInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addServer"), LangResources.get("enterServerName")).open();
-					if (Utilities.isNotBlank(servername)) {
+					if (StringUtilities.isNotBlank(servername)) {
 						final String host = new SimpleInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addServer"), LangResources.get("enterHost")).open();
-						if (Utilities.isNotBlank(host)) {
+						if (StringUtilities.isNotBlank(host)) {
 							final Server newServer = new Server().setName(servername.trim()).setHost(host.trim());
 							serverManagementConfiguration.getServers().add(newServer);
 							final ServerManagementItem serverItem = new ServerManagementItem(serverManagementGui, newServer, applicationConfiguration);

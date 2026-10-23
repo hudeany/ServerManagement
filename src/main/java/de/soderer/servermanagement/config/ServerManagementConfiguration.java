@@ -3,7 +3,7 @@ package de.soderer.servermanagement.config;
 import java.util.ArrayList;
 import java.util.List;
 
-import de.soderer.utilities.Utilities;
+import de.soderer.utilities.StringUtilities;
 
 public class ServerManagementConfiguration {
 	private String keystore;
@@ -31,7 +31,7 @@ public class ServerManagementConfiguration {
 	}
 
 	public KnownPublicSshKey getKnownPublicSshKeyByKeyId(final String keyId) {
-		if (Utilities.isBlank(keyId)) {
+		if (StringUtilities.isBlank(keyId)) {
 			return null;
 		} else {
 			for (final KnownPublicSshKey knownPublicSshKey : knownPublicSshKeys) {

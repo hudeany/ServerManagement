@@ -59,7 +59,7 @@ import de.soderer.sshkeyformats.SshKey;
 import de.soderer.sshkeyformats.SshKeyReader;
 import de.soderer.sshkeyformats.SshKeyWriter;
 import de.soderer.utilities.LangResources;
-import de.soderer.utilities.Utilities;
+import de.soderer.utilities.StringUtilities;
 
 public class SshLogViewerDialog extends JFrame {
 	private static final long serialVersionUID = 6355639543655800660L;
@@ -499,7 +499,7 @@ public class SshLogViewerDialog extends JFrame {
 		if (privateKeyFile != null) {
 			try (InputStream inputStream = new FileInputStream(privateKeyFile)) {
 				final SshKey sshKey;
-				if (Utilities.isNotBlank(password)) {
+				if (StringUtilities.isNotBlank(password)) {
 					sshKey = SshKeyReader.readKey(inputStream, password);
 				} else {
 					sshKey = SshKeyReader.readKey(inputStream, null);

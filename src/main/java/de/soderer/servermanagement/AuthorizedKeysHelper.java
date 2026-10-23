@@ -17,7 +17,7 @@ import de.soderer.sshkeyformats.AuthorizedKey;
 import de.soderer.sshkeyformats.SshKey;
 import de.soderer.sshkeyformats.SshKeyReader;
 import de.soderer.sshkeyformats.SshKeyWriter;
-import de.soderer.utilities.Utilities;
+import de.soderer.utilities.StringUtilities;
 
 public class AuthorizedKeysHelper {
 	public static List<String> readUsernames(final String hostname, final String sshAccessUsername, final File sshAccessPrivateKeyFile, final char[] sshAccessPassword) throws Exception, Exception {
@@ -71,9 +71,9 @@ public class AuthorizedKeysHelper {
 	 * Also used by ServerManagementItem, so there is only one implementation of the host and port parsing.
 	 */
 	static SftpConnection openSftpConnection(String hostname, final String sshAccessUsername, final File sshAccessPrivateKeyFile, final char[] sshAccessPassword) throws Exception, IOException {
-		if (Utilities.isBlank(hostname)) {
+		if (StringUtilities.isBlank(hostname)) {
 			throw new Exception("No host configured");
-		} else if (Utilities.isBlank(sshAccessUsername)) {
+		} else if (StringUtilities.isBlank(sshAccessUsername)) {
 			throw new Exception("No SSH admin configured for host '" + hostname + "'");
 		}
 
@@ -93,7 +93,7 @@ public class AuthorizedKeysHelper {
 			byte[] sshKeyData;
 			try (InputStream inputStream = new FileInputStream(sshAccessPrivateKeyFile)) {
 				SshKey sshKey;
-				if (Utilities.isNotBlank(sshAccessPassword)) {
+				if (StringUtilities.isNotBlank(sshAccessPassword)) {
 					sshKey = SshKeyReader.readKey(inputStream, sshAccessPassword);
 				} else {
 					sshKey = SshKeyReader.readKey(inputStream, null);
@@ -103,7 +103,7 @@ public class AuthorizedKeysHelper {
 				sshKeyData = keyDataStream.toByteArray();
 			}
 			return new SftpConnection(hostname, sshAccessUsername, sshKeyData, null, port, null);
-		} else if (Utilities.isNotBlank(sshAccessPassword)) {
+		} else if (StringUtilities.isNotBlank(sshAccessPassword)) {
 			return new SftpConnection(hostname, sshAccessUsername, null, sshAccessPassword, port, null);
 		} else {
 			throw new Exception("No supported authentication method available for host '" + hostname + "'");

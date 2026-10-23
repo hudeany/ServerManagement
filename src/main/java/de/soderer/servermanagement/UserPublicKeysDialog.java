@@ -33,6 +33,7 @@ import de.soderer.swing.ModalDialog;
 import de.soderer.swing.QuestionDialog;
 import de.soderer.swing.SwingColor;
 import de.soderer.utilities.LangResources;
+import de.soderer.utilities.StringUtilities;
 import de.soderer.utilities.Utilities;
 
 public class UserPublicKeysDialog extends ModalDialog<Boolean> {
@@ -87,7 +88,7 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 
 		panel.add(Box.createRigidArea(new Dimension(0, 5)));
 
-		if (Utilities.isNotBlank(text)) {
+		if (StringUtilities.isNotBlank(text)) {
 			final JTextArea textField = new JTextArea();
 			textField.setText(text);
 			textField.setEditable(false);

@@ -33,7 +33,7 @@ import de.soderer.swing.QuestionDialog;
 import de.soderer.swing.SimpleInputDialog;
 import de.soderer.swing.SwingColor;
 import de.soderer.utilities.LangResources;
-import de.soderer.utilities.Utilities;
+import de.soderer.utilities.StringUtilities;
 
 public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 	private static final long serialVersionUID = -1512808290727321131L;
@@ -136,7 +136,7 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 							keyInputDialog.setDefaultText(key.getComment());
 						}
 						final String keyId = keyInputDialog.open();
-						if (Utilities.isBlank(keyId)) {
+						if (StringUtilities.isBlank(keyId)) {
 							// The key id is the reference used by the users, so a key without id could never be configured
 							continue;
 						} else if (serverManagementConfiguration.getKnownPublicSshKeyByKeyId(keyId.trim()) != null) {
@@ -146,7 +146,7 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 						newKey.setKeyId(keyId.trim());
 
 						final String keyName = new SimpleInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addPublicKey"), LangResources.get("enterKeyName")).open();
-						if (Utilities.isNotBlank(keyName)) {
+						if (StringUtilities.isNotBlank(keyName)) {
 							newKey.setName(keyName);
 							serverManagementConfiguration.getKnownPublicSshKeys().add(newKey);
 							keysAdded = true;
@@ -256,7 +256,7 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 					keyLength > 0 ? Integer.toString(keyLength) : "",
 							knownPublicSshKey.getName(),
 							knownPublicSshKey.getKeyId(),
-							Utilities.shortenStringToMaxLengthCutMiddle(knownPublicSshKey.getKey(), 30)
+							StringUtilities.trimStringToMaximumLength(knownPublicSshKey.getKey(), 30, "...")
 			});
 		}
 	}
@@ -270,7 +270,7 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 	}
 
 	private File selectFile(String basePath, final String text) {
-		if (Utilities.isBlank(basePath)) {
+		if (StringUtilities.isBlank(basePath)) {
 			basePath = System.getProperty("user.home");
 		} else if (basePath.contains(File.separator)) {
 			basePath = basePath.substring(0, basePath.lastIndexOf(File.separator));

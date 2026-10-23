@@ -27,6 +27,7 @@ import de.soderer.swing.ModalDialog;
 import de.soderer.swing.QuestionDialog;
 import de.soderer.swing.SwingColor;
 import de.soderer.utilities.LangResources;
+import de.soderer.utilities.StringUtilities;
 import de.soderer.utilities.Utilities;
 
 public class AdminDialog extends ModalDialog<Integer> {
@@ -63,7 +64,7 @@ public class AdminDialog extends ModalDialog<Integer> {
 
 		panel.add(Box.createRigidArea(new Dimension(0, 5)));
 
-		if (Utilities.isNotBlank(text)) {
+		if (StringUtilities.isNotBlank(text)) {
 			final JTextArea textField = new JTextArea();
 			textField.setText(text);
 			textField.setEditable(false);
@@ -110,7 +111,7 @@ public class AdminDialog extends ModalDialog<Integer> {
 		// Before, every key stroke converted the text into an absolute path, so an emptied field became the current
 		// working directory (and the key path could never be removed) and a relative path jumped while typing
 		privateKeyFilePathField.getDocument().addDocumentListener(new TextChangeListener(() -> {
-			privateKeyFilePath = Utilities.isBlank(privateKeyFilePathField.getText()) ? null : privateKeyFilePathField.getText().trim();
+			privateKeyFilePath = StringUtilities.isBlank(privateKeyFilePathField.getText()) ? null : privateKeyFilePathField.getText().trim();
 			checkButtonStatus();
 		}));
 		privateKeyFilePathPanel.add(privateKeyFilePathField);
@@ -204,7 +205,7 @@ public class AdminDialog extends ModalDialog<Integer> {
 	}
 
 	private void checkButtonStatus() {
-		okButton.setEnabled(Utilities.isNotEmpty(username) && (Utilities.isNotEmpty(privateKeyFilePath) || Utilities.isNotEmpty(password)));
+		okButton.setEnabled(StringUtilities.isNotEmpty(username) && (StringUtilities.isNotEmpty(privateKeyFilePath) || StringUtilities.isNotEmpty(password)));
 	}
 
 	public String getUsername() {
@@ -270,7 +271,7 @@ public class AdminDialog extends ModalDialog<Integer> {
 	}
 
 	private File selectFile(String basePath, final String selectFileDialogText) {
-		if (Utilities.isBlank(basePath)) {
+		if (StringUtilities.isBlank(basePath)) {
 			basePath = System.getProperty("user.home");
 		} else if (basePath.contains(File.separator)) {
 			basePath = basePath.substring(0, basePath.lastIndexOf(File.separator));

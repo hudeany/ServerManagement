@@ -80,6 +80,7 @@ import de.soderer.swing.SwingColor;
 import de.soderer.utilities.IoUtilities;
 import de.soderer.utilities.LangResources;
 import de.soderer.utilities.PropertiesReader;
+import de.soderer.utilities.StringUtilities;
 import de.soderer.utilities.Utilities;
 
 public class ServerManagementItem extends JPanel {
@@ -118,7 +119,7 @@ public class ServerManagementItem extends JPanel {
 		serverManagementConfiguration = serverManagementGui.getServerManagementConfiguration();
 		this.server = server;
 
-		if (Utilities.isNotBlank(serverManagementConfiguration.getKeystore())) {
+		if (StringUtilities.isNotBlank(serverManagementConfiguration.getKeystore())) {
 			trustManager = TrustManagerUtilities.createTrustManagerForKeyStore(new File(serverManagementConfiguration.getKeystore()));
 			deactivateHostnameVerification = false;
 		} else {
@@ -133,7 +134,7 @@ public class ServerManagementItem extends JPanel {
 		removeAll();
 
 		addServerNamePanel(server.getName());
-		if (Utilities.isNotBlank(server.getHost())) {
+		if (StringUtilities.isNotBlank(server.getHost())) {
 			addHostPanel(server.getHost());
 		}
 
@@ -203,7 +204,7 @@ public class ServerManagementItem extends JPanel {
 	public void resetTablesStatus() {
 		if (managedUserTable != null) {
 			for (int i = 0; i < managedUserTable.getModel().getRowCount(); i++) {
-				if (Utilities.isNotBlank((String) managedUserTable.getModel().getValueAt(i, 0))) {
+				if (StringUtilities.isNotBlank((String) managedUserTable.getModel().getValueAt(i, 0))) {
 					managedUserTable.getModel().setValueAt("n/a", i, 2);
 					managedUserTable.getModel().setValueAt("n/a", i, 3);
 				}
@@ -213,7 +214,7 @@ public class ServerManagementItem extends JPanel {
 
 		if (urlsTable != null) {
 			for (int i = 0; i < urlsTable.getModel().getRowCount(); i++) {
-				if (Utilities.isNotBlank((String) urlsTable.getModel().getValueAt(i, 0))) {
+				if (StringUtilities.isNotBlank((String) urlsTable.getModel().getValueAt(i, 0))) {
 					urlsTable.getModel().setValueAt("", i, 1);
 				}
 			}
@@ -222,7 +223,7 @@ public class ServerManagementItem extends JPanel {
 
 		if (versionsTable != null) {
 			for (int i = 0; i < versionsTable.getModel().getRowCount(); i++) {
-				if (Utilities.isNotBlank((String) versionsTable.getModel().getValueAt(i, 0))) {
+				if (StringUtilities.isNotBlank((String) versionsTable.getModel().getValueAt(i, 0))) {
 					versionsTable.getModel().setValueAt("", i, 3);
 				}
 			}
@@ -722,7 +723,7 @@ public class ServerManagementItem extends JPanel {
 			public void actionPerformed(final ActionEvent event) {
 				try {
 					final String url = new SimpleInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addUrl"), LangResources.get("addUrl")).open();
-					if (Utilities.isNotBlank(url)) {
+					if (StringUtilities.isNotBlank(url)) {
 						server.getUrls().add(url);
 
 						createComponents();
@@ -806,7 +807,7 @@ public class ServerManagementItem extends JPanel {
 					}
 					final int rowIndex = versionsTable.convertRowIndexToModel(selectedRow);
 					final String versionName = (String) versionsTable.getModel().getValueAt(rowIndex, 0);
-					if (Utilities.isNotBlank(versionName) && new QuestionDialog(serverManagementGui,
+					if (StringUtilities.isNotBlank(versionName) && new QuestionDialog(serverManagementGui,
 							ServerManagement.APPLICATION_NAME + " " + LangResources.get("removeVersion"),
 							LangResources.get("removeVersionQuestion", versionName), LangResources.get("ok"),
 							LangResources.get("cancel")).open() == 0) {
@@ -880,7 +881,7 @@ public class ServerManagementItem extends JPanel {
 			public void actionPerformed(final ActionEvent event) {
 				try {
 					final String versionName = (String) logsTable.getModel().getValueAt(logsTable.getSelectedRow(), 0);
-					if (Utilities.isNotBlank(versionName)
+					if (StringUtilities.isNotBlank(versionName)
 							&& new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("removeLog"), LangResources.get("removeLogQuestion", versionName), LangResources.get("ok"), LangResources.get("cancel")).open() == 0) {
 						for (int i = 0; i < server.getLogs().size(); i++) {
 							if (server.getLogs().get(i).getName().equals(versionName)) {
@@ -1013,7 +1014,7 @@ public class ServerManagementItem extends JPanel {
 			public void actionPerformed(final ActionEvent event) {
 				try {
 					final String username = (String) managedUserTable.getModel().getValueAt(managedUserTable.getSelectedRow(), 0);
-					if (Utilities.isNotBlank(username)
+					if (StringUtilities.isNotBlank(username)
 							&& new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("removeUser"), LangResources.get("removeUserQuestion", username), LangResources.get("ok"), LangResources.get("cancel")).open() == 0) {
 						for (int i = 0; i < server.getManagedUsers().size(); i++) {
 							if (server.getManagedUsers().get(i).getUsername().equals(username)) {
@@ -1201,7 +1202,7 @@ public class ServerManagementItem extends JPanel {
 		if (sshAccessPrivateKeyFile != null) {
 			try (InputStream inputStream = new FileInputStream(sshAccessPrivateKeyFile)) {
 				SshKey sshKey;
-				if (Utilities.isNotBlank(sshAccessPassword)) {
+				if (StringUtilities.isNotBlank(sshAccessPassword)) {
 					sshKey = SshKeyReader.readKey(inputStream, sshAccessPassword);
 				} else {
 					sshKey = SshKeyReader.readKey(inputStream, null);
@@ -1253,7 +1254,7 @@ public class ServerManagementItem extends JPanel {
 		if (managedUserTable != null) {
 			if (managedUserTable.getSelectedRowCount() > 0) {
 				final String username = (String) managedUserTable.getModel().getValueAt(managedUserTable.getSelectedRow(), 0);
-				removeUserButton.setEnabled(Utilities.isNotBlank(username));
+				removeUserButton.setEnabled(StringUtilities.isNotBlank(username));
 			} else {
 				removeUserButton.setEnabled(false);
 			}
@@ -1319,7 +1320,7 @@ public class ServerManagementItem extends JPanel {
 	public void resetStatus() {
 		if (managedUserTable != null) {
 			for (int i = 0; i < managedUserTable.getModel().getRowCount(); i++) {
-				if (Utilities.isNotBlank((String) managedUserTable.getModel().getValueAt(i, 0))) {
+				if (StringUtilities.isNotBlank((String) managedUserTable.getModel().getValueAt(i, 0))) {
 					managedUserTable.getModel().setValueAt("n/a", i, 2);
 					managedUserTable.getModel().setValueAt("n/a", i, 3);
 				}
@@ -1329,7 +1330,7 @@ public class ServerManagementItem extends JPanel {
 
 		if (urlsTable != null) {
 			for (int i = 0; i < urlsTable.getModel().getRowCount(); i++) {
-				if (Utilities.isNotBlank((String) urlsTable.getModel().getValueAt(i, 0))) {
+				if (StringUtilities.isNotBlank((String) urlsTable.getModel().getValueAt(i, 0))) {
 					urlsTable.getModel().setValueAt("", i, 1);
 				}
 			}
@@ -1338,7 +1339,7 @@ public class ServerManagementItem extends JPanel {
 
 		if (versionsTable != null) {
 			for (int i = 0; i < versionsTable.getModel().getRowCount(); i++) {
-				if (Utilities.isNotBlank((String) versionsTable.getModel().getValueAt(i, 0))) {
+				if (StringUtilities.isNotBlank((String) versionsTable.getModel().getValueAt(i, 0))) {
 					versionsTable.getModel().setValueAt("", i, 3);
 				}
 			}
@@ -1700,7 +1701,7 @@ public class ServerManagementItem extends JPanel {
 	}
 
 	private Admin getSshAdminChecked() throws Exception {
-		if (server.getSshAdmin() == null || Utilities.isBlank(server.getSshAdmin().getUsername())) {
+		if (server.getSshAdmin() == null || StringUtilities.isBlank(server.getSshAdmin().getUsername())) {
 			throw new Exception("No SSH admin configured for server '" + server.getName() + "'");
 		}
 		return server.getSshAdmin();

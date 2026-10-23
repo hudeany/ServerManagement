@@ -2,6 +2,7 @@ package de.soderer.servermanagement.config;
 
 import java.io.File;
 
+import de.soderer.utilities.StringUtilities;
 import de.soderer.utilities.Utilities;
 
 public class Admin {
@@ -23,7 +24,7 @@ public class Admin {
 	}
 
 	public File getPrivateKeyFile() {
-		return Utilities.isBlank(getPrivateKeyPath()) ? null : new File(getPrivateKeyPath());
+		return StringUtilities.isBlank(getPrivateKeyPath()) ? null : new File(getPrivateKeyPath());
 	}
 	
 	public Admin setPrivateKeyPath(String privateKeyPath) {
@@ -36,7 +37,7 @@ public class Admin {
 	}
 
 	public char[] getPasswordArray() {
-		return Utilities.isBlank(getPassword()) ? null : getPassword().toCharArray();
+		return StringUtilities.isBlank(getPassword()) ? null : getPassword().toCharArray();
 	}
 	
 	public Admin setPassword(String password) {

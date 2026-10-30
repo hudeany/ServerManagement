@@ -254,7 +254,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 	}
 
 	/**
-	 * Action bar: server list and key management on the left, close, save and the status check on the right.
+	 * Action bar: server list and key management on the left, save, the status check and close (rightmost) on the right.
 	 */
 	private JComponent createActionBar(final ServerManagementGui serverManagementGui, final JPanel serverInformationPanel) {
 		// Status check Button
@@ -415,9 +415,9 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 
 		final JPanel rightActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
 		rightActions.setOpaque(false);
-		rightActions.add(closeButton);
 		rightActions.add(saveSettingsButton);
 		rightActions.add(startButton);
+		rightActions.add(closeButton);
 
 		final JPanel actionContent = new JPanel(new BorderLayout(16, 0));
 		actionContent.setOpaque(false);

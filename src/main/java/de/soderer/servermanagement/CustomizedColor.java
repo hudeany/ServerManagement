@@ -2,8 +2,13 @@ package de.soderer.servermanagement;
 
 import java.awt.Color;
 
+import de.soderer.swing.modern.ModernUi;
+
+/**
+ * Status colors of the server check results, taken from the ModernUi palette.
+ */
 public class CustomizedColor {
-	public static Color GREEN = new Color(150, 255, 150, 255);
-	public static Color YELLOW = new Color(255, 255, 150, 255);
-	public static Color RED = new Color(255, 150, 150, 255);
+	public static Color GREEN = ModernUi.SUCCESS_LIGHT;
+	public static Color YELLOW = ModernUi.WARNING_LIGHT;
+	public static Color RED = ModernUi.DANGER_LIGHT;
 }

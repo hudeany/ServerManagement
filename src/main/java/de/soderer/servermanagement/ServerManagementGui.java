@@ -1,7 +1,14 @@
 package de.soderer.servermanagement;
 
+import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.GridBagLayout;
+import java.awt.GridLayout;
 import java.awt.Image;
+import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
@@ -24,16 +31,20 @@ import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
+import javax.swing.ImageIcon;
 import javax.swing.JButton;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
+import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
 
-import de.soderer.applicationbase.ApplicationConfigurationDialog;
 import de.soderer.applicationbase.ApplicationConfigurationProperties;
 import de.soderer.applicationbase.ApplicationUpdateUtilities;
-import de.soderer.applicationbase.UpdateableGuiApplication;
+import de.soderer.applicationbase.modern.ApplicationConfigurationDialog;
+import de.soderer.applicationbase.modern.UpdateableGuiApplication;
 import de.soderer.json.JsonNode;
 import de.soderer.json.JsonObject;
 import de.soderer.json.JsonSerializer;
@@ -42,11 +53,14 @@ import de.soderer.network.NetworkUtilities;
 import de.soderer.servermanagement.config.Server;
 import de.soderer.servermanagement.config.ServerManagementConfiguration;
 import de.soderer.servermanagement.worker.CheckAllServerStatusWorker;
-import de.soderer.swing.ProgressDialog;
-import de.soderer.swing.QuestionDialog;
-import de.soderer.swing.SelectableTableDialog;
-import de.soderer.swing.SimpleInputDialog;
-import de.soderer.swing.SwingColor;
+import de.soderer.swing.modern.ButtonStyle;
+import de.soderer.swing.modern.DialogStyle;
+import de.soderer.swing.modern.IconKind;
+import de.soderer.swing.modern.ModernUi;
+import de.soderer.swing.modern.ProgressDialog;
+import de.soderer.swing.modern.QuestionDialog;
+import de.soderer.swing.modern.SelectableTableDialog;
+import de.soderer.swing.modern.SimpleInputDialog;
 import de.soderer.utilities.ConfigurationProperties;
 import de.soderer.utilities.DateUtilities;
 import de.soderer.utilities.ExceptionUtilities;
@@ -70,6 +84,9 @@ import de.soderer.utilities.VersionInfo;
 public class ServerManagementGui extends UpdateableGuiApplication {
 	/** The Constant serialVersionUID. */
 	private static final long serialVersionUID = 5969613637206441880L;
+
+	/** Vertical gap between the server cards */
+	private static final int SERVER_ITEM_GAP = 8;
 
 	public static final File KEYSTORE_FILE = new File(System.getProperty("user.home") + File.separator + "." + ServerManagement.APPLICATION_NAME + File.separator + "." + ServerManagement.APPLICATION_NAME + ".keystore");
 
@@ -112,7 +129,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 					ApplicationUpdateUtilities.executeUpdate(this, ServerManagement.VERSIONINFO_DOWNLOAD_URL, applicationConfiguration.getProxyConfiguration(), ServerManagement.APPLICATION_NAME, ServerManagement.VERSION, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, null, null, appParameters, true, false);
 				}
 			} catch (final Exception e) {
-				new QuestionDialog(this, ServerManagement.APPLICATION_NAME + " " + LangResources.get("updateCheck") + " ERROR", LangResources.get("error.cannotCheckForUpdate") + "\n" + "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
+				new QuestionDialog(this, ServerManagement.APPLICATION_NAME + " " + LangResources.get("updateCheck") + " ERROR", LangResources.get("error.cannotCheckForUpdate") + "\n" + "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
 			}
 		}
 
@@ -129,7 +146,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 			@Override
 			public void windowClosing(final WindowEvent e) {
 				if (hasUnsavedChanges
-						&& new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, LangResources.get("ingoreUnsavedSettings"), LangResources.get("yes"), LangResources.get("no")).open() != 0) {
+						&& new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, LangResources.get("ingoreUnsavedSettings"), LangResources.get("yes"), LangResources.get("no")).withDialogStyle(DialogStyle.WARNING).open() != 0) {
 					return;
 				}
 
@@ -140,75 +157,120 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 
 		setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
 
-		setLayout(new BoxLayout(getContentPane(), BoxLayout.PAGE_AXIS));
-		((JPanel) getContentPane()).setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+		final JPanel serverInformationPanel = createServerItemsPanel();
 
-		final JPanel serverInformationPanel = addServerItemsPanel();
+		final JButton configurationButton = createHeaderButton(IconKind.GEAR, LangResources.get("configuration"));
+		configurationButton.addActionListener(event -> openConfigurationDialog(serverManagementGui));
 
-		add(Box.createRigidArea(new Dimension(0, 5)));
+		final JPanel mainPanel = new JPanel(new BorderLayout(0, 8));
+		mainPanel.setOpaque(false);
+		mainPanel.setBorder(BorderFactory.createEmptyBorder(8, 8, 6, 8));
+		mainPanel.add(serverInformationScrollPane, BorderLayout.CENTER);
+		mainPanel.add(createActionBar(serverManagementGui, serverInformationPanel), BorderLayout.SOUTH);
 
-		addButtons1(serverManagementGui, serverInformationPanel);
-		addButtons2(serverManagementGui);
+		final JPanel contentPane = new JPanel(new BorderLayout());
+		contentPane.setBackground(ModernUi.BACKGROUND);
+		contentPane.add(createHeader(configurationButton), BorderLayout.NORTH);
+		contentPane.add(mainPanel, BorderLayout.CENTER);
+		setContentPane(contentPane);
 
 		setConfigurationByDefinition(serverManagementConfiguration);
 
 		checkButtonStatus();
 
-		add(Box.createRigidArea(new Dimension(0, 5)));
-
 		pack();
+		setMinimumSize(new Dimension(Math.min(getWidth(), 760), 420));
 
 		setLocationRelativeTo(null);
-		setResizable(false);
 	}
 
-	private JPanel addServerItemsPanel() throws Exception {
-		// Server information Panel
+	/**
+	 * Gradient header with logo, application name, version and the configuration button.
+	 */
+	private JPanel createHeader(final JButton configurationButton) {
+		final ModernUi.GradientHeader header = new ModernUi.GradientHeader();
+		final java.net.URL iconUrl = getClass().getClassLoader().getResource("ServerManagement_Icon.png");
+		header.add(ModernUi.createLogo(iconUrl == null ? null : new ImageIcon(iconUrl)), BorderLayout.WEST);
+
+		final JLabel applicationLabel = new JLabel(ServerManagement.APPLICATION_NAME);
+		applicationLabel.setForeground(Color.WHITE);
+		applicationLabel.setFont(ModernUi.baseFont().deriveFont(Font.BOLD, 21f));
+		final JLabel versionLabel = new JLabel("Version " + ServerManagement.VERSION);
+		versionLabel.setForeground(new Color(255, 255, 255, 190));
+		final JPanel titlePanel = new JPanel(new GridLayout(2, 1, 0, 0));
+		titlePanel.setOpaque(false);
+		titlePanel.add(applicationLabel);
+		titlePanel.add(versionLabel);
+		header.add(titlePanel, BorderLayout.CENTER);
+
+		final JPanel applicationButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+		applicationButtonPanel.setOpaque(false);
+		applicationButtonPanel.add(configurationButton);
+		// GridBagLayout centers the buttons vertically in the header
+		final JPanel eastPanel = new JPanel(new GridBagLayout());
+		eastPanel.setOpaque(false);
+		eastPanel.add(applicationButtonPanel);
+		header.add(eastPanel, BorderLayout.EAST);
+		return header;
+	}
+
+	/**
+	 * Transparent icon button for the gradient header; the text is shown as tooltip.
+	 */
+	private static JButton createHeaderButton(final IconKind iconKind, final String text) {
+		final JButton button = new ModernUi.Button(null, iconKind, ButtonStyle.HEADER);
+		button.setToolTipText(text);
+		button.getAccessibleContext().setAccessibleName(text);
+		return button;
+	}
+
+	/**
+	 * Creates the scrollable list of the server cards.
+	 *
+	 * @return the panel holding the server cards
+	 */
+	private JPanel createServerItemsPanel() throws Exception {
 		final JPanel serverInformationPanel = new JPanel();
+		serverInformationPanel.setOpaque(false);
 		serverInformationPanel.setLayout(new BoxLayout(serverInformationPanel, BoxLayout.PAGE_AXIS));
 
 		for (final Server server : serverManagementConfiguration.getServers()) {
 			final ServerManagementItem serverItem = new ServerManagementItem(this, server, applicationConfiguration);
 			serverInformationPanel.add(serverItem);
-			serverInformationPanel.add(Box.createRigidArea(new Dimension(10, 10)));
+			serverInformationPanel.add(Box.createRigidArea(new Dimension(SERVER_ITEM_GAP, SERVER_ITEM_GAP)));
 			serverItems.add(serverItem);
 		}
 
 		serverInformationScrollPane = new JScrollPane(serverInformationPanel);
-		serverInformationScrollPane.setBorder(null);
+		serverInformationScrollPane.setBorder(BorderFactory.createEmptyBorder());
 		serverInformationScrollPane.setViewportBorder(null);
-		serverInformationScrollPane.setPreferredSize(new Dimension(750, 600));
-		serverInformationScrollPane.getVerticalScrollBar().setUnitIncrement(8);
+		serverInformationScrollPane.setOpaque(false);
+		serverInformationScrollPane.getViewport().setBackground(ModernUi.BACKGROUND);
+		ModernUi.styleScrollBars(serverInformationScrollPane, ModernUi.BACKGROUND);
+		serverInformationScrollPane.setPreferredSize(new Dimension(820, 600));
+		serverInformationScrollPane.getVerticalScrollBar().setUnitIncrement(16);
 
-		final JPanel mainPanel = new JPanel();
-		mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.LINE_AXIS));
-		mainPanel.add(serverInformationScrollPane);
-
-		add(mainPanel);
 		return serverInformationPanel;
 	}
 
-	private void addButtons1(final ServerManagementGui serverManagementGui, final JPanel serverInformationPanel) {
-		final JPanel buttonPanel = new JPanel();
-		buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.LINE_AXIS));
-
-		// Start Button
-		final JButton startButton = new JButton(LangResources.get("checkServerStatus"));
+	/**
+	 * Action bar: server list and key management on the left, close, save and the status check on the right.
+	 */
+	private JComponent createActionBar(final ServerManagementGui serverManagementGui, final JPanel serverInformationPanel) {
+		// Status check Button
+		final JButton startButton = new ModernUi.Button(LangResources.get("checkServerStatus"), IconKind.REFRESH, ButtonStyle.PRIMARY);
 		startButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
 				try {
 					checkServerStatus(serverManagementGui);
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
+					showError(serverManagementGui, e);
 				}
 			}
 		});
-		buttonPanel.add(startButton);
 
-		buttonPanel.add(Box.createRigidArea(new Dimension(5, 0)));
-
-		final JButton addServerButton = new JButton(LangResources.get("addServer"));
+		final JButton addServerButton = new ModernUi.Button(LangResources.get("addServer"), IconKind.PLUS, ButtonStyle.SECONDARY);
 		addServerButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -221,28 +283,29 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 							serverManagementConfiguration.getServers().add(newServer);
 							final ServerManagementItem serverItem = new ServerManagementItem(serverManagementGui, newServer, applicationConfiguration);
 							serverInformationPanel.add(serverItem);
-							serverInformationPanel.add(Box.createRigidArea(new Dimension(10, 10)));
+							serverInformationPanel.add(Box.createRigidArea(new Dimension(SERVER_ITEM_GAP, SERVER_ITEM_GAP)));
 							serverItems.add(serverItem);
 							// Before, a new server was lost without warning when closing the application
 							serverManagementGui.signalUnsavedChanges();
 
-							serverManagementGui.pack();
+							// The window is resizable, so its size is kept and only the list is laid out again
+							serverInformationPanel.revalidate();
+							serverInformationPanel.repaint();
 
-							// Scroll to end
-							final JScrollBar verticalScrollBar = serverInformationScrollPane.getVerticalScrollBar();
-							verticalScrollBar.setValue(verticalScrollBar.getMaximum());
+							// Scroll to end, once the new card was laid out
+							SwingUtilities.invokeLater(() -> {
+								final JScrollBar verticalScrollBar = serverInformationScrollPane.getVerticalScrollBar();
+								verticalScrollBar.setValue(verticalScrollBar.getMaximum());
+							});
 						}
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
+					showError(serverManagementGui, e);
 				}
 			}
 		});
-		buttonPanel.add(addServerButton);
 
-		buttonPanel.add(Box.createRigidArea(new Dimension(5, 0)));
-
-		final JButton removeServerButton = new JButton(LangResources.get("removeServer"));
+		final JButton removeServerButton = new ModernUi.Button(LangResources.get("removeServer"), IconKind.TRASH, ButtonStyle.SECONDARY);
 		removeServerButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -262,7 +325,8 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 							LangResources.get("removeServer"),
 							LangResources.get("cancel")
 							);
-					if (tableDialog.open()) {
+					// null when closed via the window decoration
+					if (Boolean.TRUE.equals(tableDialog.open())) {
 						for (final List<String> row : tableDialog.getSelectedItems()) {
 							final String servername = row.get(0);
 							for (final ServerManagementItem serverItem : serverItems) {
@@ -292,39 +356,28 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 						serverManagementGui.signalUnsavedChanges();
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
+					showError(serverManagementGui, e);
 				}
 			}
 		});
-		buttonPanel.add(removeServerButton);
 
-		buttonPanel.add(Box.createRigidArea(new Dimension(5, 0)));
-
-		final JButton managePublicKeysButton = new JButton(LangResources.get("managePublicKeys"));
+		final JButton managePublicKeysButton = new ModernUi.Button(LangResources.get("managePublicKeys"), IconKind.LOCK, ButtonStyle.SECONDARY);
 		managePublicKeysButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
 				try {
 					final KnownPublicKeysDialog publicKeysDialog = new KnownPublicKeysDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("managePublicKeys"), serverManagementConfiguration);
-					if (publicKeysDialog.open()) {
+					if (Boolean.TRUE.equals(publicKeysDialog.open())) {
 						serverManagementGui.signalUnsavedChanges();
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
+					showError(serverManagementGui, e);
 				}
 			}
 		});
-		buttonPanel.add(managePublicKeysButton);
-
-		serverManagementGui.add(buttonPanel);
-	}
-
-	private void addButtons2(final ServerManagementGui serverManagementGui) {
-		final JPanel buttonPanel = new JPanel();
-		buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.LINE_AXIS));
 
 		// Save Button
-		final JButton saveSettingsButton = new JButton(LangResources.get("saveServerSettings"));
+		final JButton saveSettingsButton = new ModernUi.Button(LangResources.get("saveServerSettings"), IconKind.CHECK, ButtonStyle.SECONDARY);
 		saveSettingsButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -334,52 +387,18 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 						hasUnsavedChanges = false;
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
+					showError(serverManagementGui, e);
 				}
 			}
 		});
-		buttonPanel.add(saveSettingsButton);
-
-		buttonPanel.add(Box.createRigidArea(new Dimension(5, 0)));
-
-		// Configuration Button
-		final JButton configurationButton = new JButton(LangResources.get("configuration"));
-		configurationButton.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(final ActionEvent event) {
-				try {
-					byte[] iconData;
-					try (InputStream inputStream = getClass().getClassLoader().getResourceAsStream("ServerManagement.ico")) {
-						iconData = IoUtilities.toByteArray(inputStream);
-					}
-
-					Image iconImage;
-					try (InputStream imageIconStream = getClass().getClassLoader().getResourceAsStream("ServerManagement_Icon.png")) {
-						iconImage = ImageIO.read(imageIconStream);
-					}
-					final List<String> appParameters = new ArrayList<>();
-					appParameters.add(ServerManagement.SERVERS_CONFIGURATION_FILE.getAbsolutePath());
-					final ApplicationConfigurationDialog applicationConfigurationDialog = new ApplicationConfigurationDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, ServerManagement.APPLICATION_STARTUPCLASS_NAME, ServerManagement.VERSION, ServerManagement.VERSION_BUILDTIME, applicationConfiguration, iconData, iconImage, ServerManagement.VERSIONINFO_DOWNLOAD_URL, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, appParameters);
-					final Result result = applicationConfigurationDialog.open();
-					if (result != null && result == Result.OK) {
-						applicationConfiguration.save();
-					}
-				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
-				}
-			}
-		});
-		buttonPanel.add(configurationButton);
-
-		buttonPanel.add(Box.createRigidArea(new Dimension(5, 0)));
 
 		// Close Button
-		final JButton closeButton = new JButton(LangResources.get("close"));
+		final JButton closeButton = new ModernUi.Button(LangResources.get("close"), null, ButtonStyle.SECONDARY);
 		closeButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
 				if (hasUnsavedChanges
-						&& new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, LangResources.get("ingoreUnsavedSettings"), LangResources.get("yes"), LangResources.get("no")).open() != 0) {
+						&& new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, LangResources.get("ingoreUnsavedSettings"), LangResources.get("yes"), LangResources.get("no")).withDialogStyle(DialogStyle.WARNING).open() != 0) {
 					return;
 				}
 
@@ -387,9 +406,60 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 				System.exit(0);
 			}
 		});
-		buttonPanel.add(closeButton);
 
-		serverManagementGui.add(buttonPanel);
+		final JPanel leftActions = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+		leftActions.setOpaque(false);
+		leftActions.add(addServerButton);
+		leftActions.add(removeServerButton);
+		leftActions.add(managePublicKeysButton);
+
+		final JPanel rightActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+		rightActions.setOpaque(false);
+		rightActions.add(closeButton);
+		rightActions.add(saveSettingsButton);
+		rightActions.add(startButton);
+
+		final JPanel actionContent = new JPanel(new BorderLayout(16, 0));
+		actionContent.setOpaque(false);
+		actionContent.add(leftActions, BorderLayout.WEST);
+		actionContent.add(rightActions, BorderLayout.EAST);
+
+		final ModernUi.Card actionCard = new ModernUi.Card(null, null, 6);
+		actionCard.setContent(actionContent);
+		return actionCard;
+	}
+
+	/**
+	 * Opens the application configuration (language, proxy, daily update check, desktop link, ...).
+	 */
+	private void openConfigurationDialog(final ServerManagementGui serverManagementGui) {
+		try {
+			byte[] iconData;
+			try (InputStream inputStream = getClass().getClassLoader().getResourceAsStream("ServerManagement.ico")) {
+				iconData = IoUtilities.toByteArray(inputStream);
+			}
+
+			Image iconImage;
+			try (InputStream imageIconStream = getClass().getClassLoader().getResourceAsStream("ServerManagement_Icon.png")) {
+				iconImage = ImageIO.read(imageIconStream);
+			}
+			final List<String> appParameters = new ArrayList<>();
+			appParameters.add(ServerManagement.SERVERS_CONFIGURATION_FILE.getAbsolutePath());
+			final ApplicationConfigurationDialog applicationConfigurationDialog = new ApplicationConfigurationDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, ServerManagement.APPLICATION_STARTUPCLASS_NAME, ServerManagement.VERSION, ServerManagement.VERSION_BUILDTIME, applicationConfiguration, iconData, iconImage, ServerManagement.VERSIONINFO_DOWNLOAD_URL, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, appParameters);
+			final Result result = applicationConfigurationDialog.open();
+			if (result != null && result == Result.OK) {
+				applicationConfiguration.save();
+			}
+		} catch (final Exception e) {
+			showError(serverManagementGui, e);
+		}
+	}
+
+	/**
+	 * Shows an error message.
+	 */
+	static void showError(final Window parent, final Exception e) {
+		new QuestionDialog(parent, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
 	}
 
 	/**
@@ -454,14 +524,14 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 			result = progressDialog.open();
 
 			if (result == Result.CANCELED) {
-				new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, LangResources.get("error.canceledbyuser")).withBackgroundColor(SwingColor.Yellow).open();
+				new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, LangResources.get("error.canceledbyuser")).withDialogStyle(DialogStyle.WARNING).open();
 			} else if (result == Result.ERROR) {
 				final Exception e = worker.getError();
 				if (e instanceof ServerManagementException) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
 				} else {
 					final String stacktrace = ExceptionUtilities.getStackTrace(e);
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getClass().getSimpleName() + ":\n" + e.getMessage() + "\n\n" + stacktrace).withBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getClass().getSimpleName() + ":\n" + e.getMessage() + "\n\n" + stacktrace).withDialogStyle(DialogStyle.ERROR).open();
 				}
 			} else {
 				final LocalDateTime start = worker.getStartTime();
@@ -475,7 +545,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 
 				final boolean showResult = false;
 				if (showResult) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, resultText).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, resultText).withDialogStyle(DialogStyle.INFORMATION).open();
 				}
 
 				final List<String> errorneousServers = worker.get();
@@ -484,11 +554,11 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 					for (final String errorneousServer : errorneousServers) {
 						errorneousServerText += errorneousServer + "\n";
 					}
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, errorneousServerText).withBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, errorneousServerText).withDialogStyle(DialogStyle.ERROR).open();
 				}
 			}
 		} catch (final Exception e) {
-			new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
+			new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
 		}
 	}
 

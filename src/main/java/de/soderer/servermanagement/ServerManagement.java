@@ -20,8 +20,8 @@ import de.soderer.json.JsonObject;
 import de.soderer.json.JsonReader;
 import de.soderer.json.JsonSerializer;
 import de.soderer.servermanagement.config.ServerManagementConfiguration;
-import de.soderer.swing.QuestionDialog;
-import de.soderer.swing.SwingColor;
+import de.soderer.swing.modern.DialogStyle;
+import de.soderer.swing.modern.QuestionDialog;
 import de.soderer.utilities.DateUtilities;
 import de.soderer.utilities.IoUtilities;
 import de.soderer.utilities.LangResources;
@@ -185,7 +185,7 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 				// Before, the GUI was opened with an empty configuration, so saving overwrote the existing (only
 				// slightly broken) configuration file with an empty one
 				e.printStackTrace();
-				new QuestionDialog(null, ServerManagement.APPLICATION_NAME, "Configuration file '" + ServerManagement.SERVERS_CONFIGURATION_FILE + "' is invalid: \n" + (e.getMessage() != null ? e.getMessage() : e.toString()), LangResources.get("ok")).withBackgroundColor(SwingColor.LightRed).open();
+				new QuestionDialog(null, ServerManagement.APPLICATION_NAME, "Configuration file '" + ServerManagement.SERVERS_CONFIGURATION_FILE + "' is invalid: \n" + (e.getMessage() != null ? e.getMessage() : e.toString()), LangResources.get("ok")).withDialogStyle(DialogStyle.ERROR).open();
 				return 1;
 			}
 			try {

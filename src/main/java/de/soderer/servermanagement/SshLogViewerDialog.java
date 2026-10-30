@@ -58,6 +58,9 @@ import com.jcraft.jsch.Session;
 import de.soderer.sshkeyformats.SshKey;
 import de.soderer.sshkeyformats.SshKeyReader;
 import de.soderer.sshkeyformats.SshKeyWriter;
+import de.soderer.swing.modern.ButtonStyle;
+import de.soderer.swing.modern.IconKind;
+import de.soderer.swing.modern.ModernUi;
 import de.soderer.utilities.LangResources;
 import de.soderer.utilities.StringUtilities;
 
@@ -80,16 +83,19 @@ public class SshLogViewerDialog extends JFrame {
 	private JScrollPane logScrollPane;
 
 	private static final Color C_BACKGROUND = Color.WHITE;
-	private static final Color C_TEXT = Color.BLACK;
+	private static final Color C_TEXT = ModernUi.TEXT;
 	private static final Color C_ERROR = new Color(180, 20, 20);
 	private static final Color C_WARN = new Color(160, 100, 0);
 	private static final Color C_INFO = new Color(0, 120, 60);
-	private static final Color C_TIMESTAMP = new Color(100, 100, 130);
-	private static final Color C_STATUS_OK = new Color(0, 140, 60);
-	private static final Color C_STATUS_ERR = new Color(180, 20, 20);
-	private static final Color C_TOOLBAR_BG = new Color(240, 240, 240);
-	private static final Color C_BORDER = new Color(200, 200, 200);
-	private static final Color C_FIELD_BG = new Color(248, 248, 248);
+	private static final Color C_TIMESTAMP = ModernUi.MUTED;
+	private static final Color C_STATUS_OK = ModernUi.SUCCESS;
+	private static final Color C_STATUS_ERR = ModernUi.DANGER;
+	private static final Color C_TOOLBAR_BG = ModernUi.CARD;
+	private static final Color C_STATUSBAR_BG = ModernUi.READ_ONLY_BACKGROUND;
+	private static final Color C_BORDER = ModernUi.INNER_BORDER;
+	private static final Color C_LABEL = ModernUi.MUTED;
+	private static final Color C_FIELD_BG = Color.WHITE;
+	private static final Color C_FIELD_NO_MATCH = ModernUi.DANGER_LIGHT;
 	private static final Color C_SEARCH_HIGHLIGHT = new Color(255, 220, 80);
 	private static final Color C_SEARCH_HIGHLIGHT_ACTIVE = new Color(255, 140, 0);
 
@@ -194,9 +200,27 @@ public class SshLogViewerDialog extends JFrame {
 		getContentPane().setBackground(C_BACKGROUND);
 		getContentPane().setLayout(new BorderLayout(0, 0));
 
-		getContentPane().add(buildToolbar(), BorderLayout.NORTH);
+		final JPanel northPanel = new JPanel(new BorderLayout(0, 0));
+		northPanel.add(buildHeader(), BorderLayout.NORTH);
+		northPanel.add(buildToolbar(), BorderLayout.CENTER);
+		getContentPane().add(northPanel, BorderLayout.NORTH);
 		getContentPane().add(buildLogArea(), BorderLayout.CENTER);
 		getContentPane().add(buildStatusBar(), BorderLayout.SOUTH);
+	}
+
+	/**
+	 * Gradient header with the window title.
+	 */
+	private JPanel buildHeader() {
+		final ModernUi.GradientHeader header = new ModernUi.GradientHeader();
+		header.setBorder(BorderFactory.createEmptyBorder(11, 16, 11, 16));
+		final JLabel headerLabel = new JLabel(getTitle());
+		headerLabel.setForeground(Color.WHITE);
+		headerLabel.setFont(ModernUi.baseFont().deriveFont(Font.BOLD, ModernUi.baseFont().getSize2D() + 3f));
+		headerLabel.setIconTextGap(10);
+		headerLabel.setIcon(new ModernUi.ThemeIcon(IconKind.LOG, 20, Color.WHITE));
+		header.add(headerLabel, BorderLayout.CENTER);
+		return header;
 	}
 
 	private JPanel buildToolbar() {
@@ -220,7 +244,7 @@ public class SshLogViewerDialog extends JFrame {
 		c.gridy = 0;
 
 		final JLabel fileLabel = new JLabel(LangResources.get("sshLogViewer.logFile"));
-		fileLabel.setForeground(new Color(80, 80, 80));
+		fileLabel.setForeground(C_LABEL);
 		fileLabel.setFont(uiFont(11, Font.PLAIN));
 		c.gridx = 0;
 		c.weightx = 0;
@@ -229,18 +253,16 @@ public class SshLogViewerDialog extends JFrame {
 		final String displayText = buildConnectionDisplay();
 		final JTextField infoField = new JTextField(displayText);
 		infoField.setEditable(false);
-		infoField.setBackground(C_FIELD_BG);
-		infoField.setForeground(C_TEXT);
-		infoField.setFont(uiFont(11, Font.PLAIN));
+		ModernUi.styleTextField(infoField, true);
 		infoField.setCaretPosition(0);
-		infoField.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(C_BORDER), BorderFactory.createEmptyBorder(2, 6, 2, 6)));
 		c.gridx = 1;
 		c.weightx = 1;
 		bar.add(infoField, c);
 
-		connectButton = new JButton(LangResources.get("sshLogViewer.disconnect"));
+		connectButton = new ModernUi.Button(LangResources.get("sshLogViewer.disconnect"), null, ButtonStyle.SECONDARY);
 		styleButton(connectButton);
-		connectButton.setPreferredSize(new Dimension(90, connectButton.getPreferredSize().height));
+		// Fixed width, the text changes between "connect" and "disconnect"
+		connectButton.setPreferredSize(new Dimension(Math.max(110, connectButton.getPreferredSize().width), connectButton.getPreferredSize().height));
 		connectButton.addActionListener(e -> {
 			if (running.get()) {
 				stopTailing();
@@ -252,7 +274,7 @@ public class SshLogViewerDialog extends JFrame {
 		c.weightx = 0;
 		bar.add(connectButton, c);
 
-		final JButton clearButton = new JButton(LangResources.get("sshLogViewer.clear"));
+		final JButton clearButton = new ModernUi.Button(LangResources.get("sshLogViewer.clear"), IconKind.TRASH, ButtonStyle.SECONDARY);
 		styleButton(clearButton);
 		clearButton.addActionListener(e -> {
 			rawLines.clear();
@@ -268,7 +290,7 @@ public class SshLogViewerDialog extends JFrame {
 
 		scrollLockCheckBox = new JCheckBox(LangResources.get("sshLogViewer.scrollLock"));
 		scrollLockCheckBox.setBackground(C_TOOLBAR_BG);
-		scrollLockCheckBox.setForeground(new Color(60, 60, 60));
+		scrollLockCheckBox.setForeground(C_TEXT);
 		scrollLockCheckBox.setFont(uiFont(11, Font.PLAIN));
 		scrollLockCheckBox.setFocusPainted(false);
 		scrollLockCheckBox.addItemListener(e -> {
@@ -284,7 +306,7 @@ public class SshLogViewerDialog extends JFrame {
 		lineWrapCheckBox = new JCheckBox(LangResources.get("sshLogViewer.lineWrap"));
 		lineWrapCheckBox.setSelected(true);
 		lineWrapCheckBox.setBackground(C_TOOLBAR_BG);
-		lineWrapCheckBox.setForeground(new Color(60, 60, 60));
+		lineWrapCheckBox.setForeground(C_TEXT);
 		lineWrapCheckBox.setFont(uiFont(11, Font.PLAIN));
 		lineWrapCheckBox.setFocusPainted(false);
 		lineWrapCheckBox.addItemListener(e -> {
@@ -310,17 +332,14 @@ public class SshLogViewerDialog extends JFrame {
 		c.gridy = 0;
 
 		final JLabel searchLabel = new JLabel(LangResources.get("sshLogViewer.search"));
-		searchLabel.setForeground(new Color(80, 80, 80));
+		searchLabel.setForeground(C_LABEL);
 		searchLabel.setFont(uiFont(11, Font.PLAIN));
 		c.gridx = 0;
 		c.weightx = 0;
 		bar.add(searchLabel, c);
 
 		searchField = new JTextField();
-		searchField.setBackground(C_FIELD_BG);
-		searchField.setForeground(C_TEXT);
-		searchField.setFont(uiFont(11, Font.PLAIN));
-		searchField.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(C_BORDER), BorderFactory.createEmptyBorder(2, 6, 2, 6)));
+		ModernUi.styleTextField(searchField, false);
 		searchField.addActionListener(e -> searchNext());
 		c.gridx = 1;
 		c.weightx = 1;
@@ -328,7 +347,7 @@ public class SshLogViewerDialog extends JFrame {
 
 		caseSensitiveCheckBox = new JCheckBox(LangResources.get("sshLogViewer.search.caseSensitive"));
 		caseSensitiveCheckBox.setBackground(C_TOOLBAR_BG);
-		caseSensitiveCheckBox.setForeground(new Color(60, 60, 60));
+		caseSensitiveCheckBox.setForeground(C_TEXT);
 		caseSensitiveCheckBox.setFont(uiFont(11, Font.PLAIN));
 		caseSensitiveCheckBox.setFocusPainted(false);
 		c.gridx = 2;
@@ -337,7 +356,7 @@ public class SshLogViewerDialog extends JFrame {
 
 		regexCheckBox = new JCheckBox(LangResources.get("sshLogViewer.search.regex"));
 		regexCheckBox.setBackground(C_TOOLBAR_BG);
-		regexCheckBox.setForeground(new Color(60, 60, 60));
+		regexCheckBox.setForeground(C_TEXT);
 		regexCheckBox.setFont(uiFont(11, Font.PLAIN));
 		regexCheckBox.setFocusPainted(false);
 		c.gridx = 3;
@@ -346,7 +365,7 @@ public class SshLogViewerDialog extends JFrame {
 
 		filterModeCheckBox = new JCheckBox(LangResources.get("sshLogViewer.search.filterMode"));
 		filterModeCheckBox.setBackground(C_TOOLBAR_BG);
-		filterModeCheckBox.setForeground(new Color(60, 60, 60));
+		filterModeCheckBox.setForeground(C_TEXT);
 		filterModeCheckBox.setFont(uiFont(11, Font.PLAIN));
 		filterModeCheckBox.setFocusPainted(false);
 		filterModeCheckBox.addItemListener(e -> {
@@ -358,14 +377,14 @@ public class SshLogViewerDialog extends JFrame {
 		c.weightx = 0;
 		bar.add(filterModeCheckBox, c);
 
-		final JButton searchUpButton = new JButton(LangResources.get("sshLogViewer.search.up"));
+		final JButton searchUpButton = new ModernUi.Button(LangResources.get("sshLogViewer.search.up"), null, ButtonStyle.SECONDARY);
 		styleButton(searchUpButton);
 		searchUpButton.addActionListener(e -> searchPrev());
 		c.gridx = 5;
 		c.weightx = 0;
 		bar.add(searchUpButton, c);
 
-		final JButton searchDownButton = new JButton(LangResources.get("sshLogViewer.search.down"));
+		final JButton searchDownButton = new ModernUi.Button(LangResources.get("sshLogViewer.search.down"), IconKind.SEARCH, ButtonStyle.SECONDARY);
 		styleButton(searchDownButton);
 		searchDownButton.addActionListener(e -> searchNext());
 		c.gridx = 6;
@@ -374,7 +393,7 @@ public class SshLogViewerDialog extends JFrame {
 
 		searchResultLabel = new JLabel();
 		searchResultLabel.setFont(uiFont(11, Font.PLAIN));
-		searchResultLabel.setForeground(new Color(100, 100, 100));
+		searchResultLabel.setForeground(C_LABEL);
 		c.gridx = 7;
 		c.weightx = 0;
 		bar.add(searchResultLabel, c);
@@ -409,12 +428,13 @@ public class SshLogViewerDialog extends JFrame {
 
 		logScrollPane = new JScrollPane(logTextPane);
 		logScrollPane.setBorder(BorderFactory.createEmptyBorder());
+		ModernUi.styleScrollBars(logScrollPane, C_BACKGROUND);
 		return logScrollPane;
 	}
 
 	private JPanel buildStatusBar() {
-		final JPanel bar = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 4));
-		bar.setBackground(C_TOOLBAR_BG);
+		final JPanel bar = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 6));
+		bar.setBackground(C_STATUSBAR_BG);
 		bar.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, C_BORDER));
 
 		statusLabel = new JLabel(LangResources.get("sshLogViewer.status.disconnected"));
@@ -755,10 +775,10 @@ public class SshLogViewerDialog extends JFrame {
 				searchMatchIndex = nearest;
 			}
 
-			searchField.setBackground(searchMatches.isEmpty() ? new Color(255, 210, 210) : C_FIELD_BG);
+			searchField.setBackground(searchMatches.isEmpty() ? C_FIELD_NO_MATCH : C_FIELD_BG);
 			updateSearchResultLabel();
 		} catch (@SuppressWarnings("unused") final PatternSyntaxException ex) {
-			searchField.setBackground(new Color(255, 210, 210));
+			searchField.setBackground(C_FIELD_NO_MATCH);
 			searchResultLabel.setText(LangResources.get("sshLogViewer.search.invalidRegex"));
 		} catch (@SuppressWarnings("unused") final BadLocationException ex) {
 			// do nothing
@@ -819,7 +839,7 @@ public class SshLogViewerDialog extends JFrame {
 			searchResultLabel.setForeground(C_STATUS_ERR);
 		} else {
 			searchResultLabel.setText((searchMatchIndex + 1) + " / " + searchMatches.size());
-			searchResultLabel.setForeground(new Color(100, 100, 100));
+			searchResultLabel.setForeground(C_LABEL);
 		}
 	}
 
@@ -842,12 +862,15 @@ public class SshLogViewerDialog extends JFrame {
 	}
 
 	private static void styleButton(final JButton b) {
-		b.setFont(uiFont(11, Font.PLAIN));
 		b.setFocusPainted(false);
 	}
 
-	private static Font uiFont(final int size, final int style) {
-		return new Font("Segoe UI", style, size);
+	/**
+	 * Font of the toolbar texts: the ModernUi font in the given style (the size parameter of the former fixed font is
+	 * ignored, so the texts match the rest of the application).
+	 */
+	private static Font uiFont(@SuppressWarnings("unused") final int size, final int style) {
+		return ModernUi.baseFont().deriveFont(style);
 	}
 
 	private static Font monospaceFont(final int size) {

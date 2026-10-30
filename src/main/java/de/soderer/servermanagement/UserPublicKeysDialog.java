@@ -1,11 +1,12 @@
 package de.soderer.servermanagement;
 
-import java.awt.Color;
-import java.awt.Component;
+import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.GridLayout;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.awt.Insets;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -14,13 +15,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import javax.swing.BorderFactory;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
 import javax.swing.JButton;
-import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.RowSorter;
@@ -29,9 +25,12 @@ import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableModel;
 import javax.swing.table.TableRowSorter;
 
-import de.soderer.swing.ModalDialog;
-import de.soderer.swing.QuestionDialog;
-import de.soderer.swing.SwingColor;
+import de.soderer.swing.modern.ButtonStyle;
+import de.soderer.swing.modern.DialogStyle;
+import de.soderer.swing.modern.IconKind;
+import de.soderer.swing.modern.ModalDialog;
+import de.soderer.swing.modern.ModernUi;
+import de.soderer.swing.modern.QuestionDialog;
 import de.soderer.utilities.LangResources;
 import de.soderer.utilities.StringUtilities;
 
@@ -55,11 +54,19 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 	private DefaultTableModel knownSshKeysModel;
 	private JTable knownSshKeysTable;
 
-	private JPanel panel;
 	private JButton okButton;
 
+	/** Preferred width of each key table */
+	private static final int KEY_TABLE_WIDTH = 260;
+
+	/** Preferred height of each key table */
+	private static final int KEY_TABLE_HEIGHT = 240;
+
+	/** Width of the transfer buttons between the tables */
+	private static final int TRANSFER_BUTTON_WIDTH = 52;
+
 	public UserPublicKeysDialog(final ServerManagementGui serverManagementGui, final String title, final String text, final String adminKeyHash, final Map<String, String> existingKeys, final Map<String, String> configuredKeys, final Map<String, String> knownKeys) throws Exception {
-		super(serverManagementGui, title);
+		super(serverManagementGui, title, IconKind.EDIT);
 
 		this.text = text;
 
@@ -82,259 +89,181 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 	}
 
 	private void createComponents() throws Exception {
-		panel = new JPanel();
-		panel.setLayout(new BoxLayout(panel, BoxLayout.PAGE_AXIS));
-
-		panel.add(Box.createRigidArea(new Dimension(0, 5)));
-
 		if (StringUtilities.isNotBlank(text)) {
-			final JTextArea textField = new JTextArea();
-			textField.setText(text);
-			textField.setEditable(false);
-			textField.setBackground(Color.LIGHT_GRAY);
-
-			final JScrollPane textScrollpane = new JScrollPane(textField);
-			textScrollpane.setPreferredSize(new Dimension(textField.getPreferredSize().width + 5, textField.getPreferredSize().height + 5));
-
-			// Text Panel
-			final JPanel textPanel = new JPanel();
-			textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.LINE_AXIS));
-
-			textPanel.add(Box.createRigidArea(new Dimension(5, 0)));
-			textPanel.add(textScrollpane);
-			textPanel.add(Box.createRigidArea(new Dimension(5, 0)));
-			panel.add(textPanel);
+			final JTextArea textArea = new JTextArea(text);
+			textArea.setEditable(false);
+			textArea.setFocusable(false);
+			textArea.setOpaque(false);
+			textArea.setBorder(null);
+			textArea.setFont(ModernUi.baseFont());
+			textArea.setForeground(ModernUi.TEXT);
+			getContentArea().add(textArea, BorderLayout.NORTH);
 		}
 
-		final JPanel tablesPanel = new JPanel();
-		tablesPanel.setLayout(new BoxLayout(tablesPanel, BoxLayout.LINE_AXIS));
-
-		final JPanel tables1Panel = new JPanel();
-		tables1Panel.setLayout(new BoxLayout(tables1Panel, BoxLayout.PAGE_AXIS));
-		tables1Panel.add(new JLabel(LangResources.get("serverPublicKeys")));
-
+		// Server keys
 		existingUserSshKeysModel = new DefaultTableModel();
 		existingUserSshKeysModel.addColumn(LangResources.get("keyName"));
 		existingUserSshKeysModel.addColumn(LangResources.get("hash"));
-		existingUserSshKeysTable = new JTable(existingUserSshKeysModel);
-		existingUserSshKeysTable.setBorder(BorderFactory.createLineBorder(Color.BLACK));
-		existingUserSshKeysTable.setDefaultEditor(Object.class, null);
-		final TableRowSorter<TableModel> sorter1 = new TableRowSorter<>(existingUserSshKeysTable.getModel());
-		final List<RowSorter.SortKey> sortKeys1 = new ArrayList<>();
-		sortKeys1.add(new RowSorter.SortKey(1, SortOrder.ASCENDING));
-		sortKeys1.add(new RowSorter.SortKey(0, SortOrder.ASCENDING));
-		sorter1.setSortKeys(sortKeys1);
-		existingUserSshKeysTable.setRowSorter(sorter1);
-		final JScrollPane scrollPane1 = new JScrollPane(existingUserSshKeysTable);
-		tables1Panel.add(scrollPane1);
+		existingUserSshKeysTable = createKeyTable(existingUserSshKeysModel);
 
-		final JButton dropExistingKeysButton = new JButton("X");
-		dropExistingKeysButton.setForeground(CustomizedColor.RED);
-		dropExistingKeysButton.setSize(500, 20);
-		dropExistingKeysButton.setToolTipText(LangResources.get("dropExistingKeys"));
-		dropExistingKeysButton.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(final ActionEvent event) {
-				removeSelectedEntries(existingUserSshKeysTable, existingKeys);
-
-				loadTablesData();
-			}
+		final JButton dropExistingKeysButton = createDropButton(LangResources.get("dropExistingKeys"));
+		dropExistingKeysButton.addActionListener(event -> {
+			removeSelectedEntries(existingUserSshKeysTable, existingKeys);
+			loadTablesData();
 		});
-		final JPanel removeButton1Panel = new JPanel(new GridLayout(1, 1));
-		dropExistingKeysButton.setAlignmentX(Component.CENTER_ALIGNMENT);
-		removeButton1Panel.add(dropExistingKeysButton);
-		tables1Panel.add(removeButton1Panel);
 
-		final JPanel buttonPanel1 = new JPanel(new GridLayout(4, 1, 5, 5));
+		// Transfer between server keys and configured keys
+		final JButton uploadAllConfiguredUserSshKeysButton = createTransferButton("«", LangResources.get("uploadAllConfiguredUserSshKeys"));
+		uploadAllConfiguredUserSshKeysButton.addActionListener(event -> transferAllEntries(configuredSshKeysModel, existingKeys));
 
-		final JButton uploadAllConfiguredUserSshKeysButton = new JButton("<<");
-		uploadAllConfiguredUserSshKeysButton.setBackground(CustomizedColor.YELLOW);
-		uploadAllConfiguredUserSshKeysButton.setToolTipText(LangResources.get("uploadAllConfiguredUserSshKeys"));
-		uploadAllConfiguredUserSshKeysButton.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(final ActionEvent event) {
-				transferAllEntries(configuredSshKeysModel, existingKeys);
-			}
-		});
-		buttonPanel1.add(uploadAllConfiguredUserSshKeysButton);
+		final JButton uploadSelectedConfiguredUserSshKeysButton = createTransferButton("‹", LangResources.get("uploadSelectedConfiguredUserSshKeys"));
+		uploadSelectedConfiguredUserSshKeysButton.addActionListener(event -> transferSelectedEntries(configuredSshKeysTable, existingKeys));
 
-		final JButton uploadSelectedConfiguredUserSshKeysButton = new JButton("<");
-		uploadSelectedConfiguredUserSshKeysButton.setBackground(CustomizedColor.GREEN);
-		uploadSelectedConfiguredUserSshKeysButton.setToolTipText(LangResources.get("uploadSelectedConfiguredUserSshKeys"));
-		uploadSelectedConfiguredUserSshKeysButton.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(final ActionEvent event) {
-				transferSelectedEntries(configuredSshKeysTable, existingKeys);
-			}
-		});
-		buttonPanel1.add( uploadSelectedConfiguredUserSshKeysButton);
+		final JButton downloadSelectedConfiguredUserSshKeysButton = createTransferButton("›", LangResources.get("downloadSelectedExistingUserSshKeys"));
+		downloadSelectedConfiguredUserSshKeysButton.addActionListener(event -> transferSelectedEntries(existingUserSshKeysTable, knownKeys));
 
-		final JButton downloadSelectedConfiguredUserSshKeysButton = new JButton(">");
-		downloadSelectedConfiguredUserSshKeysButton.setBackground(CustomizedColor.GREEN);
-		downloadSelectedConfiguredUserSshKeysButton.setToolTipText(LangResources.get("downloadSelectedExistingUserSshKeys"));
-		downloadSelectedConfiguredUserSshKeysButton.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(final ActionEvent event) {
-				transferSelectedEntries(existingUserSshKeysTable, knownKeys);
-			}
-		});
-		buttonPanel1.add( downloadSelectedConfiguredUserSshKeysButton);
+		final JButton downloadAllExistingUserSshKeysButton = createTransferButton("»", LangResources.get("downloadAllExistingUserSshKeys"));
+		downloadAllExistingUserSshKeysButton.addActionListener(event -> transferAllEntries(existingUserSshKeysModel, knownKeys));
 
-		final JButton downloadAllExistingUserSshKeysButton = new JButton(">>");
-		downloadAllExistingUserSshKeysButton.setBackground(CustomizedColor.YELLOW);
-		downloadAllExistingUserSshKeysButton.setToolTipText(LangResources.get("downloadAllExistingUserSshKeys"));
-		downloadAllExistingUserSshKeysButton.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(final ActionEvent event) {
-				transferAllEntries(existingUserSshKeysModel, knownKeys);
-			}
-		});
-		buttonPanel1.add(downloadAllExistingUserSshKeysButton);
-
-		final JPanel tables2Panel = new JPanel();
-		tables2Panel.setLayout(new BoxLayout(tables2Panel, BoxLayout.PAGE_AXIS));
-		tables2Panel.add(new JLabel(LangResources.get("configuredPublicKeys")));
+		// Configured keys
 		configuredSshKeysModel = new DefaultTableModel();
 		configuredSshKeysModel.addColumn(LangResources.get("keyName"));
 		configuredSshKeysModel.addColumn(LangResources.get("hash"));
-		configuredSshKeysTable = new JTable(configuredSshKeysModel);
-		configuredSshKeysTable.setBorder(BorderFactory.createLineBorder(Color.BLACK));
-		configuredSshKeysTable.setDefaultEditor(Object.class, null);
+		configuredSshKeysTable = createKeyTable(configuredSshKeysModel);
 
-		final TableRowSorter<TableModel> sorter2 = new TableRowSorter<>(configuredSshKeysTable.getModel());
-		final List<RowSorter.SortKey> sortKeys2 = new ArrayList<>();
-		sortKeys2.add(new RowSorter.SortKey(1, SortOrder.ASCENDING));
-		sortKeys2.add(new RowSorter.SortKey(0, SortOrder.ASCENDING));
-		sorter2.setSortKeys(sortKeys2);
-		configuredSshKeysTable.setRowSorter(sorter2);
-		final JScrollPane scrollPane2 = new JScrollPane(configuredSshKeysTable);
-		tables2Panel.add(scrollPane2);
-
-		final JButton dropConfiguredKeysButton = new JButton("X");
-		dropConfiguredKeysButton.setForeground(CustomizedColor.RED);
-		dropConfiguredKeysButton.setToolTipText(LangResources.get("dropConfiguredKeys"));
-		dropConfiguredKeysButton.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(final ActionEvent event) {
-				removeSelectedEntries(configuredSshKeysTable, existingKeys, configuredKeys);
-
-				loadTablesData();
-			}
+		final JButton dropConfiguredKeysButton = createDropButton(LangResources.get("dropConfiguredKeys"));
+		dropConfiguredKeysButton.addActionListener(event -> {
+			removeSelectedEntries(configuredSshKeysTable, existingKeys, configuredKeys);
+			loadTablesData();
 		});
-		final JPanel removeButton2Panel = new JPanel(new GridLayout(1, 1));
-		dropConfiguredKeysButton.setAlignmentX(Component.CENTER_ALIGNMENT);
-		removeButton2Panel.add(dropConfiguredKeysButton);
-		tables2Panel.add(removeButton2Panel);
 
-		final JPanel buttonPanel2 = new JPanel(new GridLayout(4, 1, 5, 5));
+		// Transfer between configured keys and known keys
+		final JButton configureAllKnownUserSshKeysButton = createTransferButton("«", LangResources.get("configureAllKnownUserSshKeys"));
+		configureAllKnownUserSshKeysButton.addActionListener(event -> transferAllEntries(knownSshKeysModel, configuredKeys));
 
-		final JButton configureAllKnownUserSshKeysButton = new JButton("<<");
-		configureAllKnownUserSshKeysButton.setBackground(CustomizedColor.YELLOW);
-		configureAllKnownUserSshKeysButton.setToolTipText(LangResources.get("configureAllKnownUserSshKeys"));
-		configureAllKnownUserSshKeysButton.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(final ActionEvent event) {
-				transferAllEntries(knownSshKeysModel, configuredKeys);
-			}
-		});
-		buttonPanel2.add(configureAllKnownUserSshKeysButton);
+		final JButton configureSelectedKnownUserSshKeysButton = createTransferButton("‹", LangResources.get("configureSelectedKnownUserSshKeys"));
+		configureSelectedKnownUserSshKeysButton.addActionListener(event -> transferSelectedEntries(knownSshKeysTable, configuredKeys));
 
-		final JButton configureSelectedKnownUserSshKeysButton = new JButton("<");
-		configureSelectedKnownUserSshKeysButton.setBackground(CustomizedColor.GREEN);
-		configureSelectedKnownUserSshKeysButton.setToolTipText(LangResources.get("configureSelectedKnownUserSshKeys"));
-		configureSelectedKnownUserSshKeysButton.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(final ActionEvent event) {
-				transferSelectedEntries(knownSshKeysTable, configuredKeys);
-			}
-		});
-		buttonPanel2.add(configureSelectedKnownUserSshKeysButton);
-
-		final JPanel tables3Panel = new JPanel();
-		tables3Panel.setLayout(new BoxLayout(tables3Panel, BoxLayout.PAGE_AXIS));
-		tables3Panel.add(new JLabel(LangResources.get("knownPublicKeys")));
+		// Known keys
 		knownSshKeysModel = new DefaultTableModel();
 		knownSshKeysModel.addColumn(LangResources.get("keyName"));
 		knownSshKeysModel.addColumn(LangResources.get("hash"));
-		knownSshKeysTable = new JTable(knownSshKeysModel);
-		knownSshKeysTable.setBorder(BorderFactory.createLineBorder(Color.BLACK));
-		knownSshKeysTable.setDefaultEditor(Object.class, null);
-		final TableRowSorter<TableModel> sorter3 = new TableRowSorter<>(knownSshKeysTable.getModel());
-		final List<RowSorter.SortKey> sortKeys3 = new ArrayList<>();
-		sortKeys3.add(new RowSorter.SortKey(1, SortOrder.ASCENDING));
-		sortKeys3.add(new RowSorter.SortKey(0, SortOrder.ASCENDING));
-		sorter3.setSortKeys(sortKeys3);
-		knownSshKeysTable.setRowSorter(sorter3);
-		final JScrollPane scrollPane3 = new JScrollPane(knownSshKeysTable);
-		tables3Panel.add(scrollPane3);
+		knownSshKeysTable = createKeyTable(knownSshKeysModel);
 
-		final JButton dropKnownKeysButton = new JButton("X");
-		dropKnownKeysButton.setForeground(CustomizedColor.RED);
-		dropKnownKeysButton.setSize(500, 20);
-		dropKnownKeysButton.setToolTipText(LangResources.get("dropKnownKeys"));
-		dropKnownKeysButton.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(final ActionEvent event) {
-				removeSelectedEntries(knownSshKeysTable, existingKeys, configuredKeys, knownKeys);
-
-				loadTablesData();
-			}
+		final JButton dropKnownKeysButton = createDropButton(LangResources.get("dropKnownKeys"));
+		dropKnownKeysButton.addActionListener(event -> {
+			removeSelectedEntries(knownSshKeysTable, existingKeys, configuredKeys, knownKeys);
+			loadTablesData();
 		});
-		final JPanel removeButton3Panel = new JPanel(new GridLayout(1, 1));
-		dropKnownKeysButton.setAlignmentX(Component.CENTER_ALIGNMENT);
-		removeButton3Panel.add(dropKnownKeysButton);
-		tables3Panel.add(removeButton3Panel);
 
-		tablesPanel.add(tables1Panel);
-		tablesPanel.add(buttonPanel1);
-		tablesPanel.add(tables2Panel);
-		tablesPanel.add(buttonPanel2);
-		tablesPanel.add(tables3Panel);
+		final JPanel tablesPanel = new JPanel(new GridBagLayout());
+		tablesPanel.setOpaque(false);
+		addKeyColumn(tablesPanel, 0, LangResources.get("serverPublicKeys"), existingUserSshKeysTable, dropExistingKeysButton);
+		addTransferColumn(tablesPanel, 1, uploadAllConfiguredUserSshKeysButton, uploadSelectedConfiguredUserSshKeysButton, downloadSelectedConfiguredUserSshKeysButton, downloadAllExistingUserSshKeysButton);
+		addKeyColumn(tablesPanel, 2, LangResources.get("configuredPublicKeys"), configuredSshKeysTable, dropConfiguredKeysButton);
+		addTransferColumn(tablesPanel, 3, configureAllKnownUserSshKeysButton, configureSelectedKnownUserSshKeysButton);
+		addKeyColumn(tablesPanel, 4, LangResources.get("knownPublicKeys"), knownSshKeysTable, dropKnownKeysButton);
+		getContentArea().add(tablesPanel, BorderLayout.CENTER);
 
 		loadTablesData();
 
-		// Button Panel
-		final JPanel buttonPanel = new JPanel();
-		buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.LINE_AXIS));
-
-		// ok Button
-		okButton = new JButton(getI18NString("save"));
-		okButton.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(final ActionEvent event) {
-				returnValue = true;
-				dispose();
-			}
+		okButton = addButton(getI18NString("save"), null, ButtonStyle.PRIMARY, event -> {
+			returnValue = true;
+			dispose();
 		});
-		buttonPanel.add(okButton);
 
-		buttonPanel.add(Box.createRigidArea(new Dimension(5, 0)));
-
-		// Close Button
-		final JButton closeButton = new JButton(getI18NString("cancel"));
-		closeButton.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(final ActionEvent event) {
-				returnValue = false;
-				dispose();
-			}
+		addButton(getI18NString("cancel"), null, ButtonStyle.SECONDARY, event -> {
+			returnValue = false;
+			dispose();
 		});
-		buttonPanel.add(closeButton);
 
-		panel.add(tablesPanel);
-		panel.add(Box.createRigidArea(new Dimension(5, 5)));
-		panel.add(buttonPanel);
 		getRootPane().setDefaultButton(okButton);
-
-		panel.add(Box.createRigidArea(new Dimension(0, 5)));
-
-		add(panel);
 
 		pack();
 
 		setLocationRelativeTo(getOwner());
 
 		checkButtonStatus();
+	}
+
+	/**
+	 * Creates a key table, sorted by hash and name.
+	 */
+	private static JTable createKeyTable(final DefaultTableModel model) {
+		final JTable table = ModernTables.createTable(model);
+		final TableRowSorter<TableModel> sorter = new TableRowSorter<>(table.getModel());
+		final List<RowSorter.SortKey> sortKeys = new ArrayList<>();
+		sortKeys.add(new RowSorter.SortKey(1, SortOrder.ASCENDING));
+		sortKeys.add(new RowSorter.SortKey(0, SortOrder.ASCENDING));
+		sorter.setSortKeys(sortKeys);
+		table.setRowSorter(sorter);
+		return table;
+	}
+
+	/**
+	 * Full width button below a key table, removing the selected keys.
+	 */
+	private static JButton createDropButton(final String toolTipText) {
+		final JButton button = new ModernUi.Button(null, IconKind.TRASH, ButtonStyle.DANGEROUS);
+		button.setToolTipText(toolTipText);
+		button.getAccessibleContext().setAccessibleName(toolTipText);
+		return button;
+	}
+
+	/**
+	 * Button between two key tables, transferring keys in the direction of its arrow.
+	 */
+	private static JButton createTransferButton(final String arrowText, final String toolTipText) {
+		final JButton button = new ModernUi.Button(arrowText, null, ButtonStyle.SECONDARY);
+		button.setFont(ModernUi.baseFont().deriveFont(Font.BOLD, ModernUi.baseFont().getSize2D() + 4f));
+		button.setToolTipText(toolTipText);
+		button.getAccessibleContext().setAccessibleName(toolTipText);
+		button.setPreferredSize(new Dimension(TRANSFER_BUTTON_WIDTH, button.getPreferredSize().height));
+		return button;
+	}
+
+	/**
+	 * Adds a column with title, key table and the button removing the selected keys.
+	 */
+	private static void addKeyColumn(final JPanel tablesPanel, final int column, final String title, final JTable table, final JButton dropButton) {
+		final GridBagConstraints constraints = new GridBagConstraints();
+		constraints.gridx = column;
+		constraints.fill = GridBagConstraints.HORIZONTAL;
+		constraints.anchor = GridBagConstraints.LINE_START;
+
+		constraints.gridy = 0;
+		constraints.insets = new Insets(0, 0, 6, 0);
+		tablesPanel.add(ModernUi.createSectionTitle(title), constraints);
+
+		constraints.gridy = 1;
+		constraints.weightx = 1;
+		constraints.weighty = 1;
+		constraints.fill = GridBagConstraints.BOTH;
+		constraints.insets = new Insets(0, 0, 6, 0);
+		tablesPanel.add(ModernTables.createScrollPane(table, KEY_TABLE_WIDTH, KEY_TABLE_HEIGHT), constraints);
+
+		constraints.gridy = 2;
+		constraints.weighty = 0;
+		constraints.fill = GridBagConstraints.HORIZONTAL;
+		constraints.insets = new Insets(0, 0, 0, 0);
+		tablesPanel.add(dropButton, constraints);
+	}
+
+	/**
+	 * Adds a column of transfer buttons between two key tables, vertically centered at the tables.
+	 */
+	private static void addTransferColumn(final JPanel tablesPanel, final int column, final JButton... buttons) {
+		final JPanel buttonPanel = new JPanel(new GridLayout(buttons.length, 1, 0, 6));
+		buttonPanel.setOpaque(false);
+		for (final JButton button : buttons) {
+			buttonPanel.add(button);
+		}
+
+		final GridBagConstraints constraints = new GridBagConstraints();
+		constraints.gridx = column;
+		constraints.gridy = 1;
+		constraints.insets = new Insets(0, 10, 6, 10);
+		tablesPanel.add(buttonPanel, constraints);
 	}
 
 	private void loadTablesData() {
@@ -365,7 +294,7 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 		for (final int rowIndex1 : sourceTable.getSelectedRows()) {
 			final String keyHash = (String) sourceTable.getValueAt(rowIndex1, 1);
 			if (!keyHash.equalsIgnoreCase(adminKeyHash)
-					|| 0 == new QuestionDialog(this, ServerManagement.APPLICATION_NAME, LangResources.get("adminKeyRemoval"), LangResources.get("yes"), LangResources.get("no")).withBackgroundColor(SwingColor.Yellow).open()) {
+					|| 0 == new QuestionDialog(this, ServerManagement.APPLICATION_NAME, LangResources.get("adminKeyRemoval"), LangResources.get("yes"), LangResources.get("no")).withDialogStyle(DialogStyle.WARNING).open()) {
 				for (final Map<String, String> destinationMap : destinationMaps) {
 					destinationMap.remove(keyHash);
 				}

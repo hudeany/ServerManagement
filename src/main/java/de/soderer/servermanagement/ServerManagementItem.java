@@ -2,6 +2,7 @@ package de.soderer.servermanagement;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.event.ActionEvent;
@@ -38,7 +39,6 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
-import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
@@ -73,10 +73,13 @@ import de.soderer.servermanagement.worker.RefreshServerItemStatusWorker;
 import de.soderer.sshkeyformats.AuthorizedKey;
 import de.soderer.sshkeyformats.SshKey;
 import de.soderer.sshkeyformats.SshKeyReader;
-import de.soderer.swing.MultiInputDialog;
-import de.soderer.swing.QuestionDialog;
-import de.soderer.swing.SimpleInputDialog;
-import de.soderer.swing.SwingColor;
+import de.soderer.swing.modern.ButtonStyle;
+import de.soderer.swing.modern.DialogStyle;
+import de.soderer.swing.modern.IconKind;
+import de.soderer.swing.modern.ModernUi;
+import de.soderer.swing.modern.MultiInputDialog;
+import de.soderer.swing.modern.QuestionDialog;
+import de.soderer.swing.modern.SimpleInputDialog;
 import de.soderer.utilities.IoUtilities;
 import de.soderer.utilities.LangResources;
 import de.soderer.utilities.PropertiesReader;
@@ -108,11 +111,15 @@ public class ServerManagementItem extends JPanel {
 
 	private RefreshServerItemStatusWorker worker;
 
+	/** Maximum number of table rows visible without scrolling */
+	private static final int MAX_VISIBLE_TABLE_ROWS = 4;
+
+	/** Content of the server card, refilled by createComponents() */
+	private JPanel contentPanel;
+
 	public ServerManagementItem(final ServerManagementGui serverManagementGui, final Server server, final ApplicationConfigurationProperties applicationConfiguration) throws Exception {
-		super();
-		setLayout(new BoxLayout(this, BoxLayout.PAGE_AXIS));
-		setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.BLACK),
-			BorderFactory.createEmptyBorder(5, 5, 5, 5)));
+		super(new BorderLayout());
+		setOpaque(false);
 
 		this.applicationConfiguration = applicationConfiguration;
 		this.serverManagementGui = serverManagementGui;
@@ -133,35 +140,131 @@ public class ServerManagementItem extends JPanel {
 	private void createComponents() {
 		removeAll();
 
-		addServerNamePanel(server.getName());
-		if (StringUtilities.isNotBlank(server.getHost())) {
-			addHostPanel(server.getHost());
-		}
+		// Tables of a former build must not be updated by a running status check anymore
+		managedUserTable = null;
+		urlsTable = null;
+		versionsTable = null;
+		logsTable = null;
 
+		contentPanel = new JPanel();
+		contentPanel.setOpaque(false);
+		contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.PAGE_AXIS));
+
+		// Each section: title with its buttons, below it the table (only if there are entries)
+		addManagedUsersButtons();
 		if (Utilities.isNotEmpty(server.getManagedUsers())) {
 			addManagedUsersPanel(server.getManagedUsers());
 		}
-		addManagedUsersButtons();
 
+		addUrlsButtons();
 		if (Utilities.isNotEmpty(server.getUrls())) {
 			addUrlsPanel(server.getUrls());
 		}
-		addUrlsButtons();
 
+		addVersionsButtons();
 		if (Utilities.isNotEmpty(server.getVersions())) {
 			addVersionsPanel(server.getVersions());
 		}
-		addVersionsButtons();
 
+		addLogsButtons();
 		if (Utilities.isNotEmpty(server.getLogs())) {
 			addLogsPanel(server.getLogs());
 		}
-		addLogsButtons();
+
+		final ModernUi.Card card = new ModernUi.Card(server.getName(), IconKind.SERVER, 10);
+		if (StringUtilities.isNotBlank(server.getHost())) {
+			final JLabel hostLabel = ModernUi.createMutedLabel(server.getHost());
+			hostLabel.setToolTipText(LangResources.get("host"));
+			card.addHeaderComponent(hostLabel);
+		}
+		card.setContent(contentPanel);
+		add(card, BorderLayout.CENTER);
 
 		validate();
-		updateUI();
+		repaint();
 
 		checkButtonStatus();
+	}
+
+	/**
+	 * Adds the header of a section: title on the left, buttons on the right, separated from the previous section by a
+	 * thin line.
+	 */
+	private void addSectionHeader(final String title, final JPanel buttonPanel) {
+		final boolean firstSection = contentPanel.getComponentCount() == 0;
+		if (!firstSection) {
+			contentPanel.add(Box.createRigidArea(new Dimension(0, 8)));
+		}
+
+		final JPanel sectionHeader = new JPanel(new BorderLayout(12, 0));
+		sectionHeader.setOpaque(false);
+		if (firstSection) {
+			sectionHeader.setBorder(BorderFactory.createEmptyBorder(0, 0, 6, 0));
+		} else {
+			sectionHeader.setBorder(BorderFactory.createCompoundBorder(
+					BorderFactory.createMatteBorder(1, 0, 0, 0, ModernUi.INNER_BORDER),
+					BorderFactory.createEmptyBorder(10, 0, 6, 0)));
+		}
+		sectionHeader.add(ModernUi.createSectionTitle(title), BorderLayout.WEST);
+		sectionHeader.add(buttonPanel, BorderLayout.EAST);
+		contentPanel.add(sectionHeader);
+	}
+
+	/**
+	 * Transparent panel for the buttons of a section header.
+	 */
+	private static JPanel createSectionButtonPanel() {
+		final JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+		buttonPanel.setOpaque(false);
+		return buttonPanel;
+	}
+
+	private static JButton createSectionButton(final String textResourceKey, final IconKind iconKind) {
+		return new ModernUi.Button(LangResources.get(textResourceKey), iconKind, ButtonStyle.SECONDARY);
+	}
+
+	/**
+	 * Gives a table of the server card the ModernUi look; the background colors of the status check stay visible.
+	 */
+	private static void styleItemTable(final JTable table) {
+		ModernUi.styleTable(table);
+		table.setDefaultRenderer(Object.class, new PaddedCellRenderer());
+		table.setShowVerticalLines(false);
+		// Background of not yet checked tables (the status check sets the status colors)
+		table.setBackground(Color.WHITE);
+	}
+
+	/**
+	 * Limits the visible height of a table, more rows can be scrolled.
+	 */
+	private static void limitVisibleRows(final JTable table) {
+		final Dimension preferredSize = table.getPreferredSize();
+		table.setPreferredScrollableViewportSize(new Dimension(preferredSize.width, Math.min(preferredSize.height, table.getRowHeight() * MAX_VISIBLE_TABLE_ROWS)));
+	}
+
+	/**
+	 * Wraps the scroll pane of a table into a transparent panel for the card.
+	 */
+	private void addTablePanel(final JScrollPane scrollPane) {
+		ModernUi.styleScrollPane(scrollPane, Color.WHITE);
+		final JPanel tablePanel = new JPanel(new BorderLayout());
+		tablePanel.setOpaque(false);
+		tablePanel.add(scrollPane);
+		contentPanel.add(tablePanel);
+	}
+
+	/**
+	 * Cell renderer with padding; uses the background of the table, which shows the status color.
+	 */
+	private static class PaddedCellRenderer extends DefaultTableCellRenderer {
+		private static final long serialVersionUID = 4019347585127466351L;
+
+		@Override
+		public Component getTableCellRendererComponent(final JTable table, final Object value, final boolean isSelected, final boolean hasFocus, final int row, final int column) {
+			final Component component = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+			setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
+			return component;
+		}
 	}
 
 	public String getServerName() {
@@ -170,35 +273,6 @@ public class ServerManagementItem extends JPanel {
 
 	public Server getServer() {
 		return server;
-	}
-
-	private void addServerNamePanel(final String serverName) {
-		final JPanel serverNamePanel = new JPanel();
-		serverNamePanel.setLayout(new FlowLayout(FlowLayout.LEFT));
-
-		final JLabel serverNameLabel = new JLabel(LangResources.get("serverName") + ": ");
-		serverNamePanel.add(serverNameLabel);
-
-		final JTextField serverNameField = new JTextField(serverName);
-		serverNameField.setBackground(Color.LIGHT_GRAY);
-		serverNameField.setEditable(false);
-		serverNamePanel.add(serverNameField);
-
-		add(serverNamePanel);
-	}
-
-	private void addHostPanel(final String host) {
-		final JPanel hostPanel = new JPanel();
-		hostPanel.setLayout(new FlowLayout(FlowLayout.LEFT));
-
-		final JLabel hostLabel = new JLabel(LangResources.get("host") + ": ");
-		hostPanel.add(hostLabel);
-
-		final JTextField hostField = new JTextField(host);
-		hostField.setEditable(false);
-		hostPanel.add(hostField);
-
-		add(hostPanel);
 	}
 
 	public void resetTablesStatus() {
@@ -301,13 +375,6 @@ public class ServerManagementItem extends JPanel {
 	}
 
 	private void addManagedUsersPanel(final List<User> managedUsers) {
-		final JPanel labelPanel = new JPanel();
-		labelPanel.setLayout(new FlowLayout(FlowLayout.LEFT));
-
-		final JLabel hostLabel = new JLabel(LangResources.get("managedUsers"));
-		labelPanel.add(hostLabel);
-		add(labelPanel);
-
 		final DefaultTableModel model = new DefaultTableModel();
 		model.addColumn(LangResources.get("username"));
 		model.addColumn(LangResources.get("expectedAuthKeys"));
@@ -349,41 +416,35 @@ public class ServerManagementItem extends JPanel {
 							editUser(table.convertRowIndexToModel(row));
 						}
 					} catch (final Exception e) {
-						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
+						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
 					}
 				}
 			}
 		});
 
 		managedUserTable.getColumnModel().getColumn(1).setPreferredWidth(100);
-		final DefaultTableCellRenderer rightRenderer1 = new DefaultTableCellRenderer();
+		final DefaultTableCellRenderer rightRenderer1 = new PaddedCellRenderer();
 		rightRenderer1.setHorizontalAlignment(SwingConstants.RIGHT);
 		managedUserTable.getColumnModel().getColumn(1).setCellRenderer(rightRenderer1);
 
 		managedUserTable.getColumnModel().getColumn(2).setPreferredWidth(100);
-		final DefaultTableCellRenderer rightRenderer2 = new DefaultTableCellRenderer();
+		final DefaultTableCellRenderer rightRenderer2 = new PaddedCellRenderer();
 		rightRenderer2.setHorizontalAlignment(SwingConstants.RIGHT);
 		managedUserTable.getColumnModel().getColumn(2).setCellRenderer(rightRenderer2);
 
 		managedUserTable.getColumnModel().getColumn(3).setPreferredWidth(100);
-		final DefaultTableCellRenderer rightRenderer3 = new DefaultTableCellRenderer();
+		final DefaultTableCellRenderer rightRenderer3 = new PaddedCellRenderer();
 		rightRenderer3.setHorizontalAlignment(SwingConstants.RIGHT);
 		managedUserTable.getColumnModel().getColumn(3).setCellRenderer(rightRenderer3);
 
-		managedUserTable.setBorder(BorderFactory.createLineBorder(Color.BLACK));
-		managedUserTable.setRowHeight(20);
+		styleItemTable(managedUserTable);
 
 
-		if (managedUserTable.getPreferredSize().getHeight() < 65) {
-			managedUserTable.setPreferredScrollableViewportSize(managedUserTable.getPreferredSize());
-		} else {
-			managedUserTable.setPreferredScrollableViewportSize(new Dimension((int) managedUserTable.getPreferredSize().getWidth(), 65));
-		}
+		limitVisibleRows(managedUserTable);
 
 		final ServerManagementItem item = this;
 
 		final JScrollPane scrollPane = new JScrollPane(managedUserTable);
-		scrollPane.setBorder(BorderFactory.createEmptyBorder());
 		scrollPane.addMouseWheelListener(
 				new MouseWheelListener() {
 					@Override
@@ -399,14 +460,7 @@ public class ServerManagementItem extends JPanel {
 				}
 				);
 
-		final JPanel managedUsersTablePanel = new JPanel();
-		managedUsersTablePanel.setLayout(new BorderLayout());
-
-		managedUsersTablePanel.add(scrollPane);
-
-		add(managedUsersTablePanel);
-
-		add(Box.createRigidArea(new Dimension(5, 5)));
+		addTablePanel(scrollPane);
 	}
 
 	private void addUrlsPanel(final List<String> urls) {
@@ -437,23 +491,17 @@ public class ServerManagementItem extends JPanel {
 		});
 
 		urlsTable.getColumnModel().getColumn(1).setPreferredWidth(100);
-		final DefaultTableCellRenderer rightRenderer1 = new DefaultTableCellRenderer();
+		final DefaultTableCellRenderer rightRenderer1 = new PaddedCellRenderer();
 		rightRenderer1.setHorizontalAlignment(SwingConstants.RIGHT);
 		urlsTable.getColumnModel().getColumn(1).setCellRenderer(rightRenderer1);
 
-		urlsTable.setBorder(BorderFactory.createLineBorder(Color.BLACK));
-		urlsTable.setRowHeight(20);
+		styleItemTable(urlsTable);
 
-		if (urlsTable.getPreferredSize().getHeight() < 65) {
-			urlsTable.setPreferredScrollableViewportSize(urlsTable.getPreferredSize());
-		} else {
-			urlsTable.setPreferredScrollableViewportSize(new Dimension((int) urlsTable.getPreferredSize().getWidth(), 65));
-		}
+		limitVisibleRows(urlsTable);
 
 		final ServerManagementItem item = this;
 
 		final JScrollPane urlsScrollPane = new JScrollPane(urlsTable);
-		urlsScrollPane.setBorder(BorderFactory.createEmptyBorder());
 		urlsScrollPane.addMouseWheelListener(
 				new MouseWheelListener() {
 					@Override
@@ -469,13 +517,7 @@ public class ServerManagementItem extends JPanel {
 				}
 				);
 
-		final JPanel urlsTablePanel = new JPanel();
-		urlsTablePanel.setLayout(new BorderLayout());
-		urlsTablePanel.add(urlsScrollPane);
-
-		add(urlsTablePanel);
-
-		add(Box.createRigidArea(new Dimension(5, 5)));
+		addTablePanel(urlsScrollPane);
 	}
 
 	private void addVersionsPanel(final List<Version> versions) {
@@ -500,17 +542,17 @@ public class ServerManagementItem extends JPanel {
 		versionsTable.getColumnModel().getColumn(0).setPreferredWidth(50);
 
 		versionsTable.getColumnModel().getColumn(1).setPreferredWidth(200);
-		final DefaultTableCellRenderer rightRenderer1 = new DefaultTableCellRenderer();
+		final DefaultTableCellRenderer rightRenderer1 = new PaddedCellRenderer();
 		rightRenderer1.setHorizontalAlignment(SwingConstants.LEFT);
 		versionsTable.getColumnModel().getColumn(1).setCellRenderer(rightRenderer1);
 
 		versionsTable.getColumnModel().getColumn(2).setPreferredWidth(200);
-		final DefaultTableCellRenderer rightRenderer2 = new DefaultTableCellRenderer();
+		final DefaultTableCellRenderer rightRenderer2 = new PaddedCellRenderer();
 		rightRenderer2.setHorizontalAlignment(SwingConstants.LEFT);
 		versionsTable.getColumnModel().getColumn(2).setCellRenderer(rightRenderer2);
 
 		versionsTable.getColumnModel().getColumn(3).setPreferredWidth(50);
-		final DefaultTableCellRenderer rightRenderer3 = new DefaultTableCellRenderer();
+		final DefaultTableCellRenderer rightRenderer3 = new PaddedCellRenderer();
 		rightRenderer3.setHorizontalAlignment(SwingConstants.LEFT);
 		versionsTable.getColumnModel().getColumn(3).setCellRenderer(rightRenderer3);
 
@@ -558,25 +600,19 @@ public class ServerManagementItem extends JPanel {
 							serverManagementGui.signalUnsavedChanges();
 						}
 					} catch (final Exception e) {
-						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
+						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
 					}
 				}
 			}
 		});
 
-		versionsTable.setBorder(BorderFactory.createLineBorder(Color.BLACK));
-		versionsTable.setRowHeight(20);
+		styleItemTable(versionsTable);
 
-		if (versionsTable.getPreferredSize().getHeight() < 65) {
-			versionsTable.setPreferredScrollableViewportSize(versionsTable.getPreferredSize());
-		} else {
-			versionsTable.setPreferredScrollableViewportSize(new Dimension((int) versionsTable.getPreferredSize().getWidth(), 65));
-		}
+		limitVisibleRows(versionsTable);
 
 		final ServerManagementItem item = this;
 
 		final JScrollPane versionsScrollPane = new JScrollPane(versionsTable);
-		versionsScrollPane.setBorder(BorderFactory.createEmptyBorder());
 		versionsScrollPane.addMouseWheelListener(
 				new MouseWheelListener() {
 					@Override
@@ -592,13 +628,7 @@ public class ServerManagementItem extends JPanel {
 				}
 				);
 
-		final JPanel versionsTablePanel = new JPanel();
-		versionsTablePanel.setLayout(new BorderLayout());
-		versionsTablePanel.add(versionsScrollPane);
-
-		add(versionsTablePanel);
-
-		add(Box.createRigidArea(new Dimension(5, 5)));
+		addTablePanel(versionsScrollPane);
 	}
 
 	private void addLogsPanel(final List<Log> logs) {
@@ -621,12 +651,12 @@ public class ServerManagementItem extends JPanel {
 		logsTable.getColumnModel().getColumn(0).setPreferredWidth(50);
 
 		logsTable.getColumnModel().getColumn(1).setPreferredWidth(200);
-		final DefaultTableCellRenderer rightRenderer1 = new DefaultTableCellRenderer();
+		final DefaultTableCellRenderer rightRenderer1 = new PaddedCellRenderer();
 		rightRenderer1.setHorizontalAlignment(SwingConstants.LEFT);
 		logsTable.getColumnModel().getColumn(1).setCellRenderer(rightRenderer1);
 
 		logsTable.getColumnModel().getColumn(2).setPreferredWidth(200);
-		final DefaultTableCellRenderer rightRenderer2 = new DefaultTableCellRenderer();
+		final DefaultTableCellRenderer rightRenderer2 = new PaddedCellRenderer();
 		rightRenderer2.setHorizontalAlignment(SwingConstants.LEFT);
 		logsTable.getColumnModel().getColumn(2).setCellRenderer(rightRenderer2);
 
@@ -670,25 +700,19 @@ public class ServerManagementItem extends JPanel {
 							throw new Exception("Unsupported log location '" + location + "', expected 'ssh://host[:port]'");
 						}
 					} catch (final Exception e) {
-						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
+						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
 					}
 				}
 			}
 		});
 
-		logsTable.setBorder(BorderFactory.createLineBorder(Color.BLACK));
-		logsTable.setRowHeight(20);
+		styleItemTable(logsTable);
 
-		if (logsTable.getPreferredSize().getHeight() < 65) {
-			logsTable.setPreferredScrollableViewportSize(logsTable.getPreferredSize());
-		} else {
-			logsTable.setPreferredScrollableViewportSize(new Dimension((int) logsTable.getPreferredSize().getWidth(), 65));
-		}
+		limitVisibleRows(logsTable);
 
 		final ServerManagementItem item = this;
 
 		final JScrollPane versionsScrollPane = new JScrollPane(logsTable);
-		versionsScrollPane.setBorder(BorderFactory.createEmptyBorder());
 		versionsScrollPane.addMouseWheelListener(
 			new MouseWheelListener() {
 				@Override
@@ -704,20 +728,13 @@ public class ServerManagementItem extends JPanel {
 			}
 		);
 
-		final JPanel logsTablePanel = new JPanel();
-		logsTablePanel.setLayout(new BorderLayout());
-		logsTablePanel.add(versionsScrollPane);
-
-		add(logsTablePanel);
-
-		add(Box.createRigidArea(new Dimension(5, 5)));
+		addTablePanel(versionsScrollPane);
 	}
 
 	private void addUrlsButtons() {
-		final JPanel buttonPanel = new JPanel();
-		buttonPanel.setLayout(new FlowLayout(FlowLayout.LEFT));
+		final JPanel buttonPanel = createSectionButtonPanel();
 
-		final JButton addUrlButton = new JButton(LangResources.get("addUrl"));
+		final JButton addUrlButton = createSectionButton("addUrl", IconKind.PLUS);
 		addUrlButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -732,13 +749,13 @@ public class ServerManagementItem extends JPanel {
 						serverManagementGui.signalUnsavedChanges();
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
 				}
 			}
 		});
 		buttonPanel.add(addUrlButton);
 
-		removeUrlButton = new JButton(LangResources.get("removeUrl"));
+		removeUrlButton = createSectionButton("removeUrl", IconKind.TRASH);
 		removeUrlButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -758,20 +775,19 @@ public class ServerManagementItem extends JPanel {
 						serverManagementGui.signalUnsavedChanges();
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
 				}
 			}
 		});
 		buttonPanel.add(removeUrlButton);
 
-		add(buttonPanel);
+		addSectionHeader(LangResources.get("section.urls"), buttonPanel);
 	}
 
 	private void addVersionsButtons() {
-		final JPanel buttonPanel = new JPanel();
-		buttonPanel.setLayout(new FlowLayout(FlowLayout.LEFT));
+		final JPanel buttonPanel = createSectionButtonPanel();
 
-		final JButton addVersionButton = new JButton(LangResources.get("addVersion"));
+		final JButton addVersionButton = createSectionButton("addVersion", IconKind.PLUS);
 		addVersionButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -790,13 +806,13 @@ public class ServerManagementItem extends JPanel {
 						serverManagementGui.signalUnsavedChanges();
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
 				}
 			}
 		});
 		buttonPanel.add(addVersionButton);
 
-		removeVersionButton = new JButton(LangResources.get("removeVersion"));
+		removeVersionButton = createSectionButton("removeVersion", IconKind.TRASH);
 		removeVersionButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -819,13 +835,13 @@ public class ServerManagementItem extends JPanel {
 					}
 				} catch (final Exception e) {
 					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR",
-							"ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
+							"ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
 				}
 			}
 		});
 		buttonPanel.add(removeVersionButton);
 
-		final JButton readVersionsButton = new JButton(LangResources.get("readVersions"));
+		final JButton readVersionsButton = createSectionButton("readVersions", IconKind.REFRESH);
 		readVersionsButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -835,22 +851,21 @@ public class ServerManagementItem extends JPanel {
 					for (int i = 0; i < versionsTable.getModel().getRowCount(); i++) {
 						result += versionsTable.getModel().getValueAt(i, 0) + ": " + versionsTable.getModel().getValueAt(i, 3) + "\n";
 					}
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " readVersions", result.trim()).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("readVersions"), result.trim()).withDialogStyle(DialogStyle.INFORMATION).open();
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
 				}
 			}
 		});
 		buttonPanel.add(readVersionsButton);
 
-		add(buttonPanel);
+		addSectionHeader(LangResources.get("section.versions"), buttonPanel);
 	}
 
 	private void addLogsButtons() {
-		final JPanel buttonPanel = new JPanel();
-		buttonPanel.setLayout(new FlowLayout(FlowLayout.LEFT));
+		final JPanel buttonPanel = createSectionButtonPanel();
 
-		final JButton addLogButton = new JButton(LangResources.get("addLog"));
+		final JButton addLogButton = createSectionButton("addLog", IconKind.PLUS);
 		addLogButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -869,13 +884,13 @@ public class ServerManagementItem extends JPanel {
 						serverManagementGui.signalUnsavedChanges();
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
 				}
 			}
 		});
 		buttonPanel.add(addLogButton);
 
-		removeLogButton = new JButton(LangResources.get("removeLog"));
+		removeLogButton = createSectionButton("removeLog", IconKind.TRASH);
 		removeLogButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -896,13 +911,13 @@ public class ServerManagementItem extends JPanel {
 						serverManagementGui.signalUnsavedChanges();
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
 				}
 			}
 		});
 		buttonPanel.add(removeLogButton);
 
-		add(buttonPanel);
+		addSectionHeader(LangResources.get("section.logs"), buttonPanel);
 	}
 
 	private static void loadUrlsData(final DefaultTableModel model, final List<String> urls) {
@@ -942,10 +957,9 @@ public class ServerManagementItem extends JPanel {
 	}
 
 	private void addManagedUsersButtons() {
-		final JPanel buttonPanel = new JPanel();
-		buttonPanel.setLayout(new FlowLayout(FlowLayout.LEFT));
+		final JPanel buttonPanel = createSectionButtonPanel();
 
-		final JButton editAdminButton = new JButton(LangResources.get("editAdmin"));
+		final JButton editAdminButton = createSectionButton("editAdmin", IconKind.EDIT);
 		editAdminButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -968,13 +982,13 @@ public class ServerManagementItem extends JPanel {
 						serverManagementGui.signalUnsavedChanges();
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
 				}
 			}
 		});
 		buttonPanel.add(editAdminButton);
 
-		readAllUsersButton = new JButton(LangResources.get("readAllUsers"));
+		readAllUsersButton = createSectionButton("readAllUsers", IconKind.SEARCH);
 		readAllUsersButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -1002,13 +1016,13 @@ public class ServerManagementItem extends JPanel {
 						serverManagementGui.signalUnsavedChanges();
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
 				}
 			}
 		});
 		buttonPanel.add(readAllUsersButton);
 
-		removeUserButton = new JButton(LangResources.get("removeUser"));
+		removeUserButton = createSectionButton("removeUser", IconKind.TRASH);
 		removeUserButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -1029,14 +1043,14 @@ public class ServerManagementItem extends JPanel {
 						serverManagementGui.signalUnsavedChanges();
 					}
 				} catch (final Exception e) {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
 				}
 			}
 		});
 		removeUserButton.setEnabled(false);
 		buttonPanel.add(removeUserButton);
 
-		add(buttonPanel);
+		addSectionHeader(LangResources.get("managedUsers"), buttonPanel);
 	}
 
 	private static KnownPublicSshKey getKeyFromKnownKeysByKeyId(final String keyId, final List<KnownPublicSshKey> knownPublicSshKeys) {
@@ -1059,7 +1073,7 @@ public class ServerManagementItem extends JPanel {
 		try {
 			existingAuthorizedKeys = AuthorizedKeysHelper.readAuthorizedKeys(server.getHost(), server.getSshAdmin().getUsername(), server.getSshAdmin().getPrivateKeyFile(), server.getSshAdmin().getPasswordArray(), user.getUsername());
 		} catch (final Exception e) {
-			new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
+			new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
 			return;
 		}
 		final Map<String, String> existingKeys = new HashMap<>();
@@ -1173,7 +1187,7 @@ public class ServerManagementItem extends JPanel {
 							newKey.setComment(foundInKnownKeys.getKeyId());
 							newAuthorizedKeys.add(newKey);
 						} else {
-							new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "Cannot find authorized key for storage. Hash: " + hash).withBackgroundColor(SwingColor.LightRed).open();
+							new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "Cannot find authorized key for storage. Hash: " + hash).withDialogStyle(DialogStyle.ERROR).open();
 						}
 					}
 				}
@@ -1184,16 +1198,16 @@ public class ServerManagementItem extends JPanel {
 				if (!compareAuthorizedKeysLists(existingAuthorizedKeys, newAuthorizedKeys)) {
 					try {
 						AuthorizedKeysHelper.storeAuthorizedKeys(server.getHost(), server.getSshAdmin().getUsername(), server.getSshAdmin().getPrivateKeyFile(), server.getSshAdmin().getPasswordArray(), user.getUsername(), newAuthorizedKeys);
-						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, LangResources.get("succesfullyUpdatedSshUserKeys")).open();
+						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, LangResources.get("succesfullyUpdatedSshUserKeys")).withDialogStyle(DialogStyle.INFORMATION).withBackgroundColor(ModernUi.SUCCESS_LIGHT).open();
 					} catch (final Exception e) {
-						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
+						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
 					}
 				} else {
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, LangResources.get("noServerChangeNeeded")).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, LangResources.get("noServerChangeNeeded")).withDialogStyle(DialogStyle.INFORMATION).open();
 				}
 				loadUsersData((DefaultTableModel) managedUserTable.getModel(), server.getManagedUsers());
 			} catch (final Exception e) {
-				new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withBackgroundColor(SwingColor.LightRed).open();
+				new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
 			}
 		}
 	}

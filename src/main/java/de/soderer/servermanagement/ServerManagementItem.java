@@ -34,7 +34,6 @@ import javax.swing.BorderFactory;
 import javax.swing.BoundedRangeModel;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
-import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
@@ -73,7 +72,9 @@ import de.soderer.servermanagement.worker.RefreshServerItemStatusWorker;
 import de.soderer.sshkeyformats.AuthorizedKey;
 import de.soderer.sshkeyformats.SshKey;
 import de.soderer.sshkeyformats.SshKeyReader;
+import de.soderer.swing.modern.Button;
 import de.soderer.swing.modern.ButtonStyle;
+import de.soderer.swing.modern.Card;
 import de.soderer.swing.modern.DialogStyle;
 import de.soderer.swing.modern.IconKind;
 import de.soderer.swing.modern.ModernUi;
@@ -97,17 +98,17 @@ public class ServerManagementItem extends JPanel {
 	private final TrustManager trustManager;
 	private final boolean deactivateHostnameVerification;
 
-	private JButton readAllUsersButton;
+	private Button readAllUsersButton;
 	private JTable managedUserTable;
 	private JTable urlsTable;
 	private JTable versionsTable;
 	private JTable logsTable;
 	private String status = "OK";
 
-	private JButton removeUserButton;
-	private JButton removeUrlButton;
-	private JButton removeVersionButton;
-	private JButton removeLogButton;
+	private Button removeUserButton;
+	private Button removeUrlButton;
+	private Button removeVersionButton;
+	private Button removeLogButton;
 
 	private RefreshServerItemStatusWorker worker;
 
@@ -171,7 +172,7 @@ public class ServerManagementItem extends JPanel {
 			addLogsPanel(server.getLogs());
 		}
 
-		final ModernUi.Card card = new ModernUi.Card(server.getName(), IconKind.SERVER, 10);
+		final Card card = new Card(server.getName(), IconKind.SERVER, 10);
 		if (StringUtilities.isNotBlank(server.getHost())) {
 			final JLabel hostLabel = ModernUi.createMutedLabel(server.getHost());
 			hostLabel.setToolTipText(LangResources.get("host"));
@@ -219,8 +220,8 @@ public class ServerManagementItem extends JPanel {
 		return buttonPanel;
 	}
 
-	private static JButton createSectionButton(final String textResourceKey, final IconKind iconKind) {
-		return new ModernUi.Button(LangResources.get(textResourceKey), iconKind, ButtonStyle.SECONDARY);
+	private static Button createSectionButton(final String textResourceKey, final IconKind iconKind) {
+		return new Button(LangResources.get(textResourceKey), iconKind, ButtonStyle.SECONDARY);
 	}
 
 	/**
@@ -734,7 +735,7 @@ public class ServerManagementItem extends JPanel {
 	private void addUrlsButtons() {
 		final JPanel buttonPanel = createSectionButtonPanel();
 
-		final JButton addUrlButton = createSectionButton("addUrl", IconKind.PLUS);
+		final Button addUrlButton = createSectionButton("addUrl", IconKind.PLUS);
 		addUrlButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -787,7 +788,7 @@ public class ServerManagementItem extends JPanel {
 	private void addVersionsButtons() {
 		final JPanel buttonPanel = createSectionButtonPanel();
 
-		final JButton addVersionButton = createSectionButton("addVersion", IconKind.PLUS);
+		final Button addVersionButton = createSectionButton("addVersion", IconKind.PLUS);
 		addVersionButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -841,7 +842,7 @@ public class ServerManagementItem extends JPanel {
 		});
 		buttonPanel.add(removeVersionButton);
 
-		final JButton readVersionsButton = createSectionButton("readVersions", IconKind.REFRESH);
+		final Button readVersionsButton = createSectionButton("readVersions", IconKind.REFRESH);
 		readVersionsButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -865,7 +866,7 @@ public class ServerManagementItem extends JPanel {
 	private void addLogsButtons() {
 		final JPanel buttonPanel = createSectionButtonPanel();
 
-		final JButton addLogButton = createSectionButton("addLog", IconKind.PLUS);
+		final Button addLogButton = createSectionButton("addLog", IconKind.PLUS);
 		addLogButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -959,7 +960,7 @@ public class ServerManagementItem extends JPanel {
 	private void addManagedUsersButtons() {
 		final JPanel buttonPanel = createSectionButtonPanel();
 
-		final JButton editAdminButton = createSectionButton("editAdmin", IconKind.EDIT);
+		final Button editAdminButton = createSectionButton("editAdmin", IconKind.EDIT);
 		editAdminButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {

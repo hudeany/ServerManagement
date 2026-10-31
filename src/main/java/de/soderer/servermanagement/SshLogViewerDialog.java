@@ -34,7 +34,6 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
 import javax.swing.BorderFactory;
-import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -58,9 +57,12 @@ import com.jcraft.jsch.Session;
 import de.soderer.sshkeyformats.SshKey;
 import de.soderer.sshkeyformats.SshKeyReader;
 import de.soderer.sshkeyformats.SshKeyWriter;
+import de.soderer.swing.modern.Button;
 import de.soderer.swing.modern.ButtonStyle;
+import de.soderer.swing.modern.GradientHeader;
 import de.soderer.swing.modern.IconKind;
 import de.soderer.swing.modern.ModernUi;
+import de.soderer.swing.modern.ThemeIcon;
 import de.soderer.utilities.LangResources;
 import de.soderer.utilities.StringUtilities;
 
@@ -77,7 +79,7 @@ public class SshLogViewerDialog extends JFrame {
 	private JTextPane logTextPane;
 	private StyledDocument logDoc;
 	private JLabel statusLabel;
-	private JButton connectButton;
+	private Button connectButton;
 	private JCheckBox scrollLockCheckBox;
 	private JCheckBox lineWrapCheckBox;
 	private JScrollPane logScrollPane;
@@ -212,13 +214,13 @@ public class SshLogViewerDialog extends JFrame {
 	 * Gradient header with the window title.
 	 */
 	private JPanel buildHeader() {
-		final ModernUi.GradientHeader header = new ModernUi.GradientHeader();
+		final GradientHeader header = new GradientHeader();
 		header.setBorder(BorderFactory.createEmptyBorder(11, 16, 11, 16));
 		final JLabel headerLabel = new JLabel(getTitle());
 		headerLabel.setForeground(Color.WHITE);
 		headerLabel.setFont(ModernUi.baseFont().deriveFont(Font.BOLD, ModernUi.baseFont().getSize2D() + 3f));
 		headerLabel.setIconTextGap(10);
-		headerLabel.setIcon(new ModernUi.ThemeIcon(IconKind.LOG, 20, Color.WHITE));
+		headerLabel.setIcon(new ThemeIcon(IconKind.LOG, 20, Color.WHITE));
 		header.add(headerLabel, BorderLayout.CENTER);
 		return header;
 	}
@@ -259,7 +261,7 @@ public class SshLogViewerDialog extends JFrame {
 		c.weightx = 1;
 		bar.add(infoField, c);
 
-		connectButton = new ModernUi.Button(LangResources.get("sshLogViewer.disconnect"), null, ButtonStyle.SECONDARY);
+		connectButton = new Button(LangResources.get("sshLogViewer.disconnect"), null, ButtonStyle.SECONDARY);
 		styleButton(connectButton);
 		// Fixed width, the text changes between "connect" and "disconnect"
 		connectButton.setPreferredSize(new Dimension(Math.max(110, connectButton.getPreferredSize().width), connectButton.getPreferredSize().height));
@@ -274,7 +276,7 @@ public class SshLogViewerDialog extends JFrame {
 		c.weightx = 0;
 		bar.add(connectButton, c);
 
-		final JButton clearButton = new ModernUi.Button(LangResources.get("sshLogViewer.clear"), IconKind.TRASH, ButtonStyle.SECONDARY);
+		final Button clearButton = new Button(LangResources.get("sshLogViewer.clear"), IconKind.TRASH, ButtonStyle.SECONDARY);
 		styleButton(clearButton);
 		clearButton.addActionListener(e -> {
 			rawLines.clear();
@@ -377,14 +379,14 @@ public class SshLogViewerDialog extends JFrame {
 		c.weightx = 0;
 		bar.add(filterModeCheckBox, c);
 
-		final JButton searchUpButton = new ModernUi.Button(LangResources.get("sshLogViewer.search.up"), null, ButtonStyle.SECONDARY);
+		final Button searchUpButton = new Button(LangResources.get("sshLogViewer.search.up"), null, ButtonStyle.SECONDARY);
 		styleButton(searchUpButton);
 		searchUpButton.addActionListener(e -> searchPrev());
 		c.gridx = 5;
 		c.weightx = 0;
 		bar.add(searchUpButton, c);
 
-		final JButton searchDownButton = new ModernUi.Button(LangResources.get("sshLogViewer.search.down"), IconKind.SEARCH, ButtonStyle.SECONDARY);
+		final Button searchDownButton = new Button(LangResources.get("sshLogViewer.search.down"), IconKind.SEARCH, ButtonStyle.SECONDARY);
 		styleButton(searchDownButton);
 		searchDownButton.addActionListener(e -> searchNext());
 		c.gridx = 6;
@@ -861,7 +863,7 @@ public class SshLogViewerDialog extends JFrame {
 		}
 	}
 
-	private static void styleButton(final JButton b) {
+	private static void styleButton(final Button b) {
 		b.setFocusPainted(false);
 	}
 

@@ -15,7 +15,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import javax.swing.JButton;
 import javax.swing.JPanel;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
@@ -25,6 +24,7 @@ import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableModel;
 import javax.swing.table.TableRowSorter;
 
+import de.soderer.swing.modern.Button;
 import de.soderer.swing.modern.ButtonStyle;
 import de.soderer.swing.modern.DialogStyle;
 import de.soderer.swing.modern.IconKind;
@@ -54,7 +54,7 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 	private DefaultTableModel knownSshKeysModel;
 	private JTable knownSshKeysTable;
 
-	private JButton okButton;
+	private Button okButton;
 
 	/** Preferred width of each key table */
 	private static final int KEY_TABLE_WIDTH = 260;
@@ -106,23 +106,23 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 		existingUserSshKeysModel.addColumn(LangResources.get("hash"));
 		existingUserSshKeysTable = createKeyTable(existingUserSshKeysModel);
 
-		final JButton dropExistingKeysButton = createDropButton(LangResources.get("dropExistingKeys"));
+		final Button dropExistingKeysButton = createDropButton(LangResources.get("dropExistingKeys"));
 		dropExistingKeysButton.addActionListener(event -> {
 			removeSelectedEntries(existingUserSshKeysTable, existingKeys);
 			loadTablesData();
 		});
 
 		// Transfer between server keys and configured keys
-		final JButton uploadAllConfiguredUserSshKeysButton = createTransferButton("«", LangResources.get("uploadAllConfiguredUserSshKeys"));
+		final Button uploadAllConfiguredUserSshKeysButton = createTransferButton("«", LangResources.get("uploadAllConfiguredUserSshKeys"));
 		uploadAllConfiguredUserSshKeysButton.addActionListener(event -> transferAllEntries(configuredSshKeysModel, existingKeys));
 
-		final JButton uploadSelectedConfiguredUserSshKeysButton = createTransferButton("‹", LangResources.get("uploadSelectedConfiguredUserSshKeys"));
+		final Button uploadSelectedConfiguredUserSshKeysButton = createTransferButton("‹", LangResources.get("uploadSelectedConfiguredUserSshKeys"));
 		uploadSelectedConfiguredUserSshKeysButton.addActionListener(event -> transferSelectedEntries(configuredSshKeysTable, existingKeys));
 
-		final JButton downloadSelectedConfiguredUserSshKeysButton = createTransferButton("›", LangResources.get("downloadSelectedExistingUserSshKeys"));
+		final Button downloadSelectedConfiguredUserSshKeysButton = createTransferButton("›", LangResources.get("downloadSelectedExistingUserSshKeys"));
 		downloadSelectedConfiguredUserSshKeysButton.addActionListener(event -> transferSelectedEntries(existingUserSshKeysTable, knownKeys));
 
-		final JButton downloadAllExistingUserSshKeysButton = createTransferButton("»", LangResources.get("downloadAllExistingUserSshKeys"));
+		final Button downloadAllExistingUserSshKeysButton = createTransferButton("»", LangResources.get("downloadAllExistingUserSshKeys"));
 		downloadAllExistingUserSshKeysButton.addActionListener(event -> transferAllEntries(existingUserSshKeysModel, knownKeys));
 
 		// Configured keys
@@ -131,17 +131,17 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 		configuredSshKeysModel.addColumn(LangResources.get("hash"));
 		configuredSshKeysTable = createKeyTable(configuredSshKeysModel);
 
-		final JButton dropConfiguredKeysButton = createDropButton(LangResources.get("dropConfiguredKeys"));
+		final Button dropConfiguredKeysButton = createDropButton(LangResources.get("dropConfiguredKeys"));
 		dropConfiguredKeysButton.addActionListener(event -> {
 			removeSelectedEntries(configuredSshKeysTable, existingKeys, configuredKeys);
 			loadTablesData();
 		});
 
 		// Transfer between configured keys and known keys
-		final JButton configureAllKnownUserSshKeysButton = createTransferButton("«", LangResources.get("configureAllKnownUserSshKeys"));
+		final Button configureAllKnownUserSshKeysButton = createTransferButton("«", LangResources.get("configureAllKnownUserSshKeys"));
 		configureAllKnownUserSshKeysButton.addActionListener(event -> transferAllEntries(knownSshKeysModel, configuredKeys));
 
-		final JButton configureSelectedKnownUserSshKeysButton = createTransferButton("‹", LangResources.get("configureSelectedKnownUserSshKeys"));
+		final Button configureSelectedKnownUserSshKeysButton = createTransferButton("‹", LangResources.get("configureSelectedKnownUserSshKeys"));
 		configureSelectedKnownUserSshKeysButton.addActionListener(event -> transferSelectedEntries(knownSshKeysTable, configuredKeys));
 
 		// Known keys
@@ -150,7 +150,7 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 		knownSshKeysModel.addColumn(LangResources.get("hash"));
 		knownSshKeysTable = createKeyTable(knownSshKeysModel);
 
-		final JButton dropKnownKeysButton = createDropButton(LangResources.get("dropKnownKeys"));
+		final Button dropKnownKeysButton = createDropButton(LangResources.get("dropKnownKeys"));
 		dropKnownKeysButton.addActionListener(event -> {
 			removeSelectedEntries(knownSshKeysTable, existingKeys, configuredKeys, knownKeys);
 			loadTablesData();
@@ -203,8 +203,8 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 	/**
 	 * Full width button below a key table, removing the selected keys.
 	 */
-	private static JButton createDropButton(final String toolTipText) {
-		final JButton button = new ModernUi.Button(null, IconKind.TRASH, ButtonStyle.DANGEROUS);
+	private static Button createDropButton(final String toolTipText) {
+		final Button button = new Button(null, IconKind.TRASH, ButtonStyle.DANGEROUS);
 		button.setToolTipText(toolTipText);
 		button.getAccessibleContext().setAccessibleName(toolTipText);
 		return button;
@@ -213,8 +213,8 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 	/**
 	 * Button between two key tables, transferring keys in the direction of its arrow.
 	 */
-	private static JButton createTransferButton(final String arrowText, final String toolTipText) {
-		final JButton button = new ModernUi.Button(arrowText, null, ButtonStyle.SECONDARY);
+	private static Button createTransferButton(final String arrowText, final String toolTipText) {
+		final Button button = new Button(arrowText, null, ButtonStyle.SECONDARY);
 		button.setFont(ModernUi.baseFont().deriveFont(Font.BOLD, ModernUi.baseFont().getSize2D() + 4f));
 		button.setToolTipText(toolTipText);
 		button.getAccessibleContext().setAccessibleName(toolTipText);
@@ -225,7 +225,7 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 	/**
 	 * Adds a column with title, key table and the button removing the selected keys.
 	 */
-	private static void addKeyColumn(final JPanel tablesPanel, final int column, final String title, final JTable table, final JButton dropButton) {
+	private static void addKeyColumn(final JPanel tablesPanel, final int column, final String title, final JTable table, final Button dropButton) {
 		final GridBagConstraints constraints = new GridBagConstraints();
 		constraints.gridx = column;
 		constraints.fill = GridBagConstraints.HORIZONTAL;
@@ -252,10 +252,10 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 	/**
 	 * Adds a column of transfer buttons between two key tables, vertically centered at the tables.
 	 */
-	private static void addTransferColumn(final JPanel tablesPanel, final int column, final JButton... buttons) {
+	private static void addTransferColumn(final JPanel tablesPanel, final int column, final Button... buttons) {
 		final JPanel buttonPanel = new JPanel(new GridLayout(buttons.length, 1, 0, 6));
 		buttonPanel.setOpaque(false);
-		for (final JButton button : buttons) {
+		for (final Button button : buttons) {
 			buttonPanel.add(button);
 		}
 

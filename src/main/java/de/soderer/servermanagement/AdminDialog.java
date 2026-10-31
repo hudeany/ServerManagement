@@ -10,7 +10,6 @@ import java.io.File;
 import java.text.MessageFormat;
 import java.util.Locale;
 
-import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JPanel;
@@ -20,6 +19,7 @@ import javax.swing.JTextField;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 
+import de.soderer.swing.modern.Button;
 import de.soderer.swing.modern.ButtonStyle;
 import de.soderer.swing.modern.IconKind;
 import de.soderer.swing.modern.ModalDialog;
@@ -39,7 +39,7 @@ public class AdminDialog extends ModalDialog<Integer> {
 
 	private final String text;
 
-	private JButton okButton;
+	private Button okButton;
 
 	private String username = null;
 	private String privateKeyFilePath = null;
@@ -98,7 +98,7 @@ public class AdminDialog extends ModalDialog<Integer> {
 			checkButtonStatus();
 		}));
 
-		final JButton privateKeyFileButton = new ModernUi.Button(null, IconKind.FOLDER, ButtonStyle.SECONDARY);
+		final Button privateKeyFileButton = new Button(null, IconKind.FOLDER, ButtonStyle.SECONDARY);
 		privateKeyFileButton.setPreferredSize(new Dimension(FIELD_BUTTON_SIZE, FIELD_BUTTON_SIZE));
 		privateKeyFileButton.setToolTipText(getI18NString("privateKeyFilePath"));
 		privateKeyFileButton.addActionListener(event -> {

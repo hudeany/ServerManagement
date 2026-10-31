@@ -7,7 +7,7 @@ import java.io.FileInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
-import javax.swing.JButton;
+import de.soderer.swing.modern.Button;
 import javax.swing.JFileChooser;
 import javax.swing.JTable;
 import javax.swing.table.DefaultTableModel;
@@ -32,7 +32,7 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 	private static final long serialVersionUID = -1512808290727321131L;
 
 	private final JTable table;
-	private final JButton removePublicKeysButton;
+	private final Button removePublicKeysButton;
 
 	public KnownPublicKeysDialog(final ServerManagementGui serverManagementGui, final String title, final ServerManagementConfiguration serverManagementConfiguration) {
 		super(serverManagementGui, title, IconKind.LOCK);
@@ -147,7 +147,7 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 			serverManagementGui.signalUnsavedChanges();
 		});
 
-		final JButton closeButton = addButton(LangResources.get("close"), null, ButtonStyle.PRIMARY, event -> {
+		final Button closeButton = addButton(LangResources.get("close"), null, ButtonStyle.PRIMARY, event -> {
 			returnValue = false;
 			dispose();
 		});

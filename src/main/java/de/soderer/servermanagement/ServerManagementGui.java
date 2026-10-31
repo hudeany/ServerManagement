@@ -32,7 +32,6 @@ import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
-import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -53,8 +52,11 @@ import de.soderer.network.NetworkUtilities;
 import de.soderer.servermanagement.config.Server;
 import de.soderer.servermanagement.config.ServerManagementConfiguration;
 import de.soderer.servermanagement.worker.CheckAllServerStatusWorker;
+import de.soderer.swing.modern.Button;
 import de.soderer.swing.modern.ButtonStyle;
+import de.soderer.swing.modern.Card;
 import de.soderer.swing.modern.DialogStyle;
+import de.soderer.swing.modern.GradientHeader;
 import de.soderer.swing.modern.IconKind;
 import de.soderer.swing.modern.ModernUi;
 import de.soderer.swing.modern.ProgressDialog;
@@ -159,7 +161,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 
 		final JPanel serverInformationPanel = createServerItemsPanel();
 
-		final JButton configurationButton = createHeaderButton(IconKind.GEAR, LangResources.get("configuration"));
+		final Button configurationButton = createHeaderButton(IconKind.GEAR, LangResources.get("configuration"));
 		configurationButton.addActionListener(event -> openConfigurationDialog(serverManagementGui));
 
 		final JPanel mainPanel = new JPanel(new BorderLayout(0, 8));
@@ -187,8 +189,8 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 	/**
 	 * Gradient header with logo, application name, version and the configuration button.
 	 */
-	private JPanel createHeader(final JButton configurationButton) {
-		final ModernUi.GradientHeader header = new ModernUi.GradientHeader();
+	private JPanel createHeader(final Button configurationButton) {
+		final GradientHeader header = new GradientHeader();
 		final java.net.URL iconUrl = getClass().getClassLoader().getResource("ServerManagement_Icon.png");
 		header.add(ModernUi.createLogo(iconUrl == null ? null : new ImageIcon(iconUrl)), BorderLayout.WEST);
 
@@ -217,8 +219,8 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 	/**
 	 * Transparent icon button for the gradient header; the text is shown as tooltip.
 	 */
-	private static JButton createHeaderButton(final IconKind iconKind, final String text) {
-		final JButton button = new ModernUi.Button(null, iconKind, ButtonStyle.HEADER);
+	private static Button createHeaderButton(final IconKind iconKind, final String text) {
+		final Button button = new Button(null, iconKind, ButtonStyle.HEADER);
 		button.setToolTipText(text);
 		button.getAccessibleContext().setAccessibleName(text);
 		return button;
@@ -258,7 +260,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 	 */
 	private JComponent createActionBar(final ServerManagementGui serverManagementGui, final JPanel serverInformationPanel) {
 		// Status check Button
-		final JButton startButton = new ModernUi.Button(LangResources.get("checkServerStatus"), IconKind.REFRESH, ButtonStyle.PRIMARY);
+		final Button startButton = new Button(LangResources.get("checkServerStatus"), IconKind.REFRESH, ButtonStyle.PRIMARY);
 		startButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -270,7 +272,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 			}
 		});
 
-		final JButton addServerButton = new ModernUi.Button(LangResources.get("addServer"), IconKind.PLUS, ButtonStyle.SECONDARY);
+		final Button addServerButton = new Button(LangResources.get("addServer"), IconKind.PLUS, ButtonStyle.SECONDARY);
 		addServerButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -305,7 +307,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 			}
 		});
 
-		final JButton removeServerButton = new ModernUi.Button(LangResources.get("removeServer"), IconKind.TRASH, ButtonStyle.SECONDARY);
+		final Button removeServerButton = new Button(LangResources.get("removeServer"), IconKind.TRASH, ButtonStyle.SECONDARY);
 		removeServerButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -361,7 +363,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 			}
 		});
 
-		final JButton managePublicKeysButton = new ModernUi.Button(LangResources.get("managePublicKeys"), IconKind.LOCK, ButtonStyle.SECONDARY);
+		final Button managePublicKeysButton = new Button(LangResources.get("managePublicKeys"), IconKind.LOCK, ButtonStyle.SECONDARY);
 		managePublicKeysButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -377,7 +379,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 		});
 
 		// Save Button
-		final JButton saveSettingsButton = new ModernUi.Button(LangResources.get("saveServerSettings"), IconKind.CHECK, ButtonStyle.SECONDARY);
+		final Button saveSettingsButton = new Button(LangResources.get("saveServerSettings"), IconKind.CHECK, ButtonStyle.SECONDARY);
 		saveSettingsButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -393,7 +395,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 		});
 
 		// Close Button
-		final JButton closeButton = new ModernUi.Button(LangResources.get("close"), null, ButtonStyle.SECONDARY);
+		final Button closeButton = new Button(LangResources.get("close"), null, ButtonStyle.SECONDARY);
 		closeButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
@@ -424,7 +426,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 		actionContent.add(leftActions, BorderLayout.WEST);
 		actionContent.add(rightActions, BorderLayout.EAST);
 
-		final ModernUi.Card actionCard = new ModernUi.Card(null, null, 6);
+		final Card actionCard = new Card(null, null, 6);
 		actionCard.setContent(actionContent);
 		return actionCard;
 	}

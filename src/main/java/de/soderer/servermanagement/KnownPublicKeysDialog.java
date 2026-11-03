@@ -1,15 +1,18 @@
 package de.soderer.servermanagement;
 
 import java.awt.BorderLayout;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Objects;
 
-import de.soderer.swing.modern.Button;
 import javax.swing.JFileChooser;
 import javax.swing.JTable;
+import javax.swing.SwingUtilities;
 import javax.swing.table.DefaultTableModel;
 
 import de.soderer.servermanagement.config.KnownPublicSshKey;
@@ -19,6 +22,7 @@ import de.soderer.servermanagement.config.User;
 import de.soderer.sshkeyformats.SshKey;
 import de.soderer.sshkeyformats.SshKeyReader;
 import de.soderer.sshkeyformats.data.Algorithm;
+import de.soderer.swing.modern.Button;
 import de.soderer.swing.modern.ButtonStyle;
 import de.soderer.swing.modern.DialogStyle;
 import de.soderer.swing.modern.IconKind;
@@ -32,6 +36,7 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 	private static final long serialVersionUID = -1512808290727321131L;
 
 	private final JTable table;
+	private final Button editPublicKeyButton;
 	private final Button removePublicKeysButton;
 
 	public KnownPublicKeysDialog(final ServerManagementGui serverManagementGui, final String title, final ServerManagementConfiguration serverManagementConfiguration) {
@@ -57,6 +62,14 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 		table.getColumnModel().getColumn(4).setPreferredWidth(120);
 
 		table.getSelectionModel().addListSelectionListener(e -> checkButtonStatus());
+		table.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseClicked(final MouseEvent event) {
+				if (event.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(event) && table.rowAtPoint(event.getPoint()) >= 0 && editPublicKeyButton.isEnabled()) {
+					editPublicKeyButton.doClick();
+				}
+			}
+		});
 
 		getContentArea().add(ModernTables.createScrollPane(table, 760, 260), BorderLayout.CENTER);
 
@@ -108,11 +121,14 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 					newKey.setKeyId(keyId.trim());
 
 					final String keyName = new SimpleInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addPublicKey"), LangResources.get("enterKeyName")).open();
-					if (StringUtilities.isNotBlank(keyName)) {
-						newKey.setName(keyName);
-						serverManagementConfiguration.getKnownPublicSshKeys().add(newKey);
-						keysAdded = true;
+					if (keyName == null) {
+						// Canceled
+						continue;
 					}
+					// An empty key name is allowed, then the key id is shown in the user key assignment
+					newKey.setName(StringUtilities.isBlank(keyName) ? null : keyName.trim());
+					serverManagementConfiguration.getKnownPublicSshKeys().add(newKey);
+					keysAdded = true;
 				}
 			} catch (final Exception e) {
 				new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
@@ -125,12 +141,59 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 			}
 		});
 
+		editPublicKeyButton = addLeftButton(LangResources.get("editPublicKey"), IconKind.EDIT, ButtonStyle.SECONDARY, event -> {
+			if (table.getSelectedRows().length != 1) {
+				return;
+			}
+
+			final int modelRowIndex = table.convertRowIndexToModel(table.getSelectedRow());
+			final String oldKeyId = (String) table.getModel().getValueAt(modelRowIndex, 3);
+			final KnownPublicSshKey keyToEdit = serverManagementConfiguration.getKnownPublicSshKeyByKeyId(oldKeyId);
+			if (keyToEdit == null) {
+				return;
+			}
+
+			final EditKnownPublicKeyDialog editDialog = new EditKnownPublicKeyDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("editPublicKey"), serverManagementConfiguration, oldKeyId, keyToEdit.getName());
+			if (!Boolean.TRUE.equals(editDialog.open())) {
+				// Canceled
+				return;
+			}
+			final String newKeyId = editDialog.getKeyId();
+			// An empty key name is allowed, then the key id is shown in the user key assignment
+			final String newKeyName = StringUtilities.isBlank(editDialog.getKeyName()) ? null : editDialog.getKeyName().trim();
+			final String oldKeyName = StringUtilities.isBlank(keyToEdit.getName()) ? null : keyToEdit.getName();
+
+			if (newKeyId.equals(oldKeyId) && Objects.equals(newKeyName, oldKeyName)) {
+				// Nothing changed
+				return;
+			}
+
+			if (!newKeyId.equals(oldKeyId)) {
+				// Users reference keys by their id, so all references must be renamed too
+				for (final Server server : serverManagementConfiguration.getServers()) {
+					for (final User user : server.getManagedUsers()) {
+						if (user.getAuthorized_key_ids().remove(oldKeyId) && !user.getAuthorized_key_ids().contains(newKeyId)) {
+							user.getAuthorized_key_ids().add(newKeyId);
+						}
+					}
+				}
+				keyToEdit.setKeyId(newKeyId);
+			}
+			keyToEdit.setName(newKeyName);
+
+			loadPublicKeysInTable(model, serverManagementConfiguration);
+
+			returnValue = true;
+
+			serverManagementGui.signalUnsavedChanges();
+		});
+
 		removePublicKeysButton = addLeftButton(LangResources.get("removePublicKeys"), IconKind.TRASH, ButtonStyle.DANGEROUS, event -> {
 			if (new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, LangResources.get("removePublicKeys") + ": " + table.getSelectedRows().length, LangResources.get("yes"), LangResources.get("no")).withDialogStyle(DialogStyle.WARNING).open() != 0) {
 				return;
 			}
 			for (final int rowIndex : table.getSelectedRows()) {
-				final String keyId = (String) table.getModel().getValueAt(rowIndex, 3);
+				final String keyId = (String) table.getModel().getValueAt(table.convertRowIndexToModel(rowIndex), 3);
 				serverManagementConfiguration.getKnownPublicSshKeys().remove(serverManagementConfiguration.getKnownPublicSshKeyByKeyId(keyId));
 
 				for (final Server server : serverManagementConfiguration.getServers()) {
@@ -198,11 +261,9 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 	}
 
 	private void checkButtonStatus() {
-		if (table.getSelectedRows().length > 0) {
-			removePublicKeysButton.setEnabled(true);
-		} else {
-			removePublicKeysButton.setEnabled(false);
-		}
+		final int selectedRowCount = table.getSelectedRows().length;
+		editPublicKeyButton.setEnabled(selectedRowCount == 1);
+		removePublicKeysButton.setEnabled(selectedRowCount > 0);
 	}
 
 	private File selectFile(String basePath, final String text) {

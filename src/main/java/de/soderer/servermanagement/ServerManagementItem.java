@@ -1096,7 +1096,12 @@ public class ServerManagementItem extends JPanel {
 			knownKeys.put(key.getHash(), key.getKeyId());
 		}
 
-		final UserPublicKeysDialog userPublicKeysDialog = new UserPublicKeysDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, LangResources.get("editUserPublicKeys", username, server.getHost()), adminKeyHash, existingKeys, configuredKeys, knownKeys);
+		final Map<String, String> keyNamesByKeyId = new HashMap<>();
+		for (final KnownPublicSshKey knownPublicSshKey : serverManagementConfiguration.getKnownPublicSshKeys()) {
+			keyNamesByKeyId.put(knownPublicSshKey.getKeyId(), knownPublicSshKey.getName());
+		}
+
+		final UserPublicKeysDialog userPublicKeysDialog = new UserPublicKeysDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, LangResources.get("editUserPublicKeys", username, server.getHost()), adminKeyHash, existingKeys, configuredKeys, knownKeys, keyNamesByKeyId);
 		if (userPublicKeysDialog.open()) {
 			try {
 				// Known public keys

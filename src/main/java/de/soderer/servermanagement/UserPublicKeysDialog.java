@@ -45,6 +45,9 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 	private final Map<String, String> configuredKeys;
 	private final Map<String, String> knownKeys;
 
+	/** Display names of the keys by their key id */
+	private final Map<String, String> keyNamesByKeyId;
+
 	private DefaultTableModel existingUserSshKeysModel;
 	private JTable existingUserSshKeysTable;
 
@@ -65,7 +68,19 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 	/** Width of the transfer buttons between the tables */
 	private static final int TRANSFER_BUTTON_WIDTH = 52;
 
-	public UserPublicKeysDialog(final ServerManagementGui serverManagementGui, final String title, final String text, final String adminKeyHash, final Map<String, String> existingKeys, final Map<String, String> configuredKeys, final Map<String, String> knownKeys) throws Exception {
+	/** Model column index of the displayed key name */
+	private static final int COLUMN_DISPLAY_NAME = 0;
+
+	/** Model column index of the key hash */
+	private static final int COLUMN_HASH = 1;
+
+	/** Model column index of the key id (not visible, only used for transfers) */
+	private static final int COLUMN_KEY_ID = 2;
+
+	/**
+	 * @param keyNamesByKeyId Display names of the keys by their key id. Keys without a name here are displayed by their id.
+	 */
+	public UserPublicKeysDialog(final ServerManagementGui serverManagementGui, final String title, final String text, final String adminKeyHash, final Map<String, String> existingKeys, final Map<String, String> configuredKeys, final Map<String, String> knownKeys, final Map<String, String> keyNamesByKeyId) throws Exception {
 		super(serverManagementGui, title, IconKind.EDIT);
 
 		this.text = text;
@@ -80,6 +95,11 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 
 		this.knownKeys = new HashMap<>();
 		this.knownKeys.putAll(knownKeys);
+
+		this.keyNamesByKeyId = new HashMap<>();
+		if (keyNamesByKeyId != null) {
+			this.keyNamesByKeyId.putAll(keyNamesByKeyId);
+		}
 
 		setResizable(false);
 
@@ -104,6 +124,7 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 		existingUserSshKeysModel = new DefaultTableModel();
 		existingUserSshKeysModel.addColumn(LangResources.get("keyName"));
 		existingUserSshKeysModel.addColumn(LangResources.get("hash"));
+		existingUserSshKeysModel.addColumn("KeyId");
 		existingUserSshKeysTable = createKeyTable(existingUserSshKeysModel);
 
 		final Button dropExistingKeysButton = createDropButton(LangResources.get("dropExistingKeys"));
@@ -129,6 +150,7 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 		configuredSshKeysModel = new DefaultTableModel();
 		configuredSshKeysModel.addColumn(LangResources.get("keyName"));
 		configuredSshKeysModel.addColumn(LangResources.get("hash"));
+		configuredSshKeysModel.addColumn("KeyId");
 		configuredSshKeysTable = createKeyTable(configuredSshKeysModel);
 
 		final Button dropConfiguredKeysButton = createDropButton(LangResources.get("dropConfiguredKeys"));
@@ -148,6 +170,7 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 		knownSshKeysModel = new DefaultTableModel();
 		knownSshKeysModel.addColumn(LangResources.get("keyName"));
 		knownSshKeysModel.addColumn(LangResources.get("hash"));
+		knownSshKeysModel.addColumn("KeyId");
 		knownSshKeysTable = createKeyTable(knownSshKeysModel);
 
 		final Button dropKnownKeysButton = createDropButton(LangResources.get("dropKnownKeys"));
@@ -191,10 +214,12 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 	 */
 	private static JTable createKeyTable(final DefaultTableModel model) {
 		final JTable table = ModernTables.createTable(model);
+		// The key id is only needed internally for transfers, the name column shows the key name instead
+		table.removeColumn(table.getColumnModel().getColumn(COLUMN_KEY_ID));
 		final TableRowSorter<TableModel> sorter = new TableRowSorter<>(table.getModel());
 		final List<RowSorter.SortKey> sortKeys = new ArrayList<>();
-		sortKeys.add(new RowSorter.SortKey(1, SortOrder.ASCENDING));
-		sortKeys.add(new RowSorter.SortKey(0, SortOrder.ASCENDING));
+		sortKeys.add(new RowSorter.SortKey(COLUMN_HASH, SortOrder.ASCENDING));
+		sortKeys.add(new RowSorter.SortKey(COLUMN_DISPLAY_NAME, SortOrder.ASCENDING));
 		sorter.setSortKeys(sortKeys);
 		table.setRowSorter(sorter);
 		return table;
@@ -271,28 +296,39 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 			existingUserSshKeysModel.removeRow(i);
 		}
 		for (final Entry<String, String> entry : existingKeys.entrySet()) {
-			existingUserSshKeysModel.addRow(new String[] { entry.getValue(), entry.getKey() });
+			existingUserSshKeysModel.addRow(new String[] { getDisplayName(entry.getValue()), entry.getKey(), entry.getValue() });
 		}
 
 		for (int i = configuredSshKeysModel.getRowCount() - 1; i >= 0; i--) {
 			configuredSshKeysModel.removeRow(i);
 		}
 		for (final Entry<String, String> entry : configuredKeys.entrySet()) {
-			configuredSshKeysModel.addRow(new String[] { entry.getValue(), entry.getKey() });
+			configuredSshKeysModel.addRow(new String[] { getDisplayName(entry.getValue()), entry.getKey(), entry.getValue() });
 		}
 
 		for (int i = knownSshKeysModel.getRowCount() - 1; i >= 0; i--) {
 			knownSshKeysModel.removeRow(i);
 		}
 		for (final Entry<String, String> entry : knownKeys.entrySet()) {
-			knownSshKeysModel.addRow(new String[] { entry.getValue(), entry.getKey() });
+			knownSshKeysModel.addRow(new String[] { getDisplayName(entry.getValue()), entry.getKey(), entry.getValue() });
 		}
+	}
+
+	/**
+	 * Returns the key name if available, otherwise the key id itself.
+	 */
+	private String getDisplayName(final String keyId) {
+		if (keyId == null) {
+			return "";
+		}
+		final String keyName = keyNamesByKeyId.get(keyId);
+		return StringUtilities.isNotBlank(keyName) ? keyName : keyId;
 	}
 
 	@SafeVarargs
 	private final void removeSelectedEntries(final JTable sourceTable, final Map<String, String>... destinationMaps) {
 		for (final int rowIndex1 : sourceTable.getSelectedRows()) {
-			final String keyHash = (String) sourceTable.getValueAt(rowIndex1, 1);
+			final String keyHash = (String) sourceTable.getModel().getValueAt(sourceTable.convertRowIndexToModel(rowIndex1), COLUMN_HASH);
 			if (!keyHash.equalsIgnoreCase(adminKeyHash)
 					|| 0 == new QuestionDialog(this, ServerManagement.APPLICATION_NAME, LangResources.get("adminKeyRemoval"), LangResources.get("yes"), LangResources.get("no")).withDialogStyle(DialogStyle.WARNING).open()) {
 				for (final Map<String, String> destinationMap : destinationMaps) {
@@ -304,8 +340,8 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 
 	private void transferAllEntries(final DefaultTableModel sourceModel, final Map<String, String> destinationMap) {
 		for (int rowIndex1 = 0; rowIndex1 < sourceModel.getRowCount(); rowIndex1++) {
-			final String keyIdentifier = (String) sourceModel.getValueAt(rowIndex1, 0);
-			final String keyHash = (String) sourceModel.getValueAt(rowIndex1, 1);
+			final String keyIdentifier = (String) sourceModel.getValueAt(rowIndex1, COLUMN_KEY_ID);
+			final String keyHash = (String) sourceModel.getValueAt(rowIndex1, COLUMN_HASH);
 
 			boolean found = false;
 			for (final Entry<String, String> knownKey : destinationMap.entrySet()) {
@@ -325,8 +361,9 @@ public class UserPublicKeysDialog extends ModalDialog<Boolean> {
 
 	private void transferSelectedEntries(final JTable sourceTable, final Map<String, String> destinationMap) {
 		for (final int rowIndex1 : sourceTable.getSelectedRows()) {
-			final String keyIdentifier = (String) sourceTable.getValueAt(rowIndex1, 0);
-			final String keyHash = (String) sourceTable.getValueAt(rowIndex1, 1);
+			final int modelRowIndex = sourceTable.convertRowIndexToModel(rowIndex1);
+			final String keyIdentifier = (String) sourceTable.getModel().getValueAt(modelRowIndex, COLUMN_KEY_ID);
+			final String keyHash = (String) sourceTable.getModel().getValueAt(modelRowIndex, COLUMN_HASH);
 
 			boolean found = false;
 			for (final Entry<String, String> knownKey : destinationMap.entrySet()) {

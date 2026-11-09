@@ -10,16 +10,16 @@
 	<property name="bcpkix.version" value="1.86" />
 	<property name="bcprov.version" value="1.86" />
 	<property name="jsch.version" value="2.28.8" />
-	<property name="csv.version" value="26.1.15" />
-	<property name="json.version" value="26.2.18" />
+	<property name="csv.version" value="26.1.16" />
+	<property name="json.version" value="26.2.19" />
 	<property name="sshkeyformats.version" value="26.1.13" />
-	<property name="proxyautoconfig.version" value="26.1.6" />
-	<property name="network.version" value="26.0.41" />
-	<property name="soderer-console.version" value="26.0.16" />
-	<property name="soderer-swing.version" value="26.0.45" />
+	<property name="proxyautoconfig.version" value="26.1.7" />
+	<property name="network.version" value="26.0.42" />
+	<property name="soderer-console.version" value="26.0.17" />
+	<property name="soderer-swing.version" value="26.0.46" />
 	<property name="soderer-utilities.version" value="26.3.7" />
-	<property name="soderer-remote.version" value="26.0.21" />
-	<property name="soderer-applicationbase.version" value="26.0.61" />
+	<property name="soderer-remote.version" value="26.0.22" />
+	<property name="soderer-applicationbase.version" value="26.0.62" />
 
 	<patternset id="application.resources">
 		<include name="**/LanguageProperties*.properties" />
@@ -63,7 +63,7 @@
 	<!-- Tests run automatically, if the project has a "src/test/java" directory (JUnit 6, test libs in "lib_test").  -->
 	<!-- ============================================================================================================ -->
 
-	<property name="antbuildhelp.version" value="26.0.19" />
+	<property name="antbuildhelp.version" value="26.0.20" />
 
 	<!-- Test libraries, same for all applications -->
 	<property name="hamcrest.version" value="3.0" />

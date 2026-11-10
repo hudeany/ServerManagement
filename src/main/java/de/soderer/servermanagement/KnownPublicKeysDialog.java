@@ -7,6 +7,8 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.Base64;
 import java.util.List;
 import java.util.Objects;
 
@@ -42,13 +44,14 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 	public KnownPublicKeysDialog(final ServerManagementGui serverManagementGui, final String title, final ServerManagementConfiguration serverManagementConfiguration) {
 		super(serverManagementGui, title, IconKind.LOCK);
 
-		setResizable(false);
+		setResizable(true);
 
 		final DefaultTableModel model = new DefaultTableModel();
 		model.addColumn("Keytype");
 		model.addColumn("Keylength");
 		model.addColumn("Keyname");
 		model.addColumn("ID/Comment");
+		model.addColumn("Keyhash");
 		model.addColumn("Keydata");
 
 		loadPublicKeysInTable(model, serverManagementConfiguration);
@@ -59,7 +62,8 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 		table.getColumnModel().getColumn(1).setPreferredWidth(15);
 		table.getColumnModel().getColumn(2).setPreferredWidth(40);
 		table.getColumnModel().getColumn(3).setPreferredWidth(40);
-		table.getColumnModel().getColumn(4).setPreferredWidth(120);
+		table.getColumnModel().getColumn(4).setPreferredWidth(140);
+		table.getColumnModel().getColumn(5).setPreferredWidth(120);
 
 		table.getSelectionModel().addListSelectionListener(e -> checkButtonStatus());
 		table.addMouseListener(new MouseAdapter() {
@@ -71,7 +75,7 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 			}
 		});
 
-		getContentArea().add(ModernTables.createScrollPane(table, 760, 260), BorderLayout.CENTER);
+		getContentArea().add(ModernTables.createScrollPane(table, 980, 260), BorderLayout.CENTER);
 
 		addLeftButton(LangResources.get("addPublicKey"), IconKind.PLUS, ButtonStyle.SECONDARY, event -> {
 			final String homePath = System.getProperty("user.home") + File.separator + ".ssh" + File.separator;
@@ -255,8 +259,29 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 					keyLength > 0 ? Integer.toString(keyLength) : "",
 							knownPublicSshKey.getName(),
 							knownPublicSshKey.getKeyId(),
+							getKeyHash(knownPublicSshKey.getKey()),
 							StringUtilities.trimStringToMaximumLength(knownPublicSshKey.getKey(), 30, "...")
 			});
+		}
+	}
+
+	/**
+	 * Calculates the SHA256 fingerprint of a public key in the same format as "ssh-keygen -lf" (e.g. "SHA256:nThbg6kX...")
+	 *
+	 * @param base64KeyData the base64 encoded key blob, as used in authorized_keys files
+	 * @return the fingerprint or an empty string if the key data is not valid base64
+	 */
+	private static String getKeyHash(final String base64KeyData) {
+		if (StringUtilities.isBlank(base64KeyData)) {
+			return "";
+		}
+		try {
+			final byte[] keyBlob = Base64.getDecoder().decode(base64KeyData.trim());
+			final byte[] hash = MessageDigest.getInstance("SHA-256").digest(keyBlob);
+			// OpenSSH shows the base64 encoded hash without padding
+			return "SHA256:" + Base64.getEncoder().withoutPadding().encodeToString(hash);
+		} catch (@SuppressWarnings("unused") final Exception e) {
+			return "";
 		}
 	}
 

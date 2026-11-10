@@ -9,6 +9,7 @@ import java.io.FileInputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Base64;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 
@@ -16,6 +17,7 @@ import javax.swing.JFileChooser;
 import javax.swing.JTable;
 import javax.swing.SwingUtilities;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableRowSorter;
 
 import de.soderer.servermanagement.config.KnownPublicSshKey;
 import de.soderer.servermanagement.config.Server;
@@ -64,6 +66,12 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 		table.getColumnModel().getColumn(3).setPreferredWidth(40);
 		table.getColumnModel().getColumn(4).setPreferredWidth(140);
 		table.getColumnModel().getColumn(5).setPreferredWidth(120);
+
+		// Make the table sortable by clicking on the column headers
+		final TableRowSorter<DefaultTableModel> rowSorter = new TableRowSorter<>(model);
+		// The key length is shown as text, so it must be compared numerically to avoid "4096" < "521"
+		rowSorter.setComparator(1, Comparator.comparingInt((final Object value) -> StringUtilities.isBlank((String) value) ? 0 : Integer.parseInt((String) value)));
+		table.setRowSorter(rowSorter);
 
 		table.getSelectionModel().addListSelectionListener(e -> checkButtonStatus());
 		table.addMouseListener(new MouseAdapter() {

@@ -22,6 +22,7 @@ import de.soderer.utilities.StringUtilities;
 
 /**
  * Dialog for editing key id and key name of a known public ssh key in one step.
+ * The MD5 and SHA256 hashes of the key are shown read-only for identification.
  * Input is validated before the dialog closes, so the user can correct mistakes without retyping everything.
  */
 public class EditKnownPublicKeyDialog extends ModalDialog<Boolean> {
@@ -33,13 +34,19 @@ public class EditKnownPublicKeyDialog extends ModalDialog<Boolean> {
 	private String keyId;
 	private String keyName;
 
-	public EditKnownPublicKeyDialog(final ServerManagementGui serverManagementGui, final String title, final ServerManagementConfiguration serverManagementConfiguration, final String oldKeyId, final String oldKeyName) {
+	public EditKnownPublicKeyDialog(final ServerManagementGui serverManagementGui, final String title, final ServerManagementConfiguration serverManagementConfiguration, final String oldKeyId, final String oldKeyName, final String keyData) {
 		super(serverManagementGui, title, IconKind.LOCK);
 
 		setResizable(false);
 
 		keyIdField = new JTextField(oldKeyId == null ? "" : oldKeyId, 30);
 		keyNameField = new JTextField(oldKeyName == null ? "" : oldKeyName, 30);
+
+		// The hashes are only shown for information, but stay selectable, so they can be copied
+		final JTextField md5HashField = new JTextField(KnownPublicKeysDialog.getMd5KeyHash(keyData), 30);
+		md5HashField.setEditable(false);
+		final JTextField sha256HashField = new JTextField(KnownPublicKeysDialog.getSha256KeyHash(keyData), 50);
+		sha256HashField.setEditable(false);
 
 		final JPanel formPanel = new JPanel(new GridBagLayout());
 		formPanel.setOpaque(false);
@@ -70,6 +77,28 @@ public class EditKnownPublicKeyDialog extends ModalDialog<Boolean> {
 		constraints.fill = GridBagConstraints.HORIZONTAL;
 		constraints.weightx = 1;
 		formPanel.add(keyNameField, constraints);
+
+		constraints.gridx = 0;
+		constraints.gridy = 2;
+		constraints.fill = GridBagConstraints.NONE;
+		constraints.weightx = 0;
+		formPanel.add(new JLabel("MD5"), constraints);
+
+		constraints.gridx = 1;
+		constraints.fill = GridBagConstraints.HORIZONTAL;
+		constraints.weightx = 1;
+		formPanel.add(md5HashField, constraints);
+
+		constraints.gridx = 0;
+		constraints.gridy = 3;
+		constraints.fill = GridBagConstraints.NONE;
+		constraints.weightx = 0;
+		formPanel.add(new JLabel("SHA256"), constraints);
+
+		constraints.gridx = 1;
+		constraints.fill = GridBagConstraints.HORIZONTAL;
+		constraints.weightx = 1;
+		formPanel.add(sha256HashField, constraints);
 
 		getContentArea().add(formPanel, BorderLayout.CENTER);
 

@@ -157,7 +157,7 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 				return;
 			}
 
-			final EditKnownPublicKeyDialog editDialog = new EditKnownPublicKeyDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("editPublicKey"), serverManagementConfiguration, oldKeyId, keyToEdit.getName());
+			final EditKnownPublicKeyDialog editDialog = new EditKnownPublicKeyDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("editPublicKey"), serverManagementConfiguration, oldKeyId, keyToEdit.getName(), keyToEdit.getKey());
 			if (!Boolean.TRUE.equals(editDialog.open())) {
 				// Canceled
 				return;
@@ -259,29 +259,51 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 					keyLength > 0 ? Integer.toString(keyLength) : "",
 							knownPublicSshKey.getName(),
 							knownPublicSshKey.getKeyId(),
-							getKeyHash(knownPublicSshKey.getKey()),
+							getMd5KeyHash(knownPublicSshKey.getKey()),
 							StringUtilities.trimStringToMaximumLength(knownPublicSshKey.getKey(), 30, "...")
 			});
 		}
 	}
 
 	/**
-	 * Calculates the SHA256 fingerprint of a public key in the same format as "ssh-keygen -lf" (e.g. "SHA256:nThbg6kX...")
+	 * Calculates the MD5 fingerprint of a public key as uppercase hex string without separators (e.g. "3FA27C...")
 	 *
 	 * @param base64KeyData the base64 encoded key blob, as used in authorized_keys files
 	 * @return the fingerprint or an empty string if the key data is not valid base64
 	 */
-	private static String getKeyHash(final String base64KeyData) {
-		if (StringUtilities.isBlank(base64KeyData)) {
+	public static String getMd5KeyHash(final String base64KeyData) {
+		final byte[] hash = getKeyHash(base64KeyData, "MD5");
+		if (hash == null) {
 			return "";
+		}
+		final StringBuilder fingerprint = new StringBuilder();
+		for (final byte hashByte : hash) {
+			fingerprint.append(String.format("%02X", hashByte & 0xFF));
+		}
+		return fingerprint.toString();
+	}
+
+	/**
+	 * Calculates the SHA256 fingerprint of a public key as unpadded base64 string like "ssh-keygen -lf", but without the "SHA256:" prefix (e.g. "nThbg6kX...").
+	 * Base64 is case sensitive, so this value must not be converted to upper or lower case.
+	 *
+	 * @param base64KeyData the base64 encoded key blob, as used in authorized_keys files
+	 * @return the fingerprint or an empty string if the key data is not valid base64
+	 */
+	public static String getSha256KeyHash(final String base64KeyData) {
+		final byte[] hash = getKeyHash(base64KeyData, "SHA-256");
+		return hash == null ? "" : Base64.getEncoder().withoutPadding().encodeToString(hash);
+	}
+
+	private static byte[] getKeyHash(final String base64KeyData, final String hashAlgorithm) {
+		if (StringUtilities.isBlank(base64KeyData)) {
+			return null;
 		}
 		try {
 			final byte[] keyBlob = Base64.getDecoder().decode(base64KeyData.trim());
-			final byte[] hash = MessageDigest.getInstance("SHA-256").digest(keyBlob);
-			// OpenSSH shows the base64 encoded hash without padding
-			return "SHA256:" + Base64.getEncoder().withoutPadding().encodeToString(hash);
+			return MessageDigest.getInstance(hashAlgorithm).digest(keyBlob);
 		} catch (@SuppressWarnings("unused") final Exception e) {
-			return "";
+			return null;
 		}
 	}
 

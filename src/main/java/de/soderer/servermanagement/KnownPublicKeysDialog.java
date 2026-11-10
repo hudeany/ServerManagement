@@ -8,6 +8,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
@@ -141,6 +142,19 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 					newKey.setName(StringUtilities.isBlank(keyName) ? null : keyName.trim());
 					serverManagementConfiguration.getKnownPublicSshKeys().add(newKey);
 					keysAdded = true;
+
+					// Optionally authorize the new key for all managed users on all servers
+					final int managedUserCount = countManagedUsers(serverManagementConfiguration);
+					if (managedUserCount > 0
+							&& new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addPublicKey"), LangResources.get("addPublicKeyToAllUsers") + ": " + newKey.getKeyId() + " (" + managedUserCount + ")", LangResources.get("yes"), LangResources.get("no")).withDialogStyle(DialogStyle.INFORMATION).open() == 0) {
+						for (final Server server : serverManagementConfiguration.getServers()) {
+							for (final User user : server.getManagedUsers()) {
+								if (!user.getAuthorized_key_ids().contains(newKey.getKeyId())) {
+									user.getAuthorized_key_ids().add(newKey.getKeyId());
+								}
+							}
+						}
+					}
 				}
 			} catch (final Exception e) {
 				new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
@@ -201,16 +215,41 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 		});
 
 		removePublicKeysButton = addLeftButton(LangResources.get("removePublicKeys"), IconKind.TRASH, ButtonStyle.DANGEROUS, event -> {
-			if (new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, LangResources.get("removePublicKeys") + ": " + table.getSelectedRows().length, LangResources.get("yes"), LangResources.get("no")).withDialogStyle(DialogStyle.WARNING).open() != 0) {
+			final int[] selectedRows = table.getSelectedRows();
+			if (selectedRows.length == 0) {
 				return;
 			}
-			for (final int rowIndex : table.getSelectedRows()) {
-				final String keyId = (String) table.getModel().getValueAt(table.convertRowIndexToModel(rowIndex), 3);
+			if (new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, LangResources.get("removePublicKeys") + ": " + selectedRows.length, LangResources.get("yes"), LangResources.get("no")).withDialogStyle(DialogStyle.WARNING).open() != 0) {
+				return;
+			}
+
+			// Collect the key ids first, so the selection is evaluated before the configuration changes
+			final List<String> keyIdsToRemove = new ArrayList<>();
+			for (final int rowIndex : selectedRows) {
+				keyIdsToRemove.add((String) table.getModel().getValueAt(table.convertRowIndexToModel(rowIndex), 3));
+			}
+
+			// Only ask about the user assignments if any user references one of the keys
+			boolean removeFromUsers = false;
+			final int referencingUserCount = countUsersReferencingAnyKeyId(serverManagementConfiguration, keyIdsToRemove);
+			if (referencingUserCount > 0) {
+				final int answer = new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, LangResources.get("removePublicKeysFromAllUsers") + ": " + referencingUserCount, LangResources.get("yes"), LangResources.get("no"), LangResources.get("cancel")).withDialogStyle(DialogStyle.WARNING).open();
+				if (answer == 0) {
+					removeFromUsers = true;
+				} else if (answer != 1) {
+					// Canceled or closed via the window decoration
+					return;
+				}
+			}
+
+			for (final String keyId : keyIdsToRemove) {
 				serverManagementConfiguration.getKnownPublicSshKeys().remove(serverManagementConfiguration.getKnownPublicSshKeyByKeyId(keyId));
 
-				for (final Server server : serverManagementConfiguration.getServers()) {
-					for (final User user : server.getManagedUsers()) {
-						user.getAuthorized_key_ids().remove(keyId);
+				if (removeFromUsers) {
+					for (final Server server : serverManagementConfiguration.getServers()) {
+						for (final User user : server.getManagedUsers()) {
+							user.getAuthorized_key_ids().remove(keyId);
+						}
 					}
 				}
 			}
@@ -313,6 +352,35 @@ public class KnownPublicKeysDialog extends ModalDialog<Boolean> {
 		} catch (@SuppressWarnings("unused") final Exception e) {
 			return null;
 		}
+	}
+
+	/**
+	 * Counts the managed users of all servers.
+	 */
+	private static int countManagedUsers(final ServerManagementConfiguration serverManagementConfiguration) {
+		int count = 0;
+		for (final Server server : serverManagementConfiguration.getServers()) {
+			count += server.getManagedUsers().size();
+		}
+		return count;
+	}
+
+	/**
+	 * Counts the managed users of all servers, which reference at least one of the given key ids.
+	 */
+	private static int countUsersReferencingAnyKeyId(final ServerManagementConfiguration serverManagementConfiguration, final List<String> keyIds) {
+		int count = 0;
+		for (final Server server : serverManagementConfiguration.getServers()) {
+			for (final User user : server.getManagedUsers()) {
+				for (final String keyId : keyIds) {
+					if (user.getAuthorized_key_ids().contains(keyId)) {
+						count++;
+						break;
+					}
+				}
+			}
+		}
+		return count;
 	}
 
 	private void checkButtonStatus() {

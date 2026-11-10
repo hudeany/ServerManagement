@@ -74,13 +74,6 @@ import de.soderer.utilities.Utilities;
 import de.soderer.utilities.VersionInfo;
 
 /**
- * TODO:
-	Convenience Button: Add KnownKey to all selected users
-	Convenience Button: Remove KnownKey from all servers
-	Interval Testing button: every 5 sec
- */
-
-/**
  * The GUI for ServerManagement.
  */
 public class ServerManagementGui extends UpdateableGuiApplication {

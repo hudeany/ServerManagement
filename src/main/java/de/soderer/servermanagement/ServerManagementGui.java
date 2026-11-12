@@ -440,7 +440,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 			}
 			final List<String> appParameters = new ArrayList<>();
 			appParameters.add(ServerManagement.SERVERS_CONFIGURATION_FILE.getAbsolutePath());
-			final ApplicationConfigurationDialog applicationConfigurationDialog = new ApplicationConfigurationDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, ServerManagement.APPLICATION_STARTUPCLASS_NAME, ServerManagement.VERSION, ServerManagement.VERSION_BUILDTIME, applicationConfiguration, iconData, iconImage, ServerManagement.VERSIONINFO_DOWNLOAD_URL, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, appParameters);
+			final ApplicationConfigurationDialog applicationConfigurationDialog = new ApplicationConfigurationDialog(serverManagementGui, ServerManagement.APPLICATION_NAME, ServerManagement.APPLICATION_STARTUPCLASS_NAME, ServerManagement.VERSION, ServerManagement.VERSION_BUILDTIME, applicationConfiguration, iconData, iconImage, ServerManagement.VERSIONINFO_DOWNLOAD_URL, ServerManagement.TRUSTED_UPDATE_CA_CERTIFICATES, appParameters, false);
 			final Result result = applicationConfigurationDialog.open();
 			if (result != null && result == Result.OK) {
 				applicationConfiguration.save();

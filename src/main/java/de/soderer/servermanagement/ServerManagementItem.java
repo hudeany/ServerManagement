@@ -17,10 +17,13 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,6 +67,8 @@ import de.soderer.remote.SftpConnection;
 import de.soderer.servermanagement.config.Admin;
 import de.soderer.servermanagement.config.KnownPublicSshKey;
 import de.soderer.servermanagement.config.Log;
+import de.soderer.servermanagement.config.Login;
+import de.soderer.servermanagement.config.LoginType;
 import de.soderer.servermanagement.config.Server;
 import de.soderer.servermanagement.config.ServerManagementConfiguration;
 import de.soderer.servermanagement.config.User;
@@ -102,18 +107,29 @@ public class ServerManagementItem extends JPanel {
 	private JTable managedUserTable;
 	private JTable urlsTable;
 	private JTable versionsTable;
+	private JTable loginsTable;
 	private JTable logsTable;
 	private String status = "OK";
 
 	private Button removeUserButton;
 	private Button removeUrlButton;
 	private Button removeVersionButton;
+	private Button removeLoginButton;
 	private Button removeLogButton;
+
+	/** Result texts of a login check */
+	private static final String LOGIN_RESULT_OK = "OK";
+	private static final String LOGIN_RESULT_FAILED = "FAILED";
+	private static final String LOGIN_RESULT_ERROR = "ERROR";
+	private static final String LOGIN_RESULT_NOT_SUPPORTED = "n/a";
+
+	/** Column of the check result in the logins table */
+	private static final int LOGINS_RESULT_COLUMN = 3;
 
 	private RefreshServerItemStatusWorker worker;
 
 	/** Maximum number of table rows visible without scrolling */
-	private static final int MAX_VISIBLE_TABLE_ROWS = 4;
+	private static final int MAX_VISIBLE_TABLE_ROWS = 5;
 
 	/** Content of the server card, refilled by createComponents() */
 	private JPanel contentPanel;
@@ -145,6 +161,7 @@ public class ServerManagementItem extends JPanel {
 		managedUserTable = null;
 		urlsTable = null;
 		versionsTable = null;
+		loginsTable = null;
 		logsTable = null;
 
 		contentPanel = new JPanel();
@@ -165,6 +182,11 @@ public class ServerManagementItem extends JPanel {
 		addVersionsButtons();
 		if (Utilities.isNotEmpty(server.getVersions())) {
 			addVersionsPanel(server.getVersions());
+		}
+
+		addLoginsButtons();
+		if (Utilities.isNotEmpty(server.getLogins())) {
+			addLoginsPanel(server.getLogins());
 		}
 
 		addLogsButtons();
@@ -305,7 +327,40 @@ public class ServerManagementItem extends JPanel {
 			versionsTable.setBackground(Color.WHITE);
 		}
 
+		resetLoginsTableStatus();
+
 		status = "OK";
+	}
+
+	private void resetLoginsTableStatus() {
+		if (loginsTable != null) {
+			for (int i = 0; i < loginsTable.getModel().getRowCount(); i++) {
+				loginsTable.getModel().setValueAt("", i, LOGINS_RESULT_COLUMN);
+			}
+			loginsTable.setBackground(Color.WHITE);
+		}
+	}
+
+	/**
+	 * Shows the result of a login check. Logins are addressed by index, because the same URL may be configured with
+	 * different usernames.
+	 */
+	public void setLoginResult(final int loginIndex, final String resultText) {
+		if (loginsTable == null || loginIndex < 0 || loginIndex >= loginsTable.getModel().getRowCount()) {
+			return;
+		}
+
+		loginsTable.clearSelection();
+		loginsTable.getModel().setValueAt(resultText, loginIndex, LOGINS_RESULT_COLUMN);
+		if (LOGIN_RESULT_OK.equals(resultText)) {
+			raiseTableColor(loginsTable, CustomizedColor.GREEN);
+		} else if (LOGIN_RESULT_NOT_SUPPORTED.equals(resultText)) {
+			raiseTableColor(loginsTable, CustomizedColor.YELLOW);
+			raiseStatus("WARNING");
+		} else {
+			raiseTableColor(loginsTable, CustomizedColor.RED);
+			raiseStatus("ERROR");
+		}
 	}
 
 	public void setManagedUserCurrentAuthKeys(final String username, final int expectedAuthKeys, final int currentAuthKeys, final int surplusAuthKeys) {
@@ -632,6 +687,98 @@ public class ServerManagementItem extends JPanel {
 		addTablePanel(versionsScrollPane);
 	}
 
+	private void addLoginsPanel(final List<Login> logins) {
+		final DefaultTableModel model = new DefaultTableModel();
+		model.addColumn(LangResources.get("url"));
+		model.addColumn(LangResources.get("username"));
+		model.addColumn(LangResources.get("loginType"));
+		model.addColumn(LangResources.get("loginResult"));
+
+		loadLoginsData(model, logins);
+
+		loginsTable = new JTable(model) {
+			private static final long serialVersionUID = 2804713458829412663L;
+			@Override
+			public void changeSelection(final int rowIndex, final int columnIndex, final boolean toggle, final boolean extend) {
+				// Always toggle on single selection
+				super.changeSelection(rowIndex, columnIndex, !extend, extend);
+			}
+		};
+
+		loginsTable.setDefaultEditor(Object.class, null);
+		loginsTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+		loginsTable.getColumnModel().getColumn(0).setPreferredWidth(400);
+		loginsTable.getColumnModel().getColumn(1).setPreferredWidth(150);
+
+		loginsTable.getColumnModel().getColumn(2).setPreferredWidth(80);
+
+		loginsTable.getColumnModel().getColumn(LOGINS_RESULT_COLUMN).setPreferredWidth(100);
+		final DefaultTableCellRenderer rightRenderer = new PaddedCellRenderer();
+		rightRenderer.setHorizontalAlignment(SwingConstants.RIGHT);
+		loginsTable.getColumnModel().getColumn(LOGINS_RESULT_COLUMN).setCellRenderer(rightRenderer);
+
+		final ListSelectionModel selectionModel = loginsTable.getSelectionModel();
+		selectionModel.addListSelectionListener(new ListSelectionListener() {
+			@Override
+			public void valueChanged(final ListSelectionEvent e) {
+				checkButtonStatus();
+			}
+		});
+
+		loginsTable.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseClicked(final MouseEvent mouseEvent) {
+				if (mouseEvent.getClickCount() == 2) {
+					// Open Edit login on doubleclick
+					try {
+						final JTable table = (JTable) mouseEvent.getSource();
+						final int row = table.rowAtPoint(mouseEvent.getPoint());
+						if (row >= 0) {
+							editLogin(table.convertRowIndexToModel(row));
+						}
+					} catch (final Exception e) {
+						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
+					}
+				}
+			}
+		});
+
+		styleItemTable(loginsTable);
+
+		limitVisibleRows(loginsTable);
+
+		final ServerManagementItem item = this;
+
+		final JScrollPane loginsScrollPane = new JScrollPane(loginsTable);
+		loginsScrollPane.addMouseWheelListener(
+				new MouseWheelListener() {
+					@Override
+					public void mouseWheelMoved(final MouseWheelEvent e) {
+						final boolean scrollDown = e.getWheelRotation() > 0;
+						final BoundedRangeModel verticalScrollBarModel = loginsScrollPane.getVerticalScrollBar().getModel();
+						if (!scrollDown && verticalScrollBarModel.getValue() <= verticalScrollBarModel.getMinimum()) {
+							loginsScrollPane.getParent().dispatchEvent(SwingUtilities.convertMouseEvent(loginsScrollPane, e, item));
+						} else if (scrollDown && verticalScrollBarModel.getValue() + verticalScrollBarModel.getExtent() >= verticalScrollBarModel.getMaximum()) {
+							loginsScrollPane.getParent().dispatchEvent(SwingUtilities.convertMouseEvent(loginsScrollPane, e, item));
+						}
+					}
+				}
+				);
+
+		addTablePanel(loginsScrollPane);
+	}
+
+	private void editLogin(final int loginIndex) throws Exception {
+		final Login login = server.getLogins().get(loginIndex);
+		final LoginDialog dialog = new LoginDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("editLogin")).withLogin(login);
+		if (dialog.open()) {
+			dialog.applyTo(login);
+			createComponents();
+			checkButtonStatus();
+			serverManagementGui.signalUnsavedChanges();
+		}
+	}
+
 	private void addLogsPanel(final List<Log> logs) {
 		final DefaultTableModel model = new DefaultTableModel();
 		model.addColumn(LangResources.get("logName"));
@@ -863,6 +1010,83 @@ public class ServerManagementItem extends JPanel {
 		addSectionHeader(LangResources.get("section.versions"), buttonPanel);
 	}
 
+	private void addLoginsButtons() {
+		final JPanel buttonPanel = createSectionButtonPanel();
+
+		final Button addLoginButton = createSectionButton("addLogin", IconKind.PLUS);
+		addLoginButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(final ActionEvent event) {
+				try {
+					final LoginDialog dialog = new LoginDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addLogin"));
+					if (dialog.open()) {
+						server.getLogins().add(dialog.applyTo(new Login()));
+
+						createComponents();
+
+						checkButtonStatus();
+						serverManagementGui.signalUnsavedChanges();
+					}
+				} catch (final Exception e) {
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
+				}
+			}
+		});
+		buttonPanel.add(addLoginButton);
+
+		removeLoginButton = createSectionButton("removeLogin", IconKind.TRASH);
+		removeLoginButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(final ActionEvent event) {
+				try {
+					final int selectedRow = loginsTable.getSelectedRow();
+					if (selectedRow < 0) {
+						return;
+					}
+					final int rowIndex = loginsTable.convertRowIndexToModel(selectedRow);
+					final Login login = server.getLogins().get(rowIndex);
+					final String loginDisplayName = login.getUsername() + " @ " + login.getUrl();
+					if (new QuestionDialog(serverManagementGui,
+							ServerManagement.APPLICATION_NAME + " " + LangResources.get("removeLogin"),
+							LangResources.get("removeLoginQuestion", loginDisplayName), LangResources.get("ok"),
+							LangResources.get("cancel")).open() == 0) {
+						server.getLogins().remove(rowIndex);
+						((DefaultTableModel) loginsTable.getModel()).removeRow(rowIndex);
+
+						checkButtonStatus();
+						serverManagementGui.signalUnsavedChanges();
+					}
+				} catch (final Exception e) {
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
+				}
+			}
+		});
+		buttonPanel.add(removeLoginButton);
+
+		final Button checkLoginsButton = createSectionButton("checkLogins", IconKind.REFRESH);
+		checkLoginsButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(final ActionEvent event) {
+				try {
+					resetLoginsTableStatus();
+					refreshLogins();
+					String result = "";
+					if (loginsTable != null) {
+						for (int i = 0; i < loginsTable.getModel().getRowCount(); i++) {
+							result += loginsTable.getModel().getValueAt(i, 1) + " @ " + loginsTable.getModel().getValueAt(i, 0) + " (" + loginsTable.getModel().getValueAt(i, 2) + "): " + loginsTable.getModel().getValueAt(i, LOGINS_RESULT_COLUMN) + "\n";
+						}
+					}
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("checkLogins"), result.trim()).withDialogStyle(DialogStyle.INFORMATION).open();
+				} catch (final Exception e) {
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
+				}
+			}
+		});
+		buttonPanel.add(checkLoginsButton);
+
+		addSectionHeader(LangResources.get("section.logins"), buttonPanel);
+	}
+
 	private void addLogsButtons() {
 		final JPanel buttonPanel = createSectionButtonPanel();
 
@@ -946,6 +1170,20 @@ public class ServerManagementItem extends JPanel {
 		for (final Version version : versions) {
 			model.addRow(new String[] { version.getName(), version.getLocation(), version.getPath() });
 		}
+	}
+
+	private static void loadLoginsData(final DefaultTableModel model, final List<Login> logins) {
+		for (int i = model.getRowCount() - 1; i >= 0; i--) {
+			model.removeRow(i);
+		}
+		for (final Login login : logins) {
+			// The password is never shown in the table
+			model.addRow(new String[] { login.getUrl(), login.getUsername(), getLoginTypeDisplayName(login.getLoginType()), "" });
+		}
+	}
+
+	private static String getLoginTypeDisplayName(final LoginType loginType) {
+		return loginType == LoginType.OIDC ? LangResources.get("loginType.oidc") : LangResources.get("loginType.basicauth");
 	}
 
 	private static void loadLogsData(final DefaultTableModel model, final List<Log> logs) {
@@ -1302,6 +1540,12 @@ public class ServerManagementItem extends JPanel {
 			removeVersionButton.setEnabled(false);
 		}
 
+		if (loginsTable != null) {
+			removeLoginButton.setEnabled(loginsTable.getSelectedRowCount() > 0);
+		} else {
+			removeLoginButton.setEnabled(false);
+		}
+
 		if (logsTable != null) {
 			if (logsTable.getSelectedRowCount() > 0) {
 				removeLogButton.setEnabled(true);
@@ -1365,6 +1609,8 @@ public class ServerManagementItem extends JPanel {
 			}
 			versionsTable.setBackground(Color.WHITE);
 		}
+
+		resetLoginsTableStatus();
 
 		status = "OK";
 	}
@@ -1473,6 +1719,9 @@ public class ServerManagementItem extends JPanel {
 
 			// Refresh versions status
 			refreshVersions();
+
+			// Refresh logins status
+			refreshLogins();
 		} catch (final Exception e) {
 			e.printStackTrace();
 			status = "ERROR";
@@ -1675,6 +1924,77 @@ public class ServerManagementItem extends JPanel {
 			if (sftpConnection != null) {
 				sftpConnection.close();
 			}
+		}
+	}
+
+	private void refreshLogins() {
+		final List<Login> logins = server.getLogins();
+		if (logins == null) {
+			return;
+		}
+		for (int i = 0; i < logins.size(); i++) {
+			// Each login separately, so a failing login does not abort the check of further logins
+			setLoginResult(i, checkLogin(logins.get(i)));
+		}
+	}
+
+	/**
+	 * Checks a login. CLASSIC logins are checked via HTTP Basic authentication, OIDC logins are not checked yet.
+	 *
+	 * @return n/a for OIDC, OK for HTTP 2xx, FAILED for HTTP 401/403 (credentials rejected), ERROR for anything else (e.g. server
+	 *         not reachable, unexpected HTTP code)
+	 */
+	private String checkLogin(final Login login) {
+		if (login.getLoginType() == LoginType.BasicAuth) {
+			try {
+				final HttpRequest request = new HttpRequest(HttpMethod.GET, login.getUrl());
+				final String credentials = (login.getUsername() == null ? "" : login.getUsername()) + ":" + (login.getPassword() == null ? "" : login.getPassword());
+				request.addHeader("Authorization", "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8)));
+				final HttpResponse response = HttpUtilities.executeHttpRequest(request, applicationConfiguration.getProxyConfiguration().getProxy(request.getUrl()), trustManager, deactivateHostnameVerification);
+				final int httpCode = response.getHttpCode();
+				if (httpCode >= 200 && httpCode < 300) {
+					return LOGIN_RESULT_OK;
+				} else if (httpCode == 401 || httpCode == 403) {
+					return LOGIN_RESULT_FAILED;
+				} else {
+					return LOGIN_RESULT_ERROR;
+				}
+			} catch (@SuppressWarnings("unused") final Exception e) {
+				return LOGIN_RESULT_ERROR;
+			}
+		} else if (login.getLoginType() == LoginType.OIDC) {
+			try {
+				final String url = login.getUrl();
+				final String user = login.getUsername();
+				final String password = login.getPassword();
+				final String expectText = null;
+				final String usernameField = null;
+				final String passwordField = null;
+				final String dumpFinalHtmlPath = null;
+				final String tokenType = null;
+				final String idpSelection = StringUtilities.isBlank(login.getIdpSelection()) ? null : login.getIdpSelection();
+				final boolean insecure = false;
+				final boolean verbose = false;
+				final boolean quiet = false;
+				final int timeoutSeconds = 30;
+
+				final URI startUri;
+				try {
+					startUri = URI.create(url);
+					if (startUri.getScheme() == null || startUri.getHost() == null) {
+						throw new IllegalArgumentException();
+					}
+				} catch (@SuppressWarnings("unused") final IllegalArgumentException e) {
+					throw new Exception("Invalid URL: " + url);
+				}
+
+				final OidcLoginCheck check = new OidcLoginCheck(insecure, verbose, quiet, Duration.ofSeconds(timeoutSeconds), usernameField, passwordField, dumpFinalHtmlPath, tokenType, idpSelection);
+				return check.check(startUri, user, password, expectText) ? LOGIN_RESULT_OK : LOGIN_RESULT_FAILED;
+			} catch (@SuppressWarnings("unused") final Exception e) {
+				return LOGIN_RESULT_FAILED;
+			}
+		} else {
+			return LOGIN_RESULT_ERROR;
 		}
 	}
 

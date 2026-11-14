@@ -155,7 +155,12 @@ public class LoginDialog extends JDialog {
 			classicRadioButton.setSelected(login.getLoginType() != LoginType.OIDC);
 			urlField.setText(login.getUrl() == null ? "" : login.getUrl());
 			usernameField.setText(login.getUsername() == null ? "" : login.getUsername());
-			passwordField.setText(login.getPassword() == null ? "" : login.getPassword());
+			// The stored password is encrypted, the field shows the decrypted password
+			final char[] password = login.getPasswordArray();
+			passwordField.setText(password == null ? "" : new String(password));
+			if (password != null) {
+				Arrays.fill(password, '\0');
+			}
 			idpSelectionField.setText(login.getIdpSelection() == null ? "" : login.getIdpSelection());
 			updateFieldStatus();
 		}
@@ -183,7 +188,8 @@ public class LoginDialog extends JDialog {
 		login.setLoginType(isOidc ? LoginType.OIDC : LoginType.BasicAuth)
 		.setUrl(urlField.getText().trim())
 		.setUsername(usernameField.getText().trim())
-		.setPassword(password.length == 0 ? null : new String(password))
+		// Encrypted with the master key; an empty password removes it
+		.setPasswordArray(password)
 		// IdP selection is optional and only stored for OIDC
 		.setIdpSelection(isOidc && !idpSelection.isEmpty() ? idpSelection : null);
 		Arrays.fill(password, '\0');

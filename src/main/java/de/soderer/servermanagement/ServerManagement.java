@@ -19,6 +19,7 @@ import de.soderer.json.JsonNode;
 import de.soderer.json.JsonObject;
 import de.soderer.json.JsonReader;
 import de.soderer.json.JsonSerializer;
+import de.soderer.servermanagement.config.CredentialCipher;
 import de.soderer.servermanagement.config.ServerManagementConfiguration;
 import de.soderer.swing.modern.DialogStyle;
 import de.soderer.swing.modern.QuestionDialog;
@@ -172,6 +173,9 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 
 			ServerManagementConfiguration serverManagementConfiguration = new ServerManagementConfiguration();
 
+			// The master key file lies next to the servers configuration file and is created on first use
+			CredentialCipher.init(ServerManagement.SERVERS_CONFIGURATION_FILE);
+
 			try {
 				if (ServerManagement.SERVERS_CONFIGURATION_FILE.exists()) {
 					JsonNode rootNode = null;
@@ -188,8 +192,26 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 				new QuestionDialog(null, ServerManagement.APPLICATION_NAME, "Configuration file '" + ServerManagement.SERVERS_CONFIGURATION_FILE + "' is invalid: \n" + (e.getMessage() != null ? e.getMessage() : e.toString()), LangResources.get("ok")).withDialogStyle(DialogStyle.ERROR).open();
 				return 1;
 			}
+
+			// Plain text passwords of older configurations are encrypted and the configuration file is rewritten at once,
+			// so the plain text passwords do not remain on disk until the next manual save
+			boolean encryptedConfigurationNotWritten = false;
+			try {
+				if (CredentialCipher.encryptPlainPasswords(serverManagementConfiguration)) {
+					ServerManagementGui.writeServersConfiguration(serverManagementConfiguration);
+				}
+			} catch (final Exception e) {
+				e.printStackTrace();
+				encryptedConfigurationNotWritten = true;
+				new QuestionDialog(null, ServerManagement.APPLICATION_NAME, "Cannot encrypt the passwords in configuration file '" + ServerManagement.SERVERS_CONFIGURATION_FILE + "': \n" + (e.getMessage() != null ? e.getMessage() : e.toString())).withDialogStyle(DialogStyle.ERROR).open();
+			}
+
 			try {
 				final ServerManagementGui serverManagementGui = new ServerManagementGui(serverManagementConfiguration);
+				if (encryptedConfigurationNotWritten) {
+					// The user is asked to save on closing
+					serverManagementGui.signalUnsavedChanges();
+				}
 				SwingUtilities.invokeLater(new Runnable() {
 					@Override
 					public void run() {

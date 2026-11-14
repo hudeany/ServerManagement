@@ -1207,8 +1207,9 @@ public class ServerManagementItem extends JPanel {
 					if (server.getSshAdmin() != null) {
 						dialog.setUsername(server.getSshAdmin().getUsername());
 						dialog.setPrivateKeyFilePath(server.getSshAdmin().getPrivateKeyPath());
-						if (server.getSshAdmin().getPassword() != null) {
-							dialog.setPassword(server.getSshAdmin().getPassword().toCharArray());
+						final char[] adminPassword = server.getSshAdmin().getPasswordArray();
+						if (adminPassword != null) {
+							dialog.setPassword(adminPassword);
 						}
 					}
 					if (dialog.open() == 0) {
@@ -1217,7 +1218,8 @@ public class ServerManagementItem extends JPanel {
 						}
 						server.getSshAdmin().setUsername(dialog.getUsername());
 						server.getSshAdmin().setPrivateKeyPath(dialog.getPrivateKeyFilePath());
-						server.getSshAdmin().setPassword(dialog.getPassword() == null || dialog.getPassword().length == 0 ? null : new String(dialog.getPassword()));
+						// Encrypted with the master key; null or empty removes the password
+						server.getSshAdmin().setPasswordArray(dialog.getPassword());
 						serverManagementGui.signalUnsavedChanges();
 					}
 				} catch (final Exception e) {
@@ -1948,7 +1950,8 @@ public class ServerManagementItem extends JPanel {
 		if (login.getLoginType() == LoginType.BasicAuth) {
 			try {
 				final HttpRequest request = new HttpRequest(HttpMethod.GET, login.getUrl());
-				final String credentials = (login.getUsername() == null ? "" : login.getUsername()) + ":" + (login.getPassword() == null ? "" : login.getPassword());
+				final char[] password = login.getPasswordArray();
+				final String credentials = (login.getUsername() == null ? "" : login.getUsername()) + ":" + (password == null ? "" : new String(password));
 				request.addHeader("Authorization", "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8)));
 				final HttpResponse response = HttpUtilities.executeHttpRequest(request, applicationConfiguration.getProxyConfiguration().getProxy(request.getUrl()), trustManager, deactivateHostnameVerification);
 				final int httpCode = response.getHttpCode();
@@ -1966,7 +1969,8 @@ public class ServerManagementItem extends JPanel {
 			try {
 				final String url = login.getUrl();
 				final String user = login.getUsername();
-				final String password = login.getPassword();
+				final char[] passwordArray = login.getPasswordArray();
+				final String password = passwordArray == null ? null : new String(passwordArray);
 				final String expectText = null;
 				final String usernameField = null;
 				final String passwordField = null;

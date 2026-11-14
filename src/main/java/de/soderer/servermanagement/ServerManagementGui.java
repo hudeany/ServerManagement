@@ -49,6 +49,7 @@ import de.soderer.json.JsonObject;
 import de.soderer.json.JsonSerializer;
 import de.soderer.json.JsonWriter;
 import de.soderer.network.NetworkUtilities;
+import de.soderer.servermanagement.config.CredentialCipher;
 import de.soderer.servermanagement.config.Server;
 import de.soderer.servermanagement.config.ServerManagementConfiguration;
 import de.soderer.servermanagement.worker.CheckAllServerStatusWorker;
@@ -469,6 +470,20 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 			return false;
 		}
 
+		writeServersConfiguration(serverManagementConfiguration);
+		return true;
+	}
+
+	/**
+	 * Writes the server configuration to the servers configuration file without asking. Plain text passwords are
+	 * encrypted before (e.g. passwords set by a dialog via the serialization setter).
+	 *
+	 * @throws Exception if the configuration could not be written
+	 */
+	static void writeServersConfiguration(final ServerManagementConfiguration serverManagementConfiguration) throws Exception {
+		// A plain text password must never be written to the configuration file
+		CredentialCipher.encryptPlainPasswords(serverManagementConfiguration);
+
 		final File configurationFile = ServerManagement.SERVERS_CONFIGURATION_FILE.getAbsoluteFile();
 		// The directory is missing on the first start
 		if (configurationFile.getParentFile() != null && !configurationFile.getParentFile().exists()) {
@@ -487,7 +502,6 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 			Files.deleteIfExists(temporaryFile.toPath());
 			throw new Exception("Cannot save server settings to '" + configurationFile.getAbsolutePath() + "': " + (e.getMessage() != null ? e.getMessage() : e.toString()), e);
 		}
-		return true;
 	}
 
 	/**

@@ -10,7 +10,7 @@
 	<classpathentry kind="lib" path="lib/bcprov-jdk18on-1.86.jar"/>
 	<classpathentry kind="lib" path="lib/soderer-applicationbase-26.0.64.jar"/>
 	<classpathentry kind="lib" path="lib/soderer-console-26.0.17.jar"/>
-	<classpathentry kind="lib" path="lib/soderer-remote-26.0.22.jar"/>
+	<classpathentry kind="lib" path="lib/soderer-remote-26.0.24.jar"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER">
 		<attributes>
 			<attribute name="module" value="true"/>

@@ -22,6 +22,7 @@ import javax.swing.KeyStroke;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 
+import de.soderer.network.HttpUtilities;
 import de.soderer.servermanagement.config.Login;
 import de.soderer.servermanagement.config.LoginType;
 import de.soderer.swing.modern.Button;
@@ -142,7 +143,7 @@ public class LoginDialog extends JDialog {
 	private void updateOkButtonStatus() {
 		String proxyError = null;
 		try {
-			OidcLoginCheck.validateProxyUrl(proxyUrlField.getText());
+			HttpUtilities.validateProxyUrl(proxyUrlField.getText());
 		} catch (final IllegalArgumentException e) {
 			proxyError = e.getMessage();
 		}

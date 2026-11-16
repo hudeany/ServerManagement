@@ -14,7 +14,7 @@
 	<property name="json.version" value="26.2.20" />
 	<property name="sshkeyformats.version" value="26.1.13" />
 	<property name="proxyautoconfig.version" value="26.1.7" />
-	<property name="network.version" value="26.0.43" />
+	<property name="network.version" value="26.0.45" />
 	<property name="soderer-console.version" value="26.0.17" />
 	<property name="soderer-swing.version" value="26.0.46" />
 	<property name="soderer-utilities.version" value="26.3.7" />

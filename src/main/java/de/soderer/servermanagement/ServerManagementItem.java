@@ -128,10 +128,11 @@ public class ServerManagementItem extends JPanel {
 	private static final int LOGINS_RESULT_COLUMN = 3;
 
 	/**
-	 * Version location with login: "&lt;username&gt; @ &lt;GET|POST&gt;:&lt;http(s)-url&gt;", e.g.
-	 * "monitor @ POST:https://host/cid/ui/gwt/rest/versions/getVersionData". The username may contain "@" itself.
+	 * Version location with login: "&lt;GET|POST&gt;:&lt;http(s)://username@host/path&gt;", e.g.
+	 * "POST:https://monitor@host/cid/ui/gwt/rest/versions/getVersionData". The username identifies the login of this
+	 * server; special characters in the username must be URL encoded (e.g. "@" as "%40").
 	 */
-	private static final Pattern LOGIN_LOCATION_PATTERN = Pattern.compile("^\\s*(.+?)\\s*@\\s*(GET|POST)\\s*:\\s*(https?://\\S+)\\s*$", Pattern.CASE_INSENSITIVE);
+	private static final Pattern LOGIN_LOCATION_PATTERN = Pattern.compile("^\\s*(GET|POST)\\s*:\\s*(https?://[^/\\s?#]*@\\S+)\\s*$", Pattern.CASE_INSENSITIVE);
 
 	private RefreshServerItemStatusWorker worker;
 
@@ -1741,7 +1742,7 @@ public class ServerManagementItem extends JPanel {
 		SftpConnection sftpConnection = null;
 		String cachedSftpConnectionString = "";
 
-		// Locations "<username> @ <GET|POST>:<url>": one login per login configuration and one request per location
+		// Locations "<GET|POST>:<http(s)://username@host/path>": one login per login configuration and one request per location
 		final Map<Login, OidcLoginCheck.LoginSession> loginSessionCache = new HashMap<>();
 		final Map<String, String> loginLocationDataCache = new HashMap<>();
 
@@ -1760,7 +1761,7 @@ public class ServerManagementItem extends JPanel {
 							data = loginLocationDataCache.get(locationKey);
 						} else {
 							try {
-								data = readWithLogin(loginLocationMatcher.group(1), loginLocationMatcher.group(2), loginLocationMatcher.group(3), jsonRequest, loginSessionCache);
+								data = readWithLogin(loginLocationMatcher.group(1), loginLocationMatcher.group(2), jsonRequest, loginSessionCache);
 							} catch (@SuppressWarnings("unused") final Exception e) {
 								data = null;
 							}
@@ -2080,10 +2081,12 @@ public class ServerManagementItem extends JPanel {
 	}
 
 	/**
-	 * Reads the data of a version location "&lt;username&gt; @ &lt;GET|POST&gt;:&lt;url&gt;": logs in with the login of
-	 * the username and requests the URL with the session (cookies and CSRF token for OIDC, Basic authentication for
-	 * BasicAuth logins).
+	 * Reads the data of a version location "&lt;GET|POST&gt;:&lt;http(s)://username@host/path&gt;": logs in with the
+	 * login of the username and requests the URL (without the username) with the session (cookies and CSRF token for
+	 * OIDC, Basic authentication for BasicAuth logins).
 	 *
+	 * @param urlWithUsername
+	 *            the URL with the username as user info, e.g. "https://monitor@host/path"
 	 * @param jsonRequest
 	 *            true to send the header "Content-Type: application/json" (for version paths "json:...")
 	 * @param loginSessionCache
@@ -2093,7 +2096,20 @@ public class ServerManagementItem extends JPanel {
 	 * @throws Exception
 	 *             if the login fails or the request does not return HTTP 2xx
 	 */
-	private String readWithLogin(final String username, final String httpMethod, final String url, final boolean jsonRequest, final Map<Login, OidcLoginCheck.LoginSession> loginSessionCache) throws Exception {
+	private String readWithLogin(final String httpMethod, final String urlWithUsername, final boolean jsonRequest, final Map<Login, OidcLoginCheck.LoginSession> loginSessionCache) throws Exception {
+		final URI uriWithUsername = parseHttpUri(urlWithUsername);
+		final String rawUserInfo = uriWithUsername.getRawUserInfo();
+		if (rawUserInfo == null || rawUserInfo.isEmpty()) {
+			throw new Exception("Missing username in version location URL (e.g. https://monitor@host/path)");
+		}
+		if (rawUserInfo.contains(":")) {
+			// A password must never be stored as plain text in the version location
+			throw new Exception("Password in version location URL is not supported, the password is taken from the login");
+		}
+		// Decodes URL encoded characters, e.g. "max%40firma.de" to "max@firma.de"
+		final String username = uriWithUsername.getUserInfo();
+		// The username is only for the login lookup and is not sent to the server
+		final String url = urlWithUsername.trim().replaceFirst("://" + Pattern.quote(rawUserInfo) + "@", "://");
 		final URI targetUri = parseHttpUri(url);
 		final Login login = findLoginByUsername(username, targetUri);
 		final HttpMethod method = "POST".equalsIgnoreCase(httpMethod) ? HttpMethod.POST : HttpMethod.GET;

@@ -4,6 +4,7 @@ import java.io.Console;
 import java.net.CookieManager;
 import java.net.CookiePolicy;
 import java.net.InetSocketAddress;
+import java.net.Proxy;
 import java.net.ProxySelector;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -800,6 +801,26 @@ public class OidcLoginCheck {
 			final URI proxyUri = parseProxyUri(proxyUrl);
 			// Resolved here (not createUnresolved), so the HttpClient gets a connectable address
 			return ProxySelector.of(new InetSocketAddress(proxyUri.getHost(), proxyUri.getPort()));
+		}
+	}
+
+	/**
+	 * Creates a java.net.Proxy for other HTTP clients (e.g. the BasicAuth login check) with the same syntax as
+	 * {@link #createProxySelector(String)}.
+	 *
+	 * @return null if no proxy URL is given (caller decides about its default), {@link Proxy#NO_PROXY} for
+	 *         "none"/"direct", otherwise an HTTP proxy
+	 * @throws IllegalArgumentException
+	 *             if the proxy URL is invalid
+	 */
+	public static Proxy createProxy(final String proxyUrl) {
+		if (proxyUrl == null || proxyUrl.isBlank()) {
+			return null;
+		} else if (isDirectProxyValue(proxyUrl)) {
+			return Proxy.NO_PROXY;
+		} else {
+			final URI proxyUri = parseProxyUri(proxyUrl);
+			return new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyUri.getHost(), proxyUri.getPort()));
 		}
 	}
 

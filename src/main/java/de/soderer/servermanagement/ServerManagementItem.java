@@ -17,6 +17,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
+import java.net.Proxy;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -1953,7 +1954,10 @@ public class ServerManagementItem extends JPanel {
 				final char[] password = login.getPasswordArray();
 				final String credentials = (login.getUsername() == null ? "" : login.getUsername()) + ":" + (password == null ? "" : new String(password));
 				request.addHeader("Authorization", "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8)));
-				final HttpResponse response = HttpUtilities.executeHttpRequest(request, applicationConfiguration.getProxyConfiguration().getProxy(request.getUrl()), trustManager, deactivateHostnameVerification);
+				// Proxy of the login, otherwise the proxy of the application configuration
+				final Proxy loginProxy = OidcLoginCheck.createProxy(login.getProxyUrl());
+				final Proxy proxy = loginProxy != null ? loginProxy : applicationConfiguration.getProxyConfiguration().getProxy(request.getUrl());
+				final HttpResponse response = HttpUtilities.executeHttpRequest(request, proxy, trustManager, deactivateHostnameVerification);
 				final int httpCode = response.getHttpCode();
 				if (httpCode >= 200 && httpCode < 300) {
 					return LOGIN_RESULT_OK;
@@ -1992,7 +1996,10 @@ public class ServerManagementItem extends JPanel {
 					throw new Exception("Invalid URL: " + url);
 				}
 
-				final OidcLoginCheck check = new OidcLoginCheck(insecure, verbose, quiet, Duration.ofSeconds(timeoutSeconds), usernameField, passwordField, dumpFinalHtmlPath, tokenType, idpSelection);
+				// Proxy of the login; null means system proxy settings
+				final String proxyUrl = StringUtilities.isBlank(login.getProxyUrl()) ? null : login.getProxyUrl();
+
+				final OidcLoginCheck check = new OidcLoginCheck(insecure, verbose, quiet, Duration.ofSeconds(timeoutSeconds), usernameField, passwordField, dumpFinalHtmlPath, tokenType, idpSelection, proxyUrl);
 				return check.check(startUri, user, password, expectText) ? LOGIN_RESULT_OK : LOGIN_RESULT_FAILED;
 			} catch (@SuppressWarnings("unused") final Exception e) {
 				return LOGIN_RESULT_FAILED;

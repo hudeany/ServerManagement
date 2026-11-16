@@ -1,6 +1,5 @@
 package de.soderer.servermanagement;
 
-import java.io.Console;
 import java.net.CookieManager;
 import java.net.CookiePolicy;
 import java.net.HttpCookie;
@@ -12,15 +11,14 @@ import java.net.URISyntaxException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -28,9 +26,14 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
+
+import de.soderer.network.HttpMethod;
+import de.soderer.network.HttpRequest;
+import de.soderer.network.HttpResponse;
+import de.soderer.network.HttpUtilities;
+import de.soderer.network.HttpVersion;
 
 /**
  * Smoke test for web applications protected by an OIDC login (authorization code flow).
@@ -44,9 +47,7 @@ import javax.net.ssl.X509TrustManager;
  * {@link LoginSession#getCookieHeader(URI)} delivers the "Cookie" header value and
  * {@link LoginSession#getCsrfToken()} the CSRF token (header "X-CSRF-TOKEN") of the logged in session.
  *
- * No external dependencies, Java 17+.
- *
- * Exit codes: 0 = OK, 1 = check failed, 2 = usage error
+ * The requests are sent with the network library (de.soderer.network), Java 17+.
  */
 public class OidcLoginCheck {
 	private static final int MAX_REDIRECTS = 25;
@@ -82,168 +83,18 @@ public class OidcLoginCheck {
 	private final String tokenTypeFilter;
 	private final String idpSelectionText;
 
-	/** Settings for the HttpClient, which is created per check, so every login session has its own cookies */
-	private final ProxySelector proxySelector;
-	private final SSLContext sslContext;
+	/** Request settings; each check gets its own {@link HttpTransport} with its own cookies */
+	private final String proxyUrl;
+	/** Trust manager for the TLS server certificates, null for the trust store of the JVM (cacerts) */
+	private final TrustManager trustManager;
+	private final boolean deactivateHostnameVerification;
 
-	/** HttpClient of the currently running check */
-	private HttpClient httpClient;
+	/** Transport (cookies, proxy, TLS trust) of the currently running check */
+	private HttpTransport transport;
 	private String securityTokenType;
 	private String securityToken;
 	/** Reason of the failure of the last check, null if it succeeded */
 	private String lastFailureMessage;
-
-	public static void main(final String[] args) {
-		try {
-			System.exit(run(args));
-		} catch (final UsageException e) {
-			System.err.println("Error: " + e.getMessage());
-			System.err.println();
-			printUsage();
-			System.exit(2);
-		}
-	}
-
-	private static int run(final String[] args) throws UsageException {
-		String url = null;
-		String user = null;
-		String password = null;
-		String expectText = null;
-		String usernameField = null;
-		String passwordField = null;
-		String dumpFinalHtmlPath = null;
-		String tokenType = null;
-		String idpSelection = null;
-		String proxyUrl = null;
-		boolean insecure = false;
-		boolean verbose = false;
-		boolean quiet = false;
-		int timeoutSeconds = 30;
-
-		for (int i = 0; i < args.length; i++) {
-			switch (args[i]) {
-				case "-u", "-user" -> user = nextArg(args, ++i, args[i - 1]);
-				case "-p", "-password" -> password = nextArg(args, ++i, args[i - 1]);
-				case "-expect" -> expectText = nextArg(args, ++i, args[i - 1]);
-				case "-userfield" -> usernameField = nextArg(args, ++i, args[i - 1]);
-				case "-passfield" -> passwordField = nextArg(args, ++i, args[i - 1]);
-				case "-dump-final-html" -> dumpFinalHtmlPath = nextArg(args, ++i, args[i - 1]);
-				case "-token-type" -> tokenType = nextArg(args, ++i, args[i - 1]);
-				case "-idp", "-idp-button", "-idp-provider" -> idpSelection = nextArg(args, ++i, args[i - 1]);
-				case "-proxy" -> proxyUrl = nextArg(args, ++i, args[i - 1]);
-				case "-timeout" -> {
-					try {
-						timeoutSeconds = Integer.parseInt(nextArg(args, ++i, args[i - 1]));
-					} catch (@SuppressWarnings("unused") final NumberFormatException e) {
-						throw new UsageException("Invalid timeout value");
-					}
-				}
-				case "-insecure" -> insecure = true;
-				case "-v", "-verbose" -> verbose = true;
-				case "-q", "-quiet" -> quiet = true;
-				case "-h", "-help", "--help", "-?" -> {
-					printUsage();
-					return 0;
-				}
-				default -> {
-					if (args[i].startsWith("-")) {
-						throw new UsageException("Unknown option: " + args[i]);
-					} else if (url != null) {
-						throw new UsageException("More than one URL given");
-					}
-					url = args[i];
-				}
-			}
-		}
-
-		if (url == null) {
-			throw new UsageException("Missing URL");
-		}
-		if (user == null) {
-			user = System.getenv("OIDC_USER");
-		}
-		if (password == null) {
-			password = System.getenv("OIDC_PASSWORD");
-		}
-		if (user == null) {
-			throw new UsageException("Missing username (-u or environment variable OIDC_USER)");
-		}
-		if (password == null) {
-			final Console console = System.console();
-			if (console == null) {
-				throw new UsageException("Missing password (-p, environment variable OIDC_PASSWORD or interactive console)");
-			}
-			final char[] passwordChars = console.readPassword("Password for %s: ", user);
-			if (passwordChars == null) {
-				throw new UsageException("No password entered");
-			}
-			password = new String(passwordChars);
-		}
-
-		final URI startUri;
-		try {
-			startUri = URI.create(url);
-			if (startUri.getScheme() == null || startUri.getHost() == null) {
-				throw new IllegalArgumentException();
-			}
-		} catch (@SuppressWarnings("unused") final IllegalArgumentException e) {
-			throw new UsageException("Invalid URL: " + url);
-		}
-
-		if (tokenType != null && !("id_token".equals(tokenType) || "access_token".equals(tokenType) || "code".equals(tokenType))) {
-			throw new UsageException("Invalid token type for -token-type (allowed: id_token, access_token, code)");
-		}
-
-		try {
-			validateProxyUrl(proxyUrl);
-		} catch (final IllegalArgumentException e) {
-			throw new UsageException(e.getMessage());
-		}
-
-		try {
-			final OidcLoginCheck check = new OidcLoginCheck(insecure, verbose, quiet, Duration.ofSeconds(timeoutSeconds), usernameField, passwordField,
-					dumpFinalHtmlPath, tokenType, idpSelection, proxyUrl);
-			return check.check(startUri, user, password, expectText) != null ? 0 : 1;
-		} catch (final Exception e) {
-			System.out.println("RESULT: FAILED - " + e.getClass().getSimpleName() + ": " + e.getMessage());
-			if (verbose) {
-				e.printStackTrace(System.out);
-			}
-			return 1;
-		}
-	}
-
-	private static String nextArg(final String[] args, final int index, final String option) throws UsageException {
-		if (index >= args.length) {
-			throw new UsageException("Missing value for option " + option);
-		}
-		return args[index];
-	}
-
-	private static void printUsage() {
-		System.out.println("""
-				OidcLoginCheck - checks if a web application with OIDC login is deployed and running
-
-				Usage: java -jar OidcLoginCheck.jar <url> -u <user> [-p <password>] [options]
-
-				Options:
-				  -u, -user <name>        Username for the identity provider (or env OIDC_USER)
-				  -p, -password <pw>      Password (or env OIDC_PASSWORD, otherwise interactive prompt)
-				  -expect <text>          Text that must be contained in the final page
-				  -userfield <name>       Name of the username input field (auto-detected by default)
-				  -passfield <name>       Name of the password input field (auto-detected by default)
-				  -dump-final-html <file> Write final HTML response body to this file path
-				  -token-type <name>      Token output type: id_token, access_token or code
-				  -idp <text>             Optional IdP button/provider text to click before login (federated flow)
-				  -proxy <url>            HTTP proxy ("http://host:port" or "host:port"), "none" for a direct
-				                          connection (default: system proxy settings / JVM proxy properties)
-				  -timeout <seconds>      Timeout per request (default 30)
-				  -insecure               Accept any TLS certificate and hostname (test environments only)
-				  -v, -verbose            Log every request and redirect
-				  -q, -quiet              Only print token and final result
-
-				Exit codes: 0 = OK, 1 = check failed, 2 = usage error""");
-	}
 
 	/**
 	 * Creates a check that uses the system proxy settings.
@@ -292,15 +143,15 @@ public class OidcLoginCheck {
 		this.tokenTypeFilter = tokenTypeFilter;
 		this.idpSelectionText = idpSelectionText;
 
-		// Explicit proxy, or the system default (honors -Dhttps.proxyHost etc. and -Djava.net.useSystemProxies=true)
-		proxySelector = createProxySelector(proxyUrl);
+		// Explicit proxy, or the system default (honors -Dhttps.proxyHost etc. and -Djava.net.useSystemProxies=true);
+		// validated here, so an invalid proxy URL fails before the first request
+		validateProxyUrl(proxyUrl);
+		this.proxyUrl = proxyUrl;
 		log("Proxy: " + describeProxy(proxyUrl));
 
 		if (insecure) {
-			// Must be set before the first HttpClient is created
-			System.setProperty("jdk.internal.httpclient.disableHostnameVerification", "true");
-			final SSLContext checkSslContext = SSLContext.getInstance("TLS");
-			checkSslContext.init(null, new TrustManager[] { new X509TrustManager() {
+			// Only for this check (no global system property): any certificate and hostname is accepted
+			this.trustManager = new X509TrustManager() {
 				@Override
 				public void checkClientTrusted(final X509Certificate[] chain, final String authType) {
 					// Trust all
@@ -315,36 +166,15 @@ public class OidcLoginCheck {
 				public X509Certificate[] getAcceptedIssuers() {
 					return new X509Certificate[0];
 				}
-			} }, new SecureRandom());
-			this.sslContext = checkSslContext;
-		} else if (trustManager != null) {
-			// Only the certificates of the given trust manager (e.g. of a configured keystore) are trusted
-			final SSLContext checkSslContext = SSLContext.getInstance("TLS");
-			checkSslContext.init(null, new TrustManager[] { trustManager }, new SecureRandom());
-			this.sslContext = checkSslContext;
+			};
+			deactivateHostnameVerification = true;
 		} else {
-			// Default SSLContext of the HttpClient: trust store of the JVM (cacerts)
-			sslContext = null;
+			// Given trust manager (e.g. of a configured keystore) or null for the trust store of the JVM (cacerts)
+			this.trustManager = trustManager;
+			deactivateHostnameVerification = false;
 		}
 
 		requestTimeout = timeout;
-	}
-
-	/**
-	 * Creates a new HttpClient with its own cookie store, so each check starts without session and the resulting
-	 * session is independent of later checks.
-	 */
-	private HttpClient createHttpClient(final CookieManager cookieManager) {
-		final HttpClient.Builder builder = HttpClient.newBuilder()
-				.cookieHandler(cookieManager)
-				// Redirects are followed manually to keep track of the hops
-				.followRedirects(HttpClient.Redirect.NEVER)
-				.connectTimeout(requestTimeout)
-				.proxy(proxySelector);
-		if (sslContext != null) {
-			builder.sslContext(sslContext);
-		}
-		return builder.build();
 	}
 
 	/**
@@ -362,8 +192,7 @@ public class OidcLoginCheck {
 		securityToken = null;
 		lastFailureMessage = null;
 		// Each check gets its own cookie store, a new check must not reuse the session of a previous check
-		final CookieManager cookieManager = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
-		httpClient = createHttpClient(cookieManager);
+		transport = new HttpTransport(proxyUrl, trustManager, deactivateHostnameVerification, requestTimeout);
 
 		Page page = send("GET", startUri, null, null);
 		boolean loginPageSeen = false;
@@ -493,7 +322,7 @@ public class OidcLoginCheck {
 			}
 		}
 
-		final LoginSession session = new LoginSession(httpClient, cookieManager, page.uri, page.body, requestTimeout, securityTokenType, securityToken, verbose && !quiet);
+		final LoginSession session = new LoginSession(transport, page.uri, page.body, securityTokenType, securityToken, verbose && !quiet);
 
 		if (!quiet) {
 			printPageInfo(page, startTime);
@@ -526,14 +355,13 @@ public class OidcLoginCheck {
 	 * Result of a successful login: the logged in session of the web application with its cookies and CSRF token, to
 	 * be used for further requests (headers "Cookie" and "X-CSRF-TOKEN").
 	 *
-	 * Each session has its own HttpClient and cookie store, so it stays valid after further checks.
+	 * Each session has its own transport and cookie store, so it stays valid after further checks.
 	 */
 	public static final class LoginSession {
-		private final HttpClient httpClient;
+		private final HttpTransport transport;
 		private final CookieManager cookieManager;
 		private final URI finalPageUri;
 		private final String finalPageBody;
-		private final Duration requestTimeout;
 		private final String securityTokenType;
 		private final String securityToken;
 		private final boolean logEnabled;
@@ -542,13 +370,12 @@ public class OidcLoginCheck {
 		/** The probing for the CSRF token is expensive (several requests), so it is done once and only on demand */
 		private boolean csrfTokenDetermined;
 
-		private LoginSession(final HttpClient httpClient, final CookieManager cookieManager, final URI finalPageUri, final String finalPageBody, final Duration requestTimeout,
+		private LoginSession(final HttpTransport transport, final URI finalPageUri, final String finalPageBody,
 				final String securityTokenType, final String securityToken, final boolean logEnabled) {
-			this.httpClient = httpClient;
-			this.cookieManager = cookieManager;
+			this.transport = transport;
+			cookieManager = transport.getCookieManager();
 			this.finalPageUri = finalPageUri;
 			this.finalPageBody = finalPageBody;
-			this.requestTimeout = requestTimeout;
 			this.securityTokenType = securityTokenType;
 			this.securityToken = securityToken;
 			this.logEnabled = logEnabled;
@@ -622,39 +449,28 @@ public class OidcLoginCheck {
 		}
 
 		/**
-		 * Sends a request with this session: same HttpClient as the login, so the same TLS trust (default JVM trust
-		 * store, or trust all for "insecure"), the same proxy and the session cookies (the "Cookie" header is added
-		 * automatically and cookies set by the response are kept in the session). Redirects are not followed.
+		 * Sends a request with this session: same transport as the login, so the same TLS trust (configured trust
+		 * manager or JVM trust store, or trust all for "insecure"), the same proxy and the session cookies (the "Cookie"
+		 * header is added automatically and cookies set by the response are kept in the session). Redirects are not
+		 * followed.
 		 *
 		 * @param method
-		 *            "GET" or "POST"
+		 *            HTTP method, e.g. "GET" or "POST"
 		 * @param headers
 		 *            additional headers, e.g. "X-CSRF-TOKEN" and "Content-Type"; may be null
 		 * @param body
-		 *            request body for POST, may be null (empty body)
+		 *            request body, may be null (empty body)
 		 */
 		public SessionResponse send(final String method, final URI uri, final Map<String, String> headers, final String body) throws Exception {
-			final HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(uri)
-					.timeout(requestTimeout)
-					.header("User-Agent", USER_AGENT);
+			final Map<String, String> requestHeaders = new LinkedHashMap<>();
+			requestHeaders.put("User-Agent", USER_AGENT);
 			if (headers != null) {
-				for (final Map.Entry<String, String> header : headers.entrySet()) {
-					if (header.getValue() != null) {
-						requestBuilder.header(header.getKey(), header.getValue());
-					}
-				}
-			}
-			if ("POST".equalsIgnoreCase(method)) {
-				requestBuilder.POST(body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
-			} else if ("GET".equalsIgnoreCase(method)) {
-				requestBuilder.GET();
-			} else {
-				throw new IllegalArgumentException("Unsupported HTTP method: " + method);
+				requestHeaders.putAll(headers);
 			}
 			log(method.toUpperCase(Locale.ROOT) + " " + uri + " with session");
-			final HttpResponse<String> response = httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString());
-			log("-> " + response.statusCode());
-			return new SessionResponse(response.statusCode(), response.body() == null ? "" : response.body(), response.headers().map());
+			final TransportResponse response = transport.execute(method, uri, requestHeaders, body);
+			log("-> " + response.status());
+			return new SessionResponse(response.status(), response.body(), response.getHeaderLists());
 		}
 
 		/**
@@ -689,18 +505,15 @@ public class OidcLoginCheck {
 			}
 			try {
 				log("CSRF probe: GET " + endpoint + " with X-CSRF-TOKEN: Fetch");
-				final HttpRequest request = HttpRequest.newBuilder(endpoint)
-						.timeout(requestTimeout)
-						.header("User-Agent", USER_AGENT)
-						.header("Accept", "*/*")
-						.header("X-Requested-With", "XMLHttpRequest")
-						.header("X-CSRF-TOKEN", "Fetch")
-						.header("Referer", finalPageUri.toString())
-						.header("Origin", finalPageUri.getScheme() + "://" + finalPageUri.getRawAuthority())
-						.GET()
-						.build();
-				final HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-				final String headerToken = extractCsrfTokenFromHeaders(response);
+				final Map<String, String> headers = new LinkedHashMap<>();
+				headers.put("User-Agent", USER_AGENT);
+				headers.put("Accept", "*/*");
+				headers.put("X-Requested-With", "XMLHttpRequest");
+				headers.put("X-CSRF-TOKEN", "Fetch");
+				headers.put("Referer", finalPageUri.toString());
+				headers.put("Origin", finalPageUri.getScheme() + "://" + finalPageUri.getRawAuthority());
+				final TransportResponse response = transport.execute("GET", endpoint, headers, null);
+				final String headerToken = extractCsrfTokenFromHeaders(response.headers());
 				final String token = headerToken != null ? headerToken : findCsrfToken(response.body());
 				if (token != null) {
 					csrfToken = token;
@@ -735,15 +548,12 @@ public class OidcLoginCheck {
 				probeCount++;
 				try {
 					log("CSRF probe: GET " + probeUri);
-					final HttpRequest request = HttpRequest.newBuilder(probeUri)
-							.timeout(requestTimeout)
-							.header("User-Agent", USER_AGENT)
-							.header("Accept", "*/*")
-							.header("Referer", finalPageUri.toString())
-							.GET()
-							.build();
-					final HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-					final String headerToken = extractCsrfTokenFromHeaders(response);
+					final Map<String, String> headers = new LinkedHashMap<>();
+					headers.put("User-Agent", USER_AGENT);
+					headers.put("Accept", "*/*");
+					headers.put("Referer", finalPageUri.toString());
+					final TransportResponse response = transport.execute("GET", probeUri, headers, null);
+					final String headerToken = extractCsrfTokenFromHeaders(response.headers());
 					if (headerToken != null) {
 						log("CSRF token found in response headers from " + probeUri);
 						return headerToken;
@@ -797,13 +607,14 @@ public class OidcLoginCheck {
 		}
 	}
 
-	private static String extractCsrfTokenFromHeaders(final HttpResponse<String> response) {
-		for (final Map.Entry<String, List<String>> header : response.headers().map().entrySet()) {
+	private static String extractCsrfTokenFromHeaders(final Map<String, String> headers) {
+		for (final Map.Entry<String, String> header : headers.entrySet()) {
 			final String name = header.getKey().toLowerCase(Locale.ROOT);
-			if (!(name.contains("csrf") || name.contains("xsrf"))) {
+			if (!(name.contains("csrf") || name.contains("xsrf")) || header.getValue() == null) {
 				continue;
 			}
-			for (final String value : header.getValue()) {
+			// Several header lines of the same name are joined with ", " by the network library
+			for (final String value : header.getValue().split(",\\s*")) {
 				// "Required"/"Fetch" are protocol values of servers that demand or offer a token, no token itself
 				if (value != null && !value.isBlank() && !"Required".equalsIgnoreCase(value.trim()) && !"Fetch".equalsIgnoreCase(value.trim())) {
 					return value.trim();
@@ -976,30 +787,30 @@ public class OidcLoginCheck {
 		URI currentReferer = referer;
 
 		for (int redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount++) {
-			final HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(uri)
-					.timeout(requestTimeout)
-					.header("User-Agent", USER_AGENT)
-					.header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-					.header("Accept-Language", "de,en;q=0.8");
+			final Map<String, String> headers = new LinkedHashMap<>();
+			headers.put("User-Agent", USER_AGENT);
+			headers.put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+			headers.put("Accept-Language", "de,en;q=0.8");
 			if (currentReferer != null) {
-				requestBuilder.header("Referer", currentReferer.toString());
+				headers.put("Referer", currentReferer.toString());
 			}
+			final String body;
 			if ("POST".equals(method)) {
-				requestBuilder.header("Content-Type", "application/x-www-form-urlencoded");
+				headers.put("Content-Type", "application/x-www-form-urlencoded");
 				if (currentReferer != null) {
-					requestBuilder.header("Origin", currentReferer.getScheme() + "://" + currentReferer.getRawAuthority());
+					headers.put("Origin", currentReferer.getScheme() + "://" + currentReferer.getRawAuthority());
 				}
-				requestBuilder.POST(HttpRequest.BodyPublishers.ofString(formBody == null ? "" : formBody, StandardCharsets.UTF_8));
+				body = formBody == null ? "" : formBody;
 			} else {
-				requestBuilder.GET();
+				body = null;
 			}
 
-			final HttpResponse<String> response = httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString());
+			final TransportResponse response = transport.execute(method, uri, headers, body);
 			captureSecurityTokenFromUri(uri);
-			final int status = response.statusCode();
+			final int status = response.status();
 			log(method + " " + uri + " -> " + status);
 
-			final String location = response.headers().firstValue("Location").orElse(null);
+			final String location = response.getHeader("Location");
 			if (status >= 300 && status < 400 && location != null) {
 				final URI nextUri = uri.resolve(location.trim().replace(" ", "%20"));
 				captureSecurityTokenFromUri(nextUri);
@@ -1015,7 +826,7 @@ public class OidcLoginCheck {
 				continue;
 			}
 
-			return new Page(uri, status, response.body() == null ? "" : response.body());
+			return new Page(uri, status, response.body());
 		}
 		throw new IllegalStateException("Too many redirects (more than " + MAX_REDIRECTS + ")");
 	}
@@ -1387,6 +1198,121 @@ public class OidcLoginCheck {
 	private record Page(URI uri, int status, String body) {
 	}
 
+	/**
+	 * Sends the requests of a check and its login session with the network library (de.soderer.network): own cookie
+	 * store per login session, redirects are not followed (the login flow follows them itself to see every hop), proxy
+	 * and TLS trust as configured.
+	 * <p>
+	 * HTTP/2 is requested (with transparent fallback to HTTP/1.1), so the network library sends the requests with
+	 * java.net.http.HttpClient. Its HTTP/1.1 transport HttpURLConnection would silently drop the "Origin" header, which
+	 * is checked by the CSRF protection of many identity providers and web applications.
+	 * </p>
+	 */
+	private static final class HttpTransport {
+		private final CookieManager cookieManager = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
+		private final String proxyUrl;
+		private final TrustManager trustManager;
+		private final boolean deactivateHostnameVerification;
+		private final int timeoutMillis;
+
+		HttpTransport(final String proxyUrl, final TrustManager trustManager, final boolean deactivateHostnameVerification, final Duration timeout) {
+			this.proxyUrl = proxyUrl;
+			this.trustManager = trustManager;
+			this.deactivateHostnameVerification = deactivateHostnameVerification;
+			timeoutMillis = (int) Math.min(Integer.MAX_VALUE, Math.max(0, timeout.toMillis()));
+		}
+
+		CookieManager getCookieManager() {
+			return cookieManager;
+		}
+
+		/**
+		 * Sends a request without following redirects.
+		 *
+		 * @param method
+		 *            HTTP method, e.g. "GET" or "POST"
+		 * @param headers
+		 *            request headers, may be null; null values are skipped
+		 * @param body
+		 *            request body, null for none
+		 */
+		TransportResponse execute(final String method, final URI uri, final Map<String, String> headers, final String body) throws Exception {
+			final HttpRequest request = new HttpRequest(HttpMethod.getHttpMethodByName(method), uri.toString());
+			request.setHttpVersion(HttpVersion.HTTP_2);
+			request.setMaxRedirects(0);
+			request.setConnectionTimeoutMillis(timeoutMillis);
+			request.setReadTimeoutMillis(timeoutMillis);
+			if (headers != null) {
+				for (final Map.Entry<String, String> header : headers.entrySet()) {
+					if (header.getValue() != null) {
+						request.addHeader(header.getKey(), header.getValue());
+					}
+				}
+			}
+
+			final List<String> cookieHeaderValues = cookieManager.get(uri, Collections.emptyMap()).get("Cookie");
+			if (cookieHeaderValues != null && !cookieHeaderValues.isEmpty()) {
+				// Set as plain header: HttpRequest.addCookieData would encode "=" within the cookie values (e.g. Base64)
+				request.addHeader("Cookie", String.join("; ", cookieHeaderValues));
+			}
+
+			if (body != null) {
+				request.setRequestBody(body);
+			}
+
+			final HttpResponse response = HttpUtilities.executeHttpRequest(request, resolveProxy(proxyUrl, uri), trustManager, deactivateHostnameVerification);
+			final TransportResponse transportResponse = new TransportResponse(response.getHttpCode(), response.getContent() == null ? "" : response.getContent(),
+					response.getHeaders() == null ? Collections.emptyMap() : response.getHeaders());
+
+			// The network library joins several "Set-Cookie" header lines with a line break
+			final String setCookieData = transportResponse.getHeader("Set-Cookie");
+			if (setCookieData != null) {
+				final Map<String, List<String>> setCookieHeaders = new LinkedHashMap<>();
+				setCookieHeaders.put("Set-Cookie", Arrays.stream(setCookieData.split("\n")).filter(line -> !line.isBlank()).toList());
+				cookieManager.put(uri, setCookieHeaders);
+			}
+			return transportResponse;
+		}
+	}
+
+	/**
+	 * Response of {@link HttpTransport#execute(String, URI, Map, String)}.
+	 *
+	 * @param headers
+	 *            response headers; several lines of the same name are joined (", ", for "Set-Cookie" with a line break)
+	 */
+	private record TransportResponse(int status, String body, Map<String, String> headers) {
+		/**
+		 * Header value by case insensitive name, null if missing.
+		 */
+		String getHeader(final String name) {
+			for (final Map.Entry<String, String> header : headers.entrySet()) {
+				if (header.getKey() != null && header.getKey().equalsIgnoreCase(name)) {
+					return header.getValue();
+				}
+			}
+			return null;
+		}
+
+		/**
+		 * Headers with one list entry per header line ("Set-Cookie") or per header (all others).
+		 */
+		Map<String, List<String>> getHeaderLists() {
+			final Map<String, List<String>> headerLists = new LinkedHashMap<>();
+			for (final Map.Entry<String, String> header : headers.entrySet()) {
+				if (header.getKey() == null || header.getValue() == null) {
+					continue;
+				}
+				if ("Set-Cookie".equalsIgnoreCase(header.getKey())) {
+					headerLists.put(header.getKey(), List.of(header.getValue().split("\n")));
+				} else {
+					headerLists.put(header.getKey(), List.of(header.getValue()));
+				}
+			}
+			return Collections.unmodifiableMap(headerLists);
+		}
+	}
+
 	private record HtmlField(String name, String type, String value, boolean checked) {
 	}
 
@@ -1492,14 +1418,6 @@ public class OidcLoginCheck {
 				}
 			}
 			return values;
-		}
-	}
-
-	private static class UsageException extends Exception {
-		private static final long serialVersionUID = 1L;
-
-		UsageException(final String message) {
-			super(message);
 		}
 	}
 }

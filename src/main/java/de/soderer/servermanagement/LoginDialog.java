@@ -30,8 +30,8 @@ import de.soderer.swing.modern.IconKind;
 import de.soderer.utilities.LangResources;
 
 /**
- * Dialog to add or edit a login: kind of authentication (radio buttons), URL, username, password and for OIDC an
- * optional IdP selection.
+ * Dialog to add or edit a login: kind of authentication (radio buttons), URL, username, password, optional proxy URL
+ * and for OIDC an optional IdP selection.
  */
 public class LoginDialog extends JDialog {
 	private static final long serialVersionUID = -2716356042391563140L;
@@ -42,6 +42,8 @@ public class LoginDialog extends JDialog {
 	private final JTextField usernameField;
 	private final JPasswordField passwordField;
 	private final JTextField idpSelectionField;
+	private final JTextField proxyUrlField;
+	private final Button okButton;
 
 	private boolean confirmed = false;
 
@@ -67,12 +69,15 @@ public class LoginDialog extends JDialog {
 		passwordField = new JPasswordField(40);
 		idpSelectionField = new JTextField(40);
 		idpSelectionField.setToolTipText(LangResources.get("idpSelection.tooltip"));
+		proxyUrlField = new JTextField(40);
+		proxyUrlField.setToolTipText(LangResources.get("proxyUrl.tooltip"));
 
 		addRow(formPanel, 0, LangResources.get("loginType"), loginTypePanel);
 		addRow(formPanel, 1, LangResources.get("url"), urlField);
 		addRow(formPanel, 2, LangResources.get("username"), usernameField);
 		addRow(formPanel, 3, LangResources.get("password"), passwordField);
-		addRow(formPanel, 4, LangResources.get("idpSelection"), idpSelectionField);
+		addRow(formPanel, 4, LangResources.get("proxyUrl"), proxyUrlField);
+		addRow(formPanel, 5, LangResources.get("idpSelection"), idpSelectionField);
 
 		// The optional IdP selection is only used for OIDC
 		classicRadioButton.addItemListener(e -> updateFieldStatus());
@@ -83,31 +88,33 @@ public class LoginDialog extends JDialog {
 		final JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
 		buttonPanel.setBorder(BorderFactory.createEmptyBorder(8, 16, 16, 16));
 
-		final Button okButton = new Button(LangResources.get("ok"), IconKind.EDIT, ButtonStyle.SECONDARY);
+		okButton = new Button(LangResources.get("ok"), IconKind.EDIT, ButtonStyle.SECONDARY);
 		okButton.addActionListener(e -> {
 			confirmed = true;
 			dispose();
 		});
 		buttonPanel.add(okButton);
 
-		// OK only with an URL
-		okButton.setEnabled(false);
-		urlField.getDocument().addDocumentListener(new DocumentListener() {
+		// OK only with an URL and a valid (or empty) proxy URL
+		final DocumentListener validationListener = new DocumentListener() {
 			@Override
 			public void insertUpdate(final DocumentEvent e) {
-				okButton.setEnabled(!urlField.getText().isBlank());
+				updateOkButtonStatus();
 			}
 
 			@Override
 			public void removeUpdate(final DocumentEvent e) {
-				okButton.setEnabled(!urlField.getText().isBlank());
+				updateOkButtonStatus();
 			}
 
 			@Override
 			public void changedUpdate(final DocumentEvent e) {
-				okButton.setEnabled(!urlField.getText().isBlank());
+				updateOkButtonStatus();
 			}
-		});
+		};
+		urlField.getDocument().addDocumentListener(validationListener);
+		proxyUrlField.getDocument().addDocumentListener(validationListener);
+		updateOkButtonStatus();
 
 		final Button cancelButton = new Button(LangResources.get("cancel"), IconKind.TRASH, ButtonStyle.SECONDARY);
 		cancelButton.addActionListener(e -> dispose());
@@ -127,6 +134,20 @@ public class LoginDialog extends JDialog {
 
 	private void updateFieldStatus() {
 		idpSelectionField.setEnabled(oidcRadioButton.isSelected());
+	}
+
+	/**
+	 * Enables OK only with an URL and a valid proxy URL; an invalid proxy URL shows the reason as tooltip.
+	 */
+	private void updateOkButtonStatus() {
+		String proxyError = null;
+		try {
+			OidcLoginCheck.validateProxyUrl(proxyUrlField.getText());
+		} catch (final IllegalArgumentException e) {
+			proxyError = e.getMessage();
+		}
+		proxyUrlField.setToolTipText(proxyError != null ? proxyError : LangResources.get("proxyUrl.tooltip"));
+		okButton.setEnabled(!urlField.getText().isBlank() && proxyError == null);
 	}
 
 	private static void addRow(final JPanel panel, final int row, final String labelText, final JComponent component) {
@@ -162,7 +183,9 @@ public class LoginDialog extends JDialog {
 				Arrays.fill(password, '\0');
 			}
 			idpSelectionField.setText(login.getIdpSelection() == null ? "" : login.getIdpSelection());
+			proxyUrlField.setText(login.getProxyUrl() == null ? "" : login.getProxyUrl());
 			updateFieldStatus();
+			updateOkButtonStatus();
 		}
 		return this;
 	}
@@ -185,13 +208,16 @@ public class LoginDialog extends JDialog {
 		final char[] password = passwordField.getPassword();
 		final boolean isOidc = oidcRadioButton.isSelected();
 		final String idpSelection = idpSelectionField.getText().trim();
+		final String proxyUrl = proxyUrlField.getText().trim();
 		login.setLoginType(isOidc ? LoginType.OIDC : LoginType.BasicAuth)
 		.setUrl(urlField.getText().trim())
 		.setUsername(usernameField.getText().trim())
 		// Encrypted with the master key; an empty password removes it
 		.setPasswordArray(password)
 		// IdP selection is optional and only stored for OIDC
-		.setIdpSelection(isOidc && !idpSelection.isEmpty() ? idpSelection : null);
+		.setIdpSelection(isOidc && !idpSelection.isEmpty() ? idpSelection : null)
+		// Proxy is optional and used for both login types; empty means system proxy settings
+		.setProxyUrl(proxyUrl.isEmpty() ? null : proxyUrl);
 		Arrays.fill(password, '\0');
 		return login;
 	}

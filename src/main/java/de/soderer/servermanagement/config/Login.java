@@ -18,6 +18,12 @@ public class Login {
 	private String idpSelection;
 
 	/**
+	 * Optional proxy for the login check, e.g. "http://proxy.example.com:3128" or "none" for a direct connection; null
+	 * means the system proxy settings are used.
+	 */
+	private String proxyUrl;
+
+	/**
 	 * Kind of authentication; never null (configurations without login type are CLASSIC).
 	 */
 	public LoginType getLoginType() {
@@ -108,6 +114,19 @@ public class Login {
 
 	public Login setIdpSelection(final String idpSelection) {
 		this.idpSelection = idpSelection;
+		return this;
+	}
+
+	/**
+	 * Optional proxy URL for the login check ("http://host:port", "host:port" or "none"); null if the system proxy
+	 * settings are used.
+	 */
+	public String getProxyUrl() {
+		return proxyUrl;
+	}
+
+	public Login setProxyUrl(final String proxyUrl) {
+		this.proxyUrl = proxyUrl;
 		return this;
 	}
 

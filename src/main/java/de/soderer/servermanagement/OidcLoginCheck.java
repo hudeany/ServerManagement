@@ -3,8 +3,10 @@ package de.soderer.servermanagement;
 import java.io.Console;
 import java.net.CookieManager;
 import java.net.CookiePolicy;
+import java.net.InetSocketAddress;
 import java.net.ProxySelector;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -85,6 +87,7 @@ public class OidcLoginCheck {
 		String dumpFinalHtmlPath = null;
 		String tokenType = null;
 		String idpSelection = null;
+		String proxyUrl = null;
 		boolean insecure = false;
 		boolean verbose = false;
 		boolean quiet = false;
@@ -100,6 +103,7 @@ public class OidcLoginCheck {
 				case "-dump-final-html" -> dumpFinalHtmlPath = nextArg(args, ++i, args[i - 1]);
 				case "-token-type" -> tokenType = nextArg(args, ++i, args[i - 1]);
 				case "-idp", "-idp-button", "-idp-provider" -> idpSelection = nextArg(args, ++i, args[i - 1]);
+				case "-proxy" -> proxyUrl = nextArg(args, ++i, args[i - 1]);
 				case "-timeout" -> {
 					try {
 						timeoutSeconds = Integer.parseInt(nextArg(args, ++i, args[i - 1]));
@@ -164,8 +168,14 @@ public class OidcLoginCheck {
 		}
 
 		try {
+			validateProxyUrl(proxyUrl);
+		} catch (final IllegalArgumentException e) {
+			throw new UsageException(e.getMessage());
+		}
+
+		try {
 			final OidcLoginCheck check = new OidcLoginCheck(insecure, verbose, quiet, Duration.ofSeconds(timeoutSeconds), usernameField, passwordField,
-					dumpFinalHtmlPath, tokenType, idpSelection);
+					dumpFinalHtmlPath, tokenType, idpSelection, proxyUrl);
 			return check.check(startUri, user, password, expectText) ? 0 : 1;
 		} catch (final Exception e) {
 			System.out.println("RESULT: FAILED - " + e.getClass().getSimpleName() + ": " + e.getMessage());
@@ -198,6 +208,8 @@ public class OidcLoginCheck {
 				  -dump-final-html <file> Write final HTML response body to this file path
 				  -token-type <name>      Token output type: id_token, access_token or code
 				  -idp <text>             Optional IdP button/provider text to click before login (federated flow)
+				  -proxy <url>            HTTP proxy ("http://host:port" or "host:port"), "none" for a direct
+				                          connection (default: system proxy settings / JVM proxy properties)
 				  -timeout <seconds>      Timeout per request (default 30)
 				  -insecure               Accept any TLS certificate and hostname (test environments only)
 				  -v, -verbose            Log every request and redirect
@@ -206,9 +218,27 @@ public class OidcLoginCheck {
 				Exit codes: 0 = OK, 1 = check failed, 2 = usage error""");
 	}
 
+	/**
+	 * Creates a check that uses the system proxy settings.
+	 */
 	public OidcLoginCheck(final boolean insecure, final boolean verbose, final boolean quiet, final Duration timeout,
 			final String usernameFieldOverride, final String passwordFieldOverride, final String finalHtmlDumpPath,
 			final String tokenTypeFilter, final String idpSelectionText) throws Exception {
+		this(insecure, verbose, quiet, timeout, usernameFieldOverride, passwordFieldOverride, finalHtmlDumpPath, tokenTypeFilter, idpSelectionText, null);
+	}
+
+	/**
+	 * Creates a check with an explicit proxy.
+	 *
+	 * @param proxyUrl
+	 *            "http://host:port" or "host:port" for an HTTP proxy, "none"/"direct" for a direct connection, null or
+	 *            blank for the system proxy settings
+	 * @throws IllegalArgumentException
+	 *             if the proxy URL is invalid
+	 */
+	public OidcLoginCheck(final boolean insecure, final boolean verbose, final boolean quiet, final Duration timeout,
+			final String usernameFieldOverride, final String passwordFieldOverride, final String finalHtmlDumpPath,
+			final String tokenTypeFilter, final String idpSelectionText, final String proxyUrl) throws Exception {
 		this.verbose = verbose;
 		this.quiet = quiet;
 		this.usernameFieldOverride = usernameFieldOverride;
@@ -222,8 +252,9 @@ public class OidcLoginCheck {
 				// Redirects are followed manually to keep track of the hops
 				.followRedirects(HttpClient.Redirect.NEVER)
 				.connectTimeout(timeout)
-				// Honors -Dhttps.proxyHost etc. and -Djava.net.useSystemProxies=true
-				.proxy(ProxySelector.getDefault());
+				// Explicit proxy, or the system default (honors -Dhttps.proxyHost etc. and -Djava.net.useSystemProxies=true)
+				.proxy(createProxySelector(proxyUrl));
+		log("Proxy: " + describeProxy(proxyUrl));
 
 		if (insecure) {
 			// Must be set before the first HttpClient is created
@@ -728,6 +759,93 @@ public class OidcLoginCheck {
 			return null;
 		}
 		return null;
+	}
+
+	/**
+	 * Checks whether the value means "no proxy at all" (direct connection, ignoring the system proxy settings).
+	 */
+	private static boolean isDirectProxyValue(final String proxyUrl) {
+		final String trimmed = proxyUrl.trim();
+		return "none".equalsIgnoreCase(trimmed) || "direct".equalsIgnoreCase(trimmed);
+	}
+
+	/**
+	 * Validates a proxy URL as accepted by {@link #createProxySelector(String)} without any DNS lookup.
+	 *
+	 * @throws IllegalArgumentException
+	 *             with a readable message if the value is invalid
+	 */
+	public static void validateProxyUrl(final String proxyUrl) {
+		if (proxyUrl != null && !proxyUrl.isBlank() && !isDirectProxyValue(proxyUrl)) {
+			parseProxyUri(proxyUrl);
+		}
+	}
+
+	/**
+	 * Creates the proxy selector for the HttpClient.
+	 *
+	 * @param proxyUrl
+	 *            null or blank: system proxy settings; "none"/"direct": no proxy; otherwise "http://host:port" or
+	 *            "host:port"
+	 * @throws IllegalArgumentException
+	 *             if the proxy URL is invalid
+	 */
+	public static ProxySelector createProxySelector(final String proxyUrl) {
+		if (proxyUrl == null || proxyUrl.isBlank()) {
+			final ProxySelector systemDefault = ProxySelector.getDefault();
+			return systemDefault != null ? systemDefault : HttpClient.Builder.NO_PROXY;
+		} else if (isDirectProxyValue(proxyUrl)) {
+			return HttpClient.Builder.NO_PROXY;
+		} else {
+			final URI proxyUri = parseProxyUri(proxyUrl);
+			// Resolved here (not createUnresolved), so the HttpClient gets a connectable address
+			return ProxySelector.of(new InetSocketAddress(proxyUri.getHost(), proxyUri.getPort()));
+		}
+	}
+
+	private static String describeProxy(final String proxyUrl) {
+		if (proxyUrl == null || proxyUrl.isBlank()) {
+			return "system settings";
+		} else if (isDirectProxyValue(proxyUrl)) {
+			return "none (direct connection)";
+		} else {
+			final URI proxyUri = parseProxyUri(proxyUrl);
+			return proxyUri.getHost() + ":" + proxyUri.getPort();
+		}
+	}
+
+	/**
+	 * Parses and checks an HTTP proxy URL. Only plain HTTP proxies without credentials are supported, because the
+	 * java.net.http.HttpClient does not support SOCKS proxies.
+	 */
+	private static URI parseProxyUri(final String proxyUrl) {
+		String value = proxyUrl.trim();
+		if (!value.contains("://")) {
+			value = "http://" + value;
+		}
+		final URI proxyUri;
+		try {
+			proxyUri = new URI(value);
+		} catch (@SuppressWarnings("unused") final URISyntaxException e) {
+			throw new IllegalArgumentException("Invalid proxy URL: " + proxyUrl);
+		}
+		if (!"http".equalsIgnoreCase(proxyUri.getScheme())) {
+			throw new IllegalArgumentException("Unsupported proxy scheme \"" + proxyUri.getScheme() + "\" (only http proxies are supported): " + proxyUrl);
+		}
+		if (proxyUri.getRawUserInfo() != null) {
+			throw new IllegalArgumentException("Credentials in the proxy URL are not supported: " + proxyUri.getHost());
+		}
+		if (proxyUri.getHost() == null || proxyUri.getHost().isBlank()) {
+			throw new IllegalArgumentException("Missing host in proxy URL: " + proxyUrl);
+		}
+		if (proxyUri.getPort() < 1 || proxyUri.getPort() > 65535) {
+			throw new IllegalArgumentException("Missing or invalid port in proxy URL (e.g. http://proxy:3128): " + proxyUrl);
+		}
+		final String path = proxyUri.getRawPath();
+		if ((path != null && !path.isEmpty() && !"/".equals(path)) || proxyUri.getRawQuery() != null || proxyUri.getRawFragment() != null) {
+			throw new IllegalArgumentException("Proxy URL must not contain a path, query or fragment: " + proxyUrl);
+		}
+		return proxyUri;
 	}
 
 	private static int effectivePort(final URI uri) {

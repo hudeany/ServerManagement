@@ -7,11 +7,14 @@ import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.GraphicsConfiguration;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Image;
 import java.awt.Insets;
 import java.awt.Point;
+import java.awt.Rectangle;
+import java.awt.Toolkit;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -190,8 +193,30 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 
 		pack();
 		setMinimumSize(new Dimension(Math.min(getWidth(), 760), 420));
+		fitIntoScreen();
 
 		setLocationRelativeTo(null);
+	}
+
+	/**
+	 * Limits the window size to the usable screen area (without taskbar), so the action bar with the start button is
+	 * always visible, even on small screens or with many server cards.
+	 */
+	private void fitIntoScreen() {
+		final GraphicsConfiguration graphicsConfiguration = getGraphicsConfiguration();
+		if (graphicsConfiguration == null) {
+			return;
+		}
+		final Rectangle screenBounds = graphicsConfiguration.getBounds();
+		final Insets screenInsets = Toolkit.getDefaultToolkit().getScreenInsets(graphicsConfiguration);
+		final int usableWidth = screenBounds.width - screenInsets.left - screenInsets.right;
+		final int usableHeight = screenBounds.height - screenInsets.top - screenInsets.bottom;
+
+		// The minimum size must not exceed the screen either, otherwise setSize is overruled
+		final Dimension minimumSize = getMinimumSize();
+		setMinimumSize(new Dimension(Math.min(minimumSize.width, usableWidth), Math.min(minimumSize.height, usableHeight)));
+
+		setSize(Math.min(getWidth(), usableWidth), Math.min(getHeight(), usableHeight));
 	}
 
 	/**
@@ -257,7 +282,8 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 		serverInformationScrollPane.setOpaque(false);
 		serverInformationScrollPane.getViewport().setBackground(ModernUi.BACKGROUND);
 		ModernUi.styleScrollBars(serverInformationScrollPane, ModernUi.BACKGROUND);
-		serverInformationScrollPane.setPreferredSize(new Dimension(820, 600));
+		// Moderate start height; the window is resizable and additionally limited to the screen in fitIntoScreen()
+		serverInformationScrollPane.setPreferredSize(new Dimension(820, 420));
 		serverInformationScrollPane.getVerticalScrollBar().setUnitIncrement(16);
 
 		return serverInformationPanel;

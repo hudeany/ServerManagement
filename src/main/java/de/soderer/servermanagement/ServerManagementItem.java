@@ -61,8 +61,10 @@ import org.w3c.dom.Document;
 import org.xml.sax.InputSource;
 
 import de.soderer.applicationbase.ApplicationConfigurationProperties;
+import de.soderer.json.JsonNode;
 import de.soderer.json.JsonReader;
 import de.soderer.json.JsonValueString;
+import de.soderer.json.path.JsonPath;
 import de.soderer.network.HttpMethod;
 import de.soderer.network.HttpRequest;
 import de.soderer.network.HttpResponse;
@@ -1911,7 +1913,17 @@ public class ServerManagementItem extends JPanel {
 					}
 
 					if (data != null) {
-						if (version.getPath().toLowerCase().startsWith("json:")) {
+						if (version.getPath().toLowerCase().startsWith("json:") && isJsonPathWithFanOut(version.getPath().substring(5))) {
+							// Filters and wildcards are not supported by the streaming JsonReader.readUpToJsonPath, but by
+							// JsonNode.getDataListByJsonPath on the complete data
+							try {
+								setVersion(version.getName(), readFirstStringByJsonPath(data, version.getPath().substring(5).trim()));
+							} catch (final Exception e) {
+								addDebugError(debugErrors, version, "Parse JSON path '" + version.getPath().substring(5) + "'", null, e, data);
+								setVersion(version.getName(), "ERROR");
+								status = "ERROR";
+							}
+						} else if (version.getPath().toLowerCase().startsWith("json:")) {
 							try (final JsonReader jsonReader = new JsonReader(new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)))) {
 								jsonReader.readUpToJsonPath(version.getPath().substring(5));
 								jsonReader.readNextJsonNode();
@@ -1995,6 +2007,44 @@ public class ServerManagementItem extends JPanel {
 			}
 			showDebugErrors(debugErrors);
 		}
+	}
+
+	/**
+	 * Checks whether a JSON path contains a filter ("[?(...)]") or a wildcard ("*"), which can match several nodes and
+	 * need the complete data instead of the streaming JsonReader.
+	 */
+	private static boolean isJsonPathWithFanOut(final String jsonPath) {
+		return jsonPath != null && (jsonPath.contains("?(") || jsonPath.contains("*"));
+	}
+
+	/**
+	 * Reads the complete JSON data and returns the string value of the first node matching the JSON path, e.g.
+	 * "$.versionData[?(@.name=='nexInsure')].version".
+	 *
+	 * @throws Exception
+	 *             if the data or path is invalid, nothing matches or the first match is no string
+	 */
+	private static String readFirstStringByJsonPath(final String data, final String jsonPathString) throws Exception {
+		final JsonNode rootNode;
+		try (final JsonReader jsonReader = new JsonReader(new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)))) {
+			// Reads the complete document, already marked as root node (required for paths starting with "$")
+			rootNode = jsonReader.read();
+		}
+
+		final List<JsonNode> matches = rootNode.getDataListByJsonPath(new JsonPath(jsonPathString));
+		if (matches.isEmpty()) {
+			String hint = "";
+			if (jsonPathString.matches(".*\\[\\?\\(.*\\)\\].*\\.[A-Za-z0-9_$-]+\\[\\d+\\]\\s*$")) {
+				hint = " (Hint: an index after the field name, like '.version[0]', is applied to the field value, not to the filter result; remove it, the first match is used anyway)";
+			}
+			throw new Exception("JSON path '" + jsonPathString + "' found no value" + hint);
+		}
+		final JsonNode firstMatch = matches.get(0);
+		if (!(firstMatch instanceof JsonValueString)) {
+			throw new Exception("JSON path '" + jsonPathString + "' found no string value, but " + firstMatch.getJsonDataType()
+					+ (matches.size() > 1 ? " (" + matches.size() + " matches)" : ""));
+		}
+		return ((JsonValueString) firstMatch).getValue();
 	}
 
 	/** TEMPORARY DEBUG: shows the errors of the version check in a dialog; set to false (or remove) when no longer needed */

@@ -90,6 +90,8 @@ public class OidcLoginCheck {
 	private HttpClient httpClient;
 	private String securityTokenType;
 	private String securityToken;
+	/** Reason of the failure of the last check, null if it succeeded */
+	private String lastFailureMessage;
 
 	public static void main(final String[] args) {
 		try {
@@ -334,6 +336,7 @@ public class OidcLoginCheck {
 		}
 		securityTokenType = null;
 		securityToken = null;
+		lastFailureMessage = null;
 		// Each check gets its own cookie store, a new check must not reuse the session of a previous check
 		final CookieManager cookieManager = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
 		httpClient = createHttpClient(cookieManager);
@@ -483,6 +486,16 @@ public class OidcLoginCheck {
 		}
 		System.out.println("RESULT: OK");
 		return session;
+	}
+
+	/**
+	 * Reason why the last {@link #check(URI, String, String, String)} returned null, e.g. "Login form was shown again
+	 * after submitting the credentials (wrong username/password?)".
+	 *
+	 * @return null if the last check succeeded or threw an exception
+	 */
+	public String getLastFailureMessage() {
+		return lastFailureMessage;
 	}
 
 	/**
@@ -781,6 +794,7 @@ public class OidcLoginCheck {
 	 * @return always null (no session)
 	 */
 	private LoginSession fail(final String message, final Page page, final long startTime) {
+		lastFailureMessage = message + " (final URL: " + page.uri + ", HTTP " + page.status + ")";
 		if (!quiet) {
 			printPageInfo(page, startTime);
 		}

@@ -128,11 +128,12 @@ public class ServerManagementItem extends JPanel {
 	private static final int LOGINS_RESULT_COLUMN = 3;
 
 	/**
-	 * Version location with login: "&lt;GET|POST&gt;:&lt;http(s)://username@host/path&gt;", e.g.
-	 * "POST:https://monitor@host/cid/ui/gwt/rest/versions/getVersionData". The username identifies the login of this
-	 * server; special characters in the username must be URL encoded (e.g. "@" as "%40").
+	 * Version location with login: "[&lt;GET|POST&gt;:]&lt;http(s)://username@host/path&gt;", e.g.
+	 * "POST:https://monitor@host/cid/ui/gwt/rest/versions/getVersionData" or "https://monitor@host/version.json" (GET
+	 * without method prefix). The username identifies the login of this server; special characters in the username
+	 * must be URL encoded (e.g. "@" as "%40"). URLs without username are requested without login.
 	 */
-	private static final Pattern LOGIN_LOCATION_PATTERN = Pattern.compile("^\\s*(GET|POST)\\s*:\\s*(https?://[^/\\s?#]*@\\S+)\\s*$", Pattern.CASE_INSENSITIVE);
+	private static final Pattern LOGIN_LOCATION_PATTERN = Pattern.compile("^\\s*(?:(GET|POST)\\s*:\\s*)?(https?://[^/\\s?#]*@\\S+)\\s*$", Pattern.CASE_INSENSITIVE);
 
 	private RefreshServerItemStatusWorker worker;
 
@@ -1742,16 +1743,19 @@ public class ServerManagementItem extends JPanel {
 		SftpConnection sftpConnection = null;
 		String cachedSftpConnectionString = "";
 
-		// Locations "<GET|POST>:<http(s)://username@host/path>": one login per login configuration and one request per location
-		final Map<Login, OidcLoginCheck.LoginSession> loginSessionCache = new HashMap<>();
+		// Locations "[<GET|POST>:]<http(s)://username@host/path>": one login per login configuration and one request per location
+		final Map<Login, LoginAttempt> loginSessionCache = new HashMap<>();
 		final Map<String, String> loginLocationDataCache = new HashMap<>();
+
+		// TEMPORARY DEBUG: collected errors of this version check, shown in a dialog at the end
+		final List<String> debugErrors = new ArrayList<>();
 
 		try {
 			for (final Version version : server.getVersions()) {
 				// Each version separately: before, a failing SSH connection, an invalid regex or a missing property aborted
 				// the check of all further versions of this server
+				String data = null;
 				try {
-					String data = null;
 					final Matcher loginLocationMatcher = LOGIN_LOCATION_PATTERN.matcher(version.getLocation());
 					if (loginLocationMatcher.matches()) {
 						// JSON paths request JSON ("Content-Type: application/json"), so the content type is part of the cache key
@@ -1759,11 +1763,17 @@ public class ServerManagementItem extends JPanel {
 						final String locationKey = version.getLocation().trim() + (jsonRequest ? " [json]" : "");
 						if (loginLocationDataCache.containsKey(locationKey)) {
 							data = loginLocationDataCache.get(locationKey);
+							if (data == null) {
+								addDebugError(debugErrors, version, "Login request", "Same location already failed before (see error above)", null, null);
+							}
 						} else {
 							try {
-								data = readWithLogin(loginLocationMatcher.group(1), loginLocationMatcher.group(2), jsonRequest, loginSessionCache);
-							} catch (@SuppressWarnings("unused") final Exception e) {
+								// Without method prefix a GET request is used
+								final String httpMethod = loginLocationMatcher.group(1) != null ? loginLocationMatcher.group(1).toUpperCase() : "GET";
+								data = readWithLogin(httpMethod, loginLocationMatcher.group(2), jsonRequest, loginSessionCache);
+							} catch (final Exception e) {
 								data = null;
+								addDebugError(debugErrors, version, "Login and request", null, e, null);
 							}
 							// Also a failure is cached (null), so the request is not repeated for each version
 							loginLocationDataCache.put(locationKey, data);
@@ -1771,16 +1781,19 @@ public class ServerManagementItem extends JPanel {
 						// data == null is shown as ERROR below
 					} else if (version.getLocation().toLowerCase().startsWith("http://")
 							|| version.getLocation().toLowerCase().startsWith("https://")) {
+						// URL without username: GET request without login
 						try {
 							final HttpRequest request = new HttpRequest(HttpMethod.GET, version.getLocation());
 							final HttpResponse response = HttpUtilities.executeHttpRequest(request, applicationConfiguration.getProxyConfiguration().getProxy(request.getUrl()), trustManager, deactivateHostnameVerification);
 							if (response.getHttpCode() == 200) {
 								data = response.getContent();
 							} else {
+								addDebugError(debugErrors, version, "HTTP GET without login", "HTTP " + response.getHttpCode() + "\nResponse: " + shorten(response.getContent(), 500), null, null);
 								setVersion(version.getName(), "ERROR");
 								status = "ERROR";
 							}
-						} catch (@SuppressWarnings("unused") final Exception e) {
+						} catch (final Exception e) {
+							addDebugError(debugErrors, version, "HTTP GET without login", null, e, null);
 							setVersion(version.getName(), "ERROR");
 							status = "ERROR";
 						}
@@ -1803,14 +1816,16 @@ public class ServerManagementItem extends JPanel {
 						if (filePath.endsWith("/")) {
 							try {
 								data = StringUtilities.join(sftpConnection.listFiles(filePath), "\n");
-							} catch (@SuppressWarnings("unused") final Exception e) {
+							} catch (final Exception e) {
+								addDebugError(debugErrors, version, "SSH list directory " + filePath + " (" + connectionData + ")", null, e, null);
 								setVersion(version.getName(), "ERROR");
 								status = "ERROR";
 							}
 						} else {
 							try (InputStream inputStream = sftpConnection.downloadFile(filePath)) {
 								data = new String(IoUtilities.toByteArray(inputStream), StandardCharsets.UTF_8);
-							} catch (@SuppressWarnings("unused") final Exception e) {
+							} catch (final Exception e) {
+								addDebugError(debugErrors, version, "SSH download " + filePath + " (" + connectionData + ")", null, e, null);
 								setVersion(version.getName(), "ERROR");
 								status = "ERROR";
 							}
@@ -1833,7 +1848,8 @@ public class ServerManagementItem extends JPanel {
 
 						try {
 							data = sftpConnection.executeCommand(sshCommandLocation.command());
-						} catch (@SuppressWarnings("unused") final Exception e) {
+						} catch (final Exception e) {
+							addDebugError(debugErrors, version, "SSH command (" + connectionData + ")", null, e, null);
 							setVersion(version.getName(), "ERROR");
 							status = "ERROR";
 						}
@@ -1877,11 +1893,13 @@ public class ServerManagementItem extends JPanel {
 
 						try {
 							data = sftpConnection.executeCommand(command);
-						} catch (@SuppressWarnings("unused") final Exception e) {
+						} catch (final Exception e) {
+							addDebugError(debugErrors, version, "SSH command (old syntax, " + sftpConnectionString + ")", null, e, null);
 							setVersion(version.getName(), "ERROR");
 							status = "ERROR";
 						}
 					} else {
+						addDebugError(debugErrors, version, "Location", "Unsupported location type (expected http(s)://, GET:/POST:http(s)://user@..., ssh://, ssh-cmd://, ssh-cmd:)", null, null);
 						setVersion(version.getName(), "ERROR");
 						status = "ERROR";
 					}
@@ -1891,9 +1909,16 @@ public class ServerManagementItem extends JPanel {
 							try (final JsonReader jsonReader = new JsonReader(new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)))) {
 								jsonReader.readUpToJsonPath(version.getPath().substring(5));
 								jsonReader.readNextJsonNode();
-								final String versionText = ((JsonValueString) jsonReader.getCurrentObject()).getValue();
+								final Object currentObject = jsonReader.getCurrentObject();
+								if (!(currentObject instanceof JsonValueString)) {
+									// TEMPORARY DEBUG: before, this was a ClassCastException without information
+									throw new Exception("JSON path does not point to a string value, but to: "
+											+ (currentObject == null ? "null" : currentObject.getClass().getSimpleName() + " " + shorten(currentObject.toString(), 300)));
+								}
+								final String versionText = ((JsonValueString) currentObject).getValue();
 								setVersion(version.getName(), versionText);
-							} catch (@SuppressWarnings("unused") final Exception e) {
+							} catch (final Exception e) {
+								addDebugError(debugErrors, version, "Parse JSON path '" + version.getPath().substring(5) + "'", null, e, data);
 								setVersion(version.getName(), "ERROR");
 								status = "ERROR";
 							}
@@ -1902,7 +1927,8 @@ public class ServerManagementItem extends JPanel {
 								final Document document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(new InputSource(new StringReader(data)));
 								final String versionText = (String) XPathFactory.newInstance().newXPath().evaluate(version.getPath().substring(4), document, XPathConstants.STRING);
 								setVersion(version.getName(), versionText);
-							} catch (@SuppressWarnings("unused") final Exception e) {
+							} catch (final Exception e) {
+								addDebugError(debugErrors, version, "Parse XPath '" + version.getPath().substring(4) + "'", null, e, data);
 								setVersion(version.getName(), "ERROR");
 								status = "ERROR";
 							}
@@ -1912,6 +1938,7 @@ public class ServerManagementItem extends JPanel {
 							if (matcher.find()) {
 								setVersion(version.getName(), matcher.group());
 							} else {
+								addDebugError(debugErrors, version, "Regex '" + version.getPath().substring(6) + "'", "No match", null, data);
 								setVersion(version.getName(), "ERROR");
 								status = "ERROR";
 							}
@@ -1923,6 +1950,7 @@ public class ServerManagementItem extends JPanel {
 							if (matcher.find()) {
 								setVersion(version.getName(), matcher.group(group));
 							} else {
+								addDebugError(debugErrors, version, "Regex '" + version.getPath() + "'", "No match", null, data);
 								setVersion(version.getName(), "ERROR");
 								status = "ERROR";
 							}
@@ -1941,6 +1969,7 @@ public class ServerManagementItem extends JPanel {
 								setVersion(version.getName(), propertyValue);
 							}
 						} else {
+							addDebugError(debugErrors, version, "Path", "Unsupported path type (expected json:, xml:, regex:, regex(n):, properties:)", null, null);
 							setVersion(version.getName(), "ERROR");
 							status = "ERROR";
 						}
@@ -1948,7 +1977,8 @@ public class ServerManagementItem extends JPanel {
 						setVersion(version.getName(), "ERROR");
 						status = "ERROR";
 					}
-				} catch (@SuppressWarnings("unused") final Exception e) {
+				} catch (final Exception e) {
+					addDebugError(debugErrors, version, "Version check", null, e, data);
 					setVersion(version.getName(), "ERROR");
 					status = "ERROR";
 				}
@@ -1957,7 +1987,70 @@ public class ServerManagementItem extends JPanel {
 			if (sftpConnection != null) {
 				sftpConnection.close();
 			}
+			showDebugErrors(debugErrors);
 		}
+	}
+
+	/** TEMPORARY DEBUG: shows the errors of the version check in a dialog; set to false (or remove) when no longer needed */
+	private static final boolean DEBUG_VERSION_ERRORS = true;
+
+	/**
+	 * TEMPORARY DEBUG: Collects an error of the version check with all available details.
+	 *
+	 * @param message
+	 *            optional error text
+	 * @param exception
+	 *            optional exception, shown with all causes
+	 * @param data
+	 *            optional data which was parsed (shortened)
+	 */
+	private static void addDebugError(final List<String> debugErrors, final Version version, final String step, final String message, final Exception exception, final String data) {
+		if (!DEBUG_VERSION_ERRORS) {
+			return;
+		}
+		final StringBuilder text = new StringBuilder();
+		text.append("Version: ").append(version.getName()).append("\n");
+		text.append("Location: ").append(maskLocationPassword(version.getLocation())).append("\n");
+		text.append("Path: ").append(version.getPath()).append("\n");
+		text.append("Step: ").append(step).append("\n");
+		if (message != null) {
+			text.append("Error: ").append(message).append("\n");
+		}
+		Throwable cause = exception;
+		String prefix = "Exception: ";
+		while (cause != null) {
+			text.append(prefix).append(cause.getClass().getName()).append(": ").append(cause.getMessage()).append("\n");
+			prefix = "Caused by: ";
+			cause = cause.getCause() == cause ? null : cause.getCause();
+		}
+		if (data != null) {
+			text.append("Data: ").append(shorten(data, 1000)).append("\n");
+		}
+		debugErrors.add(text.toString());
+	}
+
+	/**
+	 * TEMPORARY DEBUG: Masks a password in a location like "ssh://user:password@host/path" for the error dialog.
+	 */
+	private static String maskLocationPassword(final String location) {
+		if (location == null) {
+			return null;
+		}
+		return location.replaceFirst("^((?i:ssh|ssh-cmd|https?)://[^:@/\\s]*):[^@\\s]*@", "$1:***@");
+	}
+
+	/**
+	 * TEMPORARY DEBUG: Shows the collected errors of the version check in a dialog (on the Swing thread, because the
+	 * check runs in a worker).
+	 */
+	private void showDebugErrors(final List<String> debugErrors) {
+		if (!DEBUG_VERSION_ERRORS || debugErrors.isEmpty()) {
+			return;
+		}
+		final String text = "Errors of the version check of server '" + server.getName() + "':\n\n" + String.join("\n", debugErrors);
+		// Also on the console, so the text can be copied completely
+		System.err.println(text);
+		SwingUtilities.invokeLater(() -> new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " DEBUG " + LangResources.get("readVersions") + " - " + server.getName(), text).withDialogStyle(DialogStyle.ERROR).open());
 	}
 
 	private void refreshLogins() {
@@ -2010,7 +2103,9 @@ public class ServerManagementItem extends JPanel {
 	/**
 	 * Executes the OIDC login of the given login configuration.
 	 *
-	 * @return the logged in session (cookies, CSRF token) or null, if the login failed
+	 * @return the logged in session (cookies, CSRF token)
+	 * @throws Exception
+	 *             if the login failed, with the reason as message
 	 */
 	private static OidcLoginCheck.LoginSession loginWithOidc(final Login login) throws Exception {
 		final URI startUri = parseHttpUri(login.getUrl());
@@ -2021,7 +2116,17 @@ public class ServerManagementItem extends JPanel {
 		final String proxyUrl = StringUtilities.isBlank(login.getProxyUrl()) ? null : login.getProxyUrl();
 
 		final OidcLoginCheck check = new OidcLoginCheck(false, false, false, Duration.ofSeconds(30), null, null, null, null, idpSelection, proxyUrl);
-		return check.check(startUri, login.getUsername(), password, null);
+		final OidcLoginCheck.LoginSession session = check.check(startUri, login.getUsername(), password, null);
+		if (session == null) {
+			throw new Exception("OIDC login of user '" + login.getUsername() + "' at " + startUri + " failed: " + check.getLastFailureMessage());
+		}
+		return session;
+	}
+
+	/**
+	 * Result of an OIDC login within one version refresh: the session or the error of the failed login.
+	 */
+	private record LoginAttempt(OidcLoginCheck.LoginSession session, Exception error) {
 	}
 
 	/**
@@ -2098,7 +2203,7 @@ public class ServerManagementItem extends JPanel {
 	 * @throws Exception
 	 *             if the login fails or the request does not return HTTP 2xx
 	 */
-	private String readWithLogin(final String httpMethod, final String urlWithUsername, final boolean jsonRequest, final Map<Login, OidcLoginCheck.LoginSession> loginSessionCache) throws Exception {
+	private String readWithLogin(final String httpMethod, final String urlWithUsername, final boolean jsonRequest, final Map<Login, LoginAttempt> loginSessionCache) throws Exception {
 		final URI uriWithUsername = parseHttpUri(urlWithUsername);
 		final String rawUserInfo = uriWithUsername.getRawUserInfo();
 		if (rawUserInfo == null || rawUserInfo.isEmpty()) {
@@ -2118,31 +2223,42 @@ public class ServerManagementItem extends JPanel {
 
 		final HttpResponse response;
 		if (login.getLoginType() == LoginType.OIDC) {
-			final OidcLoginCheck.LoginSession session;
-			if (loginSessionCache.containsKey(login)) {
-				session = loginSessionCache.get(login);
-			} else {
-				OidcLoginCheck.LoginSession newSession = null;
+			LoginAttempt loginAttempt = loginSessionCache.get(login);
+			if (loginAttempt == null) {
 				try {
-					newSession = loginWithOidc(login);
-				} finally {
-					// Cached even if the login failed, so it is not repeated for each version
-					loginSessionCache.put(login, newSession);
+					loginAttempt = new LoginAttempt(loginWithOidc(login), null);
+				} catch (final Exception e) {
+					loginAttempt = new LoginAttempt(null, e);
 				}
-				session = newSession;
+				// Cached even if the login failed, so it is not repeated for each version
+				loginSessionCache.put(login, loginAttempt);
 			}
-			if (session == null) {
-				throw new Exception("Login of user '" + username + "' failed");
+			if (loginAttempt.error() != null) {
+				throw loginAttempt.error();
 			}
+			final OidcLoginCheck.LoginSession session = loginAttempt.session();
 
 			final String csrfToken = session.getCsrfToken();
 			HttpResponse sessionResponse = executeSessionRequest(login, session, method, url, targetUri, csrfToken, jsonRequest);
+			String retryInfo = "";
 			if (sessionResponse.getHttpCode() == 403) {
 				// The token may be outdated or bound to the endpoint: request a new one and retry once
 				final String newCsrfToken = session.fetchCsrfToken(targetUri);
 				if (newCsrfToken != null && !newCsrfToken.equals(csrfToken)) {
 					sessionResponse = executeSessionRequest(login, session, method, url, targetUri, newCsrfToken, jsonRequest);
+					retryInfo = ", retried with new CSRF token";
+				} else {
+					retryInfo = ", no new CSRF token for retry";
 				}
+			}
+			if (sessionResponse.getHttpCode() < 200 || sessionResponse.getHttpCode() >= 300) {
+				// TEMPORARY DEBUG: details of the session for the error dialog (no secret values, only whether they exist)
+				final String cookieHeader = session.getCookieHeader(targetUri);
+				throw new Exception("HTTP " + sessionResponse.getHttpCode() + " for " + httpMethod + " " + url
+						+ " (login OK at " + session.getFinalPageUri()
+						+ ", CSRF token: " + (csrfToken == null ? "not found" : "found")
+						+ ", cookies for URL: " + (cookieHeader == null ? "none" : cookieHeader.split("; ").length)
+						+ retryInfo + ")\nResponse: " + shorten(sessionResponse.getContent(), 500));
 			}
 			response = sessionResponse;
 		} else {
@@ -2157,9 +2273,22 @@ public class ServerManagementItem extends JPanel {
 		}
 
 		if (response.getHttpCode() < 200 || response.getHttpCode() >= 300) {
-			throw new Exception("HTTP " + response.getHttpCode() + " for " + httpMethod + " " + url);
+			throw new Exception("HTTP " + response.getHttpCode() + " for " + httpMethod + " " + url + "\nResponse: " + shorten(response.getContent(), 500));
 		}
 		return response.getContent();
+	}
+
+	/**
+	 * Shortens a text for error messages.
+	 */
+	private static String shorten(final String text, final int maxLength) {
+		if (text == null) {
+			return "<null>";
+		} else if (text.length() <= maxLength) {
+			return text;
+		} else {
+			return text.substring(0, maxLength) + "... (" + text.length() + " chars)";
+		}
 	}
 
 	/**

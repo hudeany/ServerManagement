@@ -96,8 +96,3 @@ The complete manual is available in the application (**Help → Manual**) in Eng
 
 ServerManagement accesses your servers via SSH and HTTP(S) and **can change data on them**, e.g. the `authorized_keys` of SSH users. It is intended for experimental use only, and any use is at your own risk. The developer accepts **no liability whatsoever**, neither for the correct function nor for any damage resulting from the use of the program, such as lost access to a server.
 
-## Contact
-
-Suggestions for improvement and bug reports are welcome: **servermanagement@soderer.de**
-
-*Author: Andreas Soderer*

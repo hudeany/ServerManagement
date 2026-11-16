@@ -63,6 +63,9 @@ import org.xml.sax.InputSource;
 import de.soderer.applicationbase.ApplicationConfigurationProperties;
 import de.soderer.json.JsonNode;
 import de.soderer.json.JsonReader;
+import de.soderer.json.JsonValueBoolean;
+import de.soderer.json.JsonValueInteger;
+import de.soderer.json.JsonValueNumber;
 import de.soderer.json.JsonValueString;
 import de.soderer.json.path.JsonPath;
 import de.soderer.network.HttpMethod;
@@ -191,6 +194,11 @@ public class ServerManagementItem extends JPanel {
 			addManagedUsersPanel(server.getManagedUsers());
 		}
 
+		addLoginsButtons();
+		if (Utilities.isNotEmpty(server.getLogins())) {
+			addLoginsPanel(server.getLogins());
+		}
+
 		addUrlsButtons();
 		if (Utilities.isNotEmpty(server.getUrls())) {
 			addUrlsPanel(server.getUrls());
@@ -199,11 +207,6 @@ public class ServerManagementItem extends JPanel {
 		addVersionsButtons();
 		if (Utilities.isNotEmpty(server.getVersions())) {
 			addVersionsPanel(server.getVersions());
-		}
-
-		addLoginsButtons();
-		if (Utilities.isNotEmpty(server.getLogins())) {
-			addLoginsPanel(server.getLogins());
 		}
 
 		addLogsButtons();
@@ -1913,28 +1916,11 @@ public class ServerManagementItem extends JPanel {
 					}
 
 					if (data != null) {
-						if (version.getPath().toLowerCase().startsWith("json:") && isJsonPathWithFanOut(version.getPath().substring(5))) {
-							// Filters and wildcards are not supported by the streaming JsonReader.readUpToJsonPath, but by
-							// JsonNode.getDataListByJsonPath on the complete data
+						if (version.getPath().toLowerCase().startsWith("json:")) {
+							// Complete JSON path support (RFC 9535: filters, wildcards, slices, negative indexes,
+							// recursive descent, functions) via JsonNode.getDataListByJsonPath on the complete data
 							try {
-								setVersion(version.getName(), readFirstStringByJsonPath(data, version.getPath().substring(5).trim()));
-							} catch (final Exception e) {
-								addDebugError(debugErrors, version, "Parse JSON path '" + version.getPath().substring(5) + "'", null, e, data);
-								setVersion(version.getName(), "ERROR");
-								status = "ERROR";
-							}
-						} else if (version.getPath().toLowerCase().startsWith("json:")) {
-							try (final JsonReader jsonReader = new JsonReader(new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)))) {
-								jsonReader.readUpToJsonPath(version.getPath().substring(5));
-								jsonReader.readNextJsonNode();
-								final Object currentObject = jsonReader.getCurrentObject();
-								if (!(currentObject instanceof JsonValueString)) {
-									// TEMPORARY DEBUG: before, this was a ClassCastException without information
-									throw new Exception("JSON path does not point to a string value, but to: "
-											+ (currentObject == null ? "null" : currentObject.getClass().getSimpleName() + " " + shorten(currentObject.toString(), 300)));
-								}
-								final String versionText = ((JsonValueString) currentObject).getValue();
-								setVersion(version.getName(), versionText);
+								setVersion(version.getName(), readFirstValueByJsonPath(data, version.getPath().substring(5).trim()));
 							} catch (final Exception e) {
 								addDebugError(debugErrors, version, "Parse JSON path '" + version.getPath().substring(5) + "'", null, e, data);
 								setVersion(version.getName(), "ERROR");
@@ -2010,21 +1996,14 @@ public class ServerManagementItem extends JPanel {
 	}
 
 	/**
-	 * Checks whether a JSON path contains a filter ("[?(...)]") or a wildcard ("*"), which can match several nodes and
-	 * need the complete data instead of the streaming JsonReader.
-	 */
-	private static boolean isJsonPathWithFanOut(final String jsonPath) {
-		return jsonPath != null && (jsonPath.contains("?(") || jsonPath.contains("*"));
-	}
-
-	/**
-	 * Reads the complete JSON data and returns the string value of the first node matching the JSON path, e.g.
-	 * "$.versionData[?(@.name=='nexInsure')].version".
+	 * Reads the complete JSON data and returns the value of the first node matching the JSON path as text, e.g.
+	 * "$.versionData[?(@.name=='nexInsure')].version" or "$.versionData[?(match(@.version, '25\\..*'))].version".
+	 * Strings, numbers and booleans are accepted as version values.
 	 *
 	 * @throws Exception
-	 *             if the data or path is invalid, nothing matches or the first match is no string
+	 *             if the data or path is invalid, nothing matches or the first match is no simple value
 	 */
-	private static String readFirstStringByJsonPath(final String data, final String jsonPathString) throws Exception {
+	private static String readFirstValueByJsonPath(final String data, final String jsonPathString) throws Exception {
 		final JsonNode rootNode;
 		try (final JsonReader jsonReader = new JsonReader(new ByteArrayInputStream(data.getBytes(StandardCharsets.UTF_8)))) {
 			// Reads the complete document, already marked as root node (required for paths starting with "$")
@@ -2040,11 +2019,18 @@ public class ServerManagementItem extends JPanel {
 			throw new Exception("JSON path '" + jsonPathString + "' found no value" + hint);
 		}
 		final JsonNode firstMatch = matches.get(0);
-		if (!(firstMatch instanceof JsonValueString)) {
-			throw new Exception("JSON path '" + jsonPathString + "' found no string value, but " + firstMatch.getJsonDataType()
-					+ (matches.size() > 1 ? " (" + matches.size() + " matches)" : ""));
+		if (firstMatch instanceof JsonValueString) {
+			return ((JsonValueString) firstMatch).getValue();
+		} else if (firstMatch instanceof JsonValueInteger) {
+			return ((JsonValueInteger) firstMatch).getValue().toString();
+		} else if (firstMatch instanceof JsonValueNumber) {
+			return ((JsonValueNumber) firstMatch).getValue().toString();
+		} else if (firstMatch instanceof JsonValueBoolean) {
+			return ((JsonValueBoolean) firstMatch).getValue().toString();
+		} else {
+			throw new Exception("JSON path '" + jsonPathString + "' found no simple value, but " + firstMatch.getJsonDataType() + " "
+					+ shorten(firstMatch.toString(), 300) + (matches.size() > 1 ? " (" + matches.size() + " matches)" : ""));
 		}
-		return ((JsonValueString) firstMatch).getValue();
 	}
 
 	/** TEMPORARY DEBUG: shows the errors of the version check in a dialog; set to false (or remove) when no longer needed */

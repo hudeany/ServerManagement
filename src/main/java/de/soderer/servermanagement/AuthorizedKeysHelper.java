@@ -66,27 +66,79 @@ public class AuthorizedKeysHelper {
 		}
 	}
 
+	public static final int DEFAULT_SSH_PORT = 22;
+
 	/**
-	 * Opens a SFTP connection. The hostname may contain a port ("host:port", default port 22).
-	 * Also used by ServerManagementItem, so there is only one implementation of the host and port parsing.
+	 * Host and SSH port, e.g. of a server host configuration "host:port".
 	 */
-	static SftpConnection openSftpConnection(String hostname, final String sshAccessUsername, final File sshAccessPrivateKeyFile, final char[] sshAccessPassword) throws Exception, IOException {
+	public record HostAndPort(String host, int port) {
+	}
+
+	/**
+	 * Splits a host configuration into host and port: "host", "host:port", "[ipv6]", "[ipv6]:port" or a plain IPv6
+	 * address (without port). Without port the default port 22 is used.
+	 */
+	public static HostAndPort parseHostAndPort(final String hostname) throws Exception {
 		if (StringUtilities.isBlank(hostname)) {
 			throw new Exception("No host configured");
-		} else if (StringUtilities.isBlank(sshAccessUsername)) {
-			throw new Exception("No SSH admin configured for host '" + hostname + "'");
+		}
+		final String value = hostname.trim();
+		String host = value;
+		String portText = null;
+		if (value.startsWith("[")) {
+			final int closingBracketIndex = value.indexOf(']');
+			if (closingBracketIndex < 0) {
+				throw new Exception("Invalid IPv6 host '" + hostname + "'");
+			}
+			host = value.substring(1, closingBracketIndex);
+			final String rest = value.substring(closingBracketIndex + 1);
+			if (rest.startsWith(":")) {
+				portText = rest.substring(1).trim();
+			} else if (!rest.isEmpty()) {
+				throw new Exception("Invalid host '" + hostname + "'");
+			}
+		} else if (value.indexOf(':') >= 0 && value.indexOf(':') == value.lastIndexOf(':')) {
+			// Exactly one ":" is "host:port", several ":" are a plain IPv6 address
+			host = value.substring(0, value.indexOf(':')).trim();
+			portText = value.substring(value.indexOf(':') + 1).trim();
 		}
 
-		int port = 22;
-		if (hostname.contains(":")) {
-			// Before, lastIndexOf(":" + 1) searched for the text ":1", so every host with a port failed
-			final String portText = hostname.substring(hostname.lastIndexOf(":") + 1).trim();
+		int port = DEFAULT_SSH_PORT;
+		if (portText != null) {
 			try {
 				port = Integer.parseInt(portText);
 			} catch (@SuppressWarnings("unused") final NumberFormatException e) {
 				throw new Exception("Invalid port '" + portText + "' for host '" + hostname + "'");
 			}
-			hostname = hostname.substring(0, hostname.lastIndexOf(":"));
+		}
+		if (port < 1 || port > 65535) {
+			throw new Exception("Invalid port '" + port + "' for host '" + hostname + "'");
+		}
+		if (host.isEmpty()) {
+			throw new Exception("No host configured");
+		}
+		return new HostAndPort(host, port);
+	}
+
+	/**
+	 * Opens a SFTP connection. The hostname may contain a port ("host:port", default port 22).
+	 * Also used by ServerManagementItem, so there is only one implementation of the host and port parsing.
+	 */
+	static SftpConnection openSftpConnection(final String hostname, final String sshAccessUsername, final File sshAccessPrivateKeyFile, final char[] sshAccessPassword) throws Exception, IOException {
+		final HostAndPort hostAndPort = parseHostAndPort(hostname);
+		return openSftpConnection(hostAndPort.host(), hostAndPort.port(), sshAccessUsername, sshAccessPrivateKeyFile, sshAccessPassword);
+	}
+
+	/**
+	 * Opens a SFTP connection on an explicit port (the hostname must not contain a port).
+	 */
+	static SftpConnection openSftpConnection(final String hostname, final int port, final String sshAccessUsername, final File sshAccessPrivateKeyFile, final char[] sshAccessPassword) throws Exception, IOException {
+		if (StringUtilities.isBlank(hostname)) {
+			throw new Exception("No host configured");
+		} else if (StringUtilities.isBlank(sshAccessUsername)) {
+			throw new Exception("No SSH admin configured for host '" + hostname + "'");
+		} else if (port < 1 || port > 65535) {
+			throw new Exception("Invalid port '" + port + "' for host '" + hostname + "'");
 		}
 
 		if (sshAccessPrivateKeyFile != null) {

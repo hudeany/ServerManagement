@@ -1785,40 +1785,19 @@ public class ServerManagementItem extends JPanel {
 							status = "ERROR";
 						}
 					} else if (version.getLocation().toLowerCase().startsWith("ssh://")) {
-						String hostnameForSsh = server.getHost();
-						String usernameForSsh = server.getSshAdmin().getUsername();
-						File privateKeyFileForSsh = server.getSshAdmin().getPrivateKeyFile();
-						char[] passwordForSsh = server.getSshAdmin().getPasswordArray();
+						final SshLocation sshLocation = SshLocation.parse(version.getLocation());
+						final SshConnectionData connectionData = resolveSshConnectionData(sshLocation.username(), sshLocation.password(), sshLocation.host(), sshLocation.port());
+						final String filePath = sshLocation.path();
 
-						String filePath = version.getLocation().substring(6);
-
-						if (filePath.contains(":")) {
-							hostnameForSsh = filePath.substring(0, filePath.lastIndexOf(":"));
-							filePath = filePath.substring(filePath.lastIndexOf(":") + 1);
-						}
-
-						if (hostnameForSsh.contains("@")) {
-							usernameForSsh = hostnameForSsh.substring(0, hostnameForSsh.lastIndexOf("@"));
-							hostnameForSsh = hostnameForSsh.substring(hostnameForSsh.lastIndexOf("@") + 1);
-						}
-
-						if (usernameForSsh.contains(":")) {
-							privateKeyFileForSsh = null;
-							passwordForSsh = usernameForSsh.substring(usernameForSsh.lastIndexOf(":") + 1).toCharArray();
-							usernameForSsh = usernameForSsh.substring(0, usernameForSsh.lastIndexOf(":"));
-						}
-
-						final String sftpConnectionString = usernameForSsh + "@" + hostnameForSsh;
-
-						if (sftpConnection == null || !cachedSftpConnectionString.equals(sftpConnectionString)) {
+						if (sftpConnection == null || !cachedSftpConnectionString.equals(connectionData.cacheKey())) {
 							if (sftpConnection != null) {
 								sftpConnection.close();
 								// Must not be used again, if the new connection fails
 								sftpConnection = null;
 								cachedSftpConnectionString = "";
 							}
-							sftpConnection = openSftpConnection(hostnameForSsh, usernameForSsh, privateKeyFileForSsh, passwordForSsh);
-							cachedSftpConnectionString = sftpConnectionString;
+							sftpConnection = connectionData.open();
+							cachedSftpConnectionString = connectionData.cacheKey();
 						}
 
 						if (filePath.endsWith("/")) {
@@ -1836,7 +1815,30 @@ public class ServerManagementItem extends JPanel {
 								status = "ERROR";
 							}
 						}
+					} else if (version.getLocation().toLowerCase().startsWith("ssh-cmd://")) {
+						// "ssh-cmd://[user[:password]@][host][:port] <command>"
+						final SshCommandLocation sshCommandLocation = SshCommandLocation.parse(version.getLocation());
+						final SshConnectionData connectionData = resolveSshConnectionData(sshCommandLocation.username(), sshCommandLocation.password(), sshCommandLocation.host(), sshCommandLocation.port());
+
+						if (sftpConnection == null || !cachedSftpConnectionString.equals(connectionData.cacheKey())) {
+							if (sftpConnection != null) {
+								sftpConnection.close();
+								// Must not be used again, if the new connection fails
+								sftpConnection = null;
+								cachedSftpConnectionString = "";
+							}
+							sftpConnection = connectionData.open();
+							cachedSftpConnectionString = connectionData.cacheKey();
+						}
+
+						try {
+							data = sftpConnection.executeCommand(sshCommandLocation.command());
+						} catch (@SuppressWarnings("unused") final Exception e) {
+							setVersion(version.getName(), "ERROR");
+							status = "ERROR";
+						}
 					} else if (version.getLocation().toLowerCase().startsWith("ssh-cmd:")) {
+						// Old syntax "ssh-cmd:[user[:password]@host:]<command>" (the command must not contain ":")
 						String hostnameForSsh = server.getHost();
 						String usernameForSsh = server.getSshAdmin().getUsername();
 						File privateKeyFileForSsh = server.getSshAdmin().getPrivateKeyFile();
@@ -2186,6 +2188,253 @@ public class ServerManagementItem extends JPanel {
 
 	public String getStatus() {
 		return status;
+	}
+
+	/**
+	 * Effective data of an SSH connection for a version location.
+	 */
+	private record SshConnectionData(String host, int port, String username, File privateKeyFile, char[] password) {
+		/**
+		 * Key for reusing the open connection; the credentials are not part of it, so the same user, host and port share
+		 * one connection.
+		 */
+		String cacheKey() {
+			return username + "@" + host + ":" + port;
+		}
+
+		SftpConnection open() throws Exception {
+			return AuthorizedKeysHelper.openSftpConnection(host, port, username, privateKeyFile, password);
+		}
+
+		@Override
+		public String toString() {
+			// The password must never appear in log output
+			return cacheKey();
+		}
+	}
+
+	/**
+	 * Determines the SSH connection data of a version location. Missing parts are taken from the server and its SSH
+	 * admin: without host the host (and port) of the server, without username the SSH admin, without password the
+	 * authentication of the SSH admin. Without port, port 22 is used for an explicit host.
+	 */
+	private SshConnectionData resolveSshConnectionData(final String username, final String password, final String host, final Integer port) throws Exception {
+		final String effectiveHost;
+		final int effectivePort;
+		if (host != null) {
+			effectiveHost = host;
+			effectivePort = port != null ? port : AuthorizedKeysHelper.DEFAULT_SSH_PORT;
+		} else {
+			// The host of the server may contain a port itself ("host:port")
+			final AuthorizedKeysHelper.HostAndPort serverHostAndPort = AuthorizedKeysHelper.parseHostAndPort(server.getHost());
+			effectiveHost = serverHostAndPort.host();
+			effectivePort = port != null ? port : serverHostAndPort.port();
+		}
+
+		final Admin sshAdmin = server.getSshAdmin();
+		final String effectiveUsername = username != null ? username : sshAdmin == null ? null : sshAdmin.getUsername();
+		if (password != null) {
+			// An explicit password replaces the key authentication of the SSH admin
+			return new SshConnectionData(effectiveHost, effectivePort, effectiveUsername, null, password.toCharArray());
+		} else if (sshAdmin == null) {
+			throw new Exception("No SSH admin configured for server '" + server.getName() + "'");
+		} else {
+			return new SshConnectionData(effectiveHost, effectivePort, effectiveUsername, sshAdmin.getPrivateKeyFile(), sshAdmin.getPasswordArray());
+		}
+	}
+
+	/**
+	 * Parsed version location "ssh-cmd://[user[:password]@][host][:port] &lt;command&gt;". Connection and command are
+	 * separated by the first whitespace, so the command may contain any characters (":", "/", "@", pipes, quotes).
+	 *
+	 * Supported e.g.: "ssh-cmd://andreas@homebase java -version", "ssh-cmd://andreas@homebase:2222 java -version",
+	 * "ssh-cmd://andreas:password@homebase java -version", "ssh-cmd:// java -version" (host and SSH admin of the server).
+	 *
+	 * @param username
+	 *            null if not given (SSH admin of the server)
+	 * @param password
+	 *            null if not given (authentication of the SSH admin)
+	 * @param host
+	 *            null if not given (host of the server)
+	 * @param port
+	 *            null if not given (port 22, or the port of the server host if no host is given)
+	 */
+	record SshCommandLocation(String username, String password, String host, Integer port, String command) {
+		private static final Pattern CONNECTION_AND_COMMAND_PATTERN = Pattern.compile("^(\\S*)\\s+(.+)$", Pattern.DOTALL);
+
+		static SshCommandLocation parse(final String location) throws Exception {
+			if (location == null || !location.trim().toLowerCase().startsWith("ssh-cmd://")) {
+				throw new Exception("Invalid SSH command location, expected 'ssh-cmd://[user[:password]@][host][:port] <command>'");
+			}
+			final Matcher matcher = CONNECTION_AND_COMMAND_PATTERN.matcher(location.trim().substring(10));
+			if (!matcher.matches() || matcher.group(2).isBlank()) {
+				throw new Exception("Missing command in SSH command location, expected 'ssh-cmd://[user[:password]@][host][:port] <command>'");
+			}
+			final String connection = matcher.group(1);
+			final String command = matcher.group(2).trim();
+
+			// User info: up to the last "@" (the password may contain "@" and ":", but no whitespace)
+			final int atIndex = connection.lastIndexOf('@');
+			String username = null;
+			String password = null;
+			if (atIndex >= 0) {
+				final String userInfo = connection.substring(0, atIndex);
+				final int colonIndex = userInfo.indexOf(':');
+				username = colonIndex >= 0 ? userInfo.substring(0, colonIndex) : userInfo;
+				password = colonIndex >= 0 ? userInfo.substring(colonIndex + 1) : null;
+				if (username.isEmpty()) {
+					username = null;
+				}
+			}
+			final String hostAndPort = connection.substring(atIndex + 1);
+
+			String host = hostAndPort;
+			String portText = null;
+			if (hostAndPort.startsWith("[")) {
+				final int closingBracketIndex = hostAndPort.indexOf(']');
+				if (closingBracketIndex < 0) {
+					throw new Exception("Invalid IPv6 host in SSH command location: " + hostAndPort);
+				}
+				host = hostAndPort.substring(1, closingBracketIndex);
+				final String rest = hostAndPort.substring(closingBracketIndex + 1);
+				if (rest.startsWith(":")) {
+					portText = rest.substring(1);
+				} else if (!rest.isEmpty()) {
+					throw new Exception("Invalid host in SSH command location: " + hostAndPort);
+				}
+			} else if (hostAndPort.indexOf(':') >= 0 && hostAndPort.indexOf(':') == hostAndPort.lastIndexOf(':')) {
+				// Exactly one ":" is "host:port", several ":" are a plain IPv6 address
+				host = hostAndPort.substring(0, hostAndPort.indexOf(':'));
+				portText = hostAndPort.substring(hostAndPort.indexOf(':') + 1);
+			}
+			if (host.isEmpty()) {
+				host = null;
+			}
+
+			Integer port = null;
+			if (portText != null && !portText.isEmpty()) {
+				if (!portText.matches("\\d{1,5}") || Integer.parseInt(portText) < 1 || Integer.parseInt(portText) > 65535) {
+					throw new Exception("Invalid port '" + portText + "' in SSH command location");
+				}
+				port = Integer.parseInt(portText);
+			}
+			return new SshCommandLocation(username, password, host, port, command);
+		}
+
+		@Override
+		public String toString() {
+			// The password must never appear in log output
+			final String hostText = host == null ? "" : host.contains(":") ? "[" + host + "]" : host;
+			return "ssh-cmd://" + (username == null ? "" : username + (password == null ? "" : ":***") + "@") + hostText + (port == null ? "" : ":" + port) + " " + command;
+		}
+	}
+
+	/**
+	 * Parsed version location "ssh://[user[:password]@][host][:port]/path" or "ssh://[user[:password]@][host]:path"
+	 * (scp style, the path may be relative to the home directory of the user).
+	 *
+	 * Supported e.g.: "ssh://andreas@homebase/etc/os-release", "ssh://andreas@homebase:/etc/os-release",
+	 * "ssh://andreas@homebase:22/etc/os-release", "ssh://andreas:password@homebase/etc/os-release",
+	 * "ssh://andreas@homebase:version.txt", "ssh:///etc/os-release" (host and user of the server).
+	 *
+	 * @param username
+	 *            null if not given (SSH admin of the server)
+	 * @param password
+	 *            null if not given (authentication of the SSH admin)
+	 * @param host
+	 *            null if not given (host of the server)
+	 * @param port
+	 *            null if not given (port 22, or the port of the server host if no host is given)
+	 */
+	record SshLocation(String username, String password, String host, Integer port, String path) {
+		private static final Pattern PORT_AND_PATH_PATTERN = Pattern.compile("^(\\d{1,5})(/.*)$");
+
+		static SshLocation parse(final String location) throws Exception {
+			if (location == null || !location.toLowerCase().startsWith("ssh://")) {
+				throw new Exception("Invalid SSH location, expected 'ssh://[user[:password]@][host][:port]/path'");
+			}
+			final String rest = location.trim().substring(6);
+
+			// User info: up to the last "@" before the path (the password may contain "@", but not "/")
+			final int firstSlashIndex = rest.indexOf('/');
+			final String authorityArea = firstSlashIndex >= 0 ? rest.substring(0, firstSlashIndex) : rest;
+			final int atIndex = authorityArea.lastIndexOf('@');
+			String username = null;
+			String password = null;
+			if (atIndex >= 0) {
+				final String userInfo = rest.substring(0, atIndex);
+				// The username cannot contain ":", so the password may contain ":"
+				final int colonIndex = userInfo.indexOf(':');
+				username = colonIndex >= 0 ? userInfo.substring(0, colonIndex) : userInfo;
+				password = colonIndex >= 0 ? userInfo.substring(colonIndex + 1) : null;
+				if (username.isEmpty()) {
+					username = null;
+				}
+			}
+			final String hostPortPath = rest.substring(atIndex + 1);
+
+			// Host, also as IPv6 address in brackets
+			final int hostEndIndex;
+			if (hostPortPath.startsWith("[")) {
+				final int closingBracketIndex = hostPortPath.indexOf(']');
+				if (closingBracketIndex < 0) {
+					throw new Exception("Invalid IPv6 host in SSH location: " + location);
+				}
+				hostEndIndex = closingBracketIndex + 1;
+			} else {
+				int index = 0;
+				while (index < hostPortPath.length() && hostPortPath.charAt(index) != ':' && hostPortPath.charAt(index) != '/') {
+					index++;
+				}
+				hostEndIndex = index;
+			}
+			String host = hostPortPath.substring(0, hostEndIndex);
+			if (host.startsWith("[") && host.endsWith("]")) {
+				host = host.substring(1, host.length() - 1);
+			}
+			if (host.isEmpty()) {
+				host = null;
+			}
+
+			// Port and path
+			Integer port = null;
+			String path;
+			final String afterHost = hostPortPath.substring(hostEndIndex);
+			if (afterHost.startsWith(":")) {
+				final String afterColon = afterHost.substring(1);
+				final Matcher portMatcher = PORT_AND_PATH_PATTERN.matcher(afterColon);
+				if (portMatcher.matches()) {
+					// "host:22/path"
+					port = Integer.parseInt(portMatcher.group(1));
+					path = portMatcher.group(2);
+				} else if (afterColon.matches("\\d{1,5}")) {
+					throw new Exception("Missing path after port in SSH location: " + location);
+				} else {
+					// "host:/path" or scp style "host:relative/path"
+					path = afterColon;
+				}
+			} else {
+				// "host/path" or "/path"
+				path = afterHost;
+			}
+
+			if (path.isEmpty()) {
+				throw new Exception("Missing path in SSH location: " + location);
+			}
+			if (port != null && (port < 1 || port > 65535)) {
+				throw new Exception("Invalid port " + port + " in SSH location: " + location);
+			}
+			return new SshLocation(username, password, host, port, path);
+		}
+
+		@Override
+		public String toString() {
+			// The password must never appear in log output
+			final String hostText = host == null ? "" : host.contains(":") ? "[" + host + "]" : host;
+			// Relative paths are relative to the home directory of the user
+			final String pathText = path.startsWith("/") ? path : "/~/" + path;
+			return "ssh://" + (username == null ? "" : username + (password == null ? "" : ":***") + "@") + hostText + (port == null ? "" : ":" + port) + pathText;
+		}
 	}
 
 	private static SftpConnection openSftpConnection(final String hostname, final String sshAccessUsername, final File sshAccessPrivateKeyFile, final char[] sshAccessPassword) throws Exception, IOException {

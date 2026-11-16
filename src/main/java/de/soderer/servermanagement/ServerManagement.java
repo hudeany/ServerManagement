@@ -41,7 +41,7 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 	 * The Constant VERSION_RESOURCE_FILE, which contains version number and
 	 * versioninfo download url.
 	 */
-	public static final String VERSION_RESOURCE_FILE = "/version.txt";
+	public static final String VERSION_RESOURCE_FILE = "/application_version.txt";
 
 	public static final String HELP_RESOURCE_FILE = "/help.txt";
 
@@ -116,7 +116,7 @@ public class ServerManagement extends UpdateableConsoleApplication implements Wo
 			}
 		} catch (@SuppressWarnings("unused") final Exception e) {
 			// Without the version.txt file we may not go on
-			System.err.println("Invalid version.txt");
+			System.err.println("Invalid " + VERSION_RESOURCE_FILE);
 			return 1;
 		}
 

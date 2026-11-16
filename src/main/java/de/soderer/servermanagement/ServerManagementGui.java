@@ -172,6 +172,8 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 
 		final Button configurationButton = createHeaderButton(IconKind.GEAR, LangResources.get("configuration"));
 		configurationButton.addActionListener(event -> openConfigurationDialog(serverManagementGui));
+		final Button helpButton = createHeaderButton(IconKind.HELP, LangResources.get("help"));
+		helpButton.addActionListener(event -> new HelpDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " (" + ServerManagement.VERSION.toString() + ") " + LangResources.get("help"), applicationConfiguration).open());
 
 		final JPanel mainPanel = new JPanel(new BorderLayout(0, 8));
 		mainPanel.setOpaque(false);
@@ -183,7 +185,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 
 		final JPanel contentPane = new JPanel(new BorderLayout());
 		contentPane.setBackground(ModernUi.BACKGROUND);
-		contentPane.add(createHeader(configurationButton), BorderLayout.NORTH);
+		contentPane.add(createHeader(helpButton, configurationButton), BorderLayout.NORTH);
 		contentPane.add(mainPanel, BorderLayout.CENTER);
 		setContentPane(contentPane);
 
@@ -220,9 +222,9 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 	}
 
 	/**
-	 * Gradient header with logo, application name, version and the configuration button.
+	 * Gradient header with logo, application name, version and the help and configuration buttons.
 	 */
-	private JPanel createHeader(final Button configurationButton) {
+	private JPanel createHeader(final Button helpButton, final Button configurationButton) {
 		final GradientHeader header = new GradientHeader();
 		final java.net.URL iconUrl = getClass().getClassLoader().getResource("ServerManagement_Icon.png");
 		header.add(ModernUi.createLogo(iconUrl == null ? null : new ImageIcon(iconUrl)), BorderLayout.WEST);
@@ -240,6 +242,8 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 
 		final JPanel applicationButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
 		applicationButtonPanel.setOpaque(false);
+		applicationButtonPanel.add(helpButton);
+		// The configuration button is the rightmost one, like in the other applications
 		applicationButtonPanel.add(configurationButton);
 		// GridBagLayout centers the buttons vertically in the header
 		final JPanel eastPanel = new JPanel(new GridBagLayout());

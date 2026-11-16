@@ -8,3 +8,4 @@
 /lib_build/
 /build.version
 /src/main/resources/version.txt
+/src/main/resources/application_version.txt

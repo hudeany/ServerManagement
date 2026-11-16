@@ -2,15 +2,21 @@ package de.soderer.servermanagement;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
+import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Image;
+import java.awt.Insets;
+import java.awt.Point;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
@@ -37,6 +43,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
+import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
 
@@ -92,6 +99,11 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 
 	private final List<ServerManagementItem> serverItems = new ArrayList<>();
 	private JScrollPane serverInformationScrollPane;
+	private JPanel serverInformationPanel;
+
+	/** Table of contents above the server list with one jump button per server */
+	private Card tableOfContentsCard;
+	private JPanel tableOfContentsPanel;
 
 	/**
 	 * Instantiates a new ServerManagement gui.
@@ -153,7 +165,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 
 		setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
 
-		final JPanel serverInformationPanel = createServerItemsPanel();
+		final JPanel newServerInformationPanel = createServerItemsPanel();
 
 		final Button configurationButton = createHeaderButton(IconKind.GEAR, LangResources.get("configuration"));
 		configurationButton.addActionListener(event -> openConfigurationDialog(serverManagementGui));
@@ -161,8 +173,10 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 		final JPanel mainPanel = new JPanel(new BorderLayout(0, 8));
 		mainPanel.setOpaque(false);
 		mainPanel.setBorder(BorderFactory.createEmptyBorder(8, 8, 6, 8));
+		// Fixed above the scroll pane, so it stays reachable while scrolling
+		mainPanel.add(createTableOfContents(), BorderLayout.NORTH);
 		mainPanel.add(serverInformationScrollPane, BorderLayout.CENTER);
-		mainPanel.add(createActionBar(serverManagementGui, serverInformationPanel), BorderLayout.SOUTH);
+		mainPanel.add(createActionBar(serverManagementGui, newServerInformationPanel), BorderLayout.SOUTH);
 
 		final JPanel contentPane = new JPanel(new BorderLayout());
 		contentPane.setBackground(ModernUi.BACKGROUND);
@@ -226,7 +240,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 	 * @return the panel holding the server cards
 	 */
 	private JPanel createServerItemsPanel() throws Exception {
-		final JPanel serverInformationPanel = new JPanel();
+		serverInformationPanel = new JPanel();
 		serverInformationPanel.setOpaque(false);
 		serverInformationPanel.setLayout(new BoxLayout(serverInformationPanel, BoxLayout.PAGE_AXIS));
 
@@ -250,9 +264,144 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 	}
 
 	/**
+	 * Creates the table of contents: one button per server, wrapped into several rows if needed.
+	 */
+	private Card createTableOfContents() {
+		tableOfContentsPanel = new JPanel(new WrapLayout(FlowLayout.LEFT, 6, 4));
+		tableOfContentsPanel.setOpaque(false);
+		// The number of rows depends on the width, so the height must be recalculated after a width change
+		tableOfContentsPanel.addComponentListener(new ComponentAdapter() {
+			private int lastWidth = -1;
+
+			@Override
+			public void componentResized(final ComponentEvent event) {
+				final int width = tableOfContentsPanel.getWidth();
+				if (width != lastWidth) {
+					lastWidth = width;
+					tableOfContentsPanel.revalidate();
+				}
+			}
+		});
+
+		tableOfContentsCard = new Card(null, null, 6);
+		tableOfContentsCard.setContent(tableOfContentsPanel);
+
+		rebuildTableOfContents();
+		return tableOfContentsCard;
+	}
+
+	/**
+	 * Refills the table of contents from the current server items (after adding or removing servers).
+	 */
+	private void rebuildTableOfContents() {
+		if (tableOfContentsPanel == null) {
+			return;
+		}
+
+		tableOfContentsPanel.removeAll();
+		for (final ServerManagementItem serverItem : serverItems) {
+			final String serverName = serverItem.getServerName();
+			final Button jumpButton = new Button(StringUtilities.isNotBlank(serverName) ? serverName : "?", null, ButtonStyle.SECONDARY);
+			final String host = serverItem.getServer().getHost();
+			if (StringUtilities.isNotBlank(host)) {
+				jumpButton.setToolTipText(host);
+			}
+			jumpButton.addActionListener(event -> scrollToServerItem(serverItem));
+			tableOfContentsPanel.add(jumpButton);
+		}
+
+		// A table of contents is only useful for more than one server
+		tableOfContentsCard.setVisible(serverItems.size() > 1);
+		tableOfContentsCard.revalidate();
+		tableOfContentsCard.repaint();
+	}
+
+	/**
+	 * Scrolls the server list so that the card of the given server is at the top (as far as possible at the end of
+	 * the list).
+	 */
+	private void scrollToServerItem(final ServerManagementItem serverItem) {
+		final JViewport viewport = serverInformationScrollPane.getViewport();
+		final int maxY = Math.max(0, serverInformationPanel.getHeight() - viewport.getExtentSize().height);
+		viewport.setViewPosition(new Point(0, Math.min(serverItem.getY(), maxY)));
+	}
+
+	/**
+	 * FlowLayout, which wraps its components into further rows and reports the resulting height as preferred size
+	 * (the standard FlowLayout always reports a single row).
+	 */
+	private static class WrapLayout extends FlowLayout {
+		private static final long serialVersionUID = 3870283817163405716L;
+
+		WrapLayout(final int align, final int hgap, final int vgap) {
+			super(align, hgap, vgap);
+		}
+
+		@Override
+		public Dimension preferredLayoutSize(final Container target) {
+			return layoutSize(target, true);
+		}
+
+		@Override
+		public Dimension minimumLayoutSize(final Container target) {
+			final Dimension minimum = layoutSize(target, false);
+			minimum.width -= getHgap() + 1;
+			return minimum;
+		}
+
+		private Dimension layoutSize(final Container target, final boolean preferred) {
+			synchronized (target.getTreeLock()) {
+				// Before the first layout the target has no width yet, then the width of a parent is used
+				Container sizedContainer = target;
+				while (sizedContainer.getWidth() == 0 && sizedContainer.getParent() != null) {
+					sizedContainer = sizedContainer.getParent();
+				}
+				final int targetWidth = sizedContainer.getWidth() == 0 ? Integer.MAX_VALUE : sizedContainer.getWidth();
+
+				final Insets insets = target.getInsets();
+				final int horizontalInsetsAndGap = insets.left + insets.right + getHgap() * 2;
+				final int maxRowWidth = targetWidth - horizontalInsetsAndGap;
+
+				final Dimension size = new Dimension(0, 0);
+				int rowWidth = 0;
+				int rowHeight = 0;
+				for (final Component component : target.getComponents()) {
+					if (!component.isVisible()) {
+						continue;
+					}
+					final Dimension componentSize = preferred ? component.getPreferredSize() : component.getMinimumSize();
+					if (rowWidth > 0 && rowWidth + getHgap() + componentSize.width > maxRowWidth) {
+						addRow(size, rowWidth, rowHeight);
+						rowWidth = 0;
+						rowHeight = 0;
+					}
+					if (rowWidth > 0) {
+						rowWidth += getHgap();
+					}
+					rowWidth += componentSize.width;
+					rowHeight = Math.max(rowHeight, componentSize.height);
+				}
+				addRow(size, rowWidth, rowHeight);
+
+				size.width += horizontalInsetsAndGap;
+				size.height += insets.top + insets.bottom + getVgap() * 2;
+				return size;
+			}
+		}
+
+		private void addRow(final Dimension size, final int rowWidth, final int rowHeight) {
+			size.width = Math.max(size.width, rowWidth);
+			if (size.height > 0) {
+				size.height += getVgap();
+			}
+			size.height += rowHeight;
+		}
+	}
+
+	/**
 	 * Action bar: server list and key management on the left, save, the status check and close (rightmost) on the right.
 	 */
-	private JComponent createActionBar(final ServerManagementGui serverManagementGui, final JPanel serverInformationPanel) {
+	private JComponent createActionBar(final ServerManagementGui serverManagementGui, final JPanel newServerInformationPanel) {
 		// Status check Button
 		final Button startButton = new Button(LangResources.get("checkServerStatus"), IconKind.REFRESH, ButtonStyle.PRIMARY);
 		startButton.addActionListener(new ActionListener() {
@@ -278,15 +427,16 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 							final Server newServer = new Server().setName(servername.trim()).setHost(host.trim());
 							serverManagementConfiguration.getServers().add(newServer);
 							final ServerManagementItem serverItem = new ServerManagementItem(serverManagementGui, newServer, applicationConfiguration);
-							serverInformationPanel.add(serverItem);
-							serverInformationPanel.add(Box.createRigidArea(new Dimension(SERVER_ITEM_GAP, SERVER_ITEM_GAP)));
+							newServerInformationPanel.add(serverItem);
+							newServerInformationPanel.add(Box.createRigidArea(new Dimension(SERVER_ITEM_GAP, SERVER_ITEM_GAP)));
 							serverItems.add(serverItem);
+							rebuildTableOfContents();
 							// Before, a new server was lost without warning when closing the application
 							serverManagementGui.signalUnsavedChanges();
 
 							// The window is resizable, so its size is kept and only the list is laid out again
-							serverInformationPanel.revalidate();
-							serverInformationPanel.repaint();
+							newServerInformationPanel.revalidate();
+							newServerInformationPanel.repaint();
 
 							// Scroll to end, once the new card was laid out
 							SwingUtilities.invokeLater(() -> {
@@ -331,19 +481,21 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 									// Before, the server stayed in the configuration, so it was saved again and came back on the next start
 									serverManagementConfiguration.getServers().remove(serverItem.getServer());
 									// Also remove the spacing area after the item
-									final int componentIndex = Arrays.asList(serverInformationPanel.getComponents()).indexOf(serverItem);
-									if (componentIndex >= 0 && componentIndex + 1 < serverInformationPanel.getComponentCount() && serverInformationPanel.getComponent(componentIndex + 1) instanceof Box.Filler) {
-										serverInformationPanel.remove(componentIndex + 1);
+									final int componentIndex = Arrays.asList(newServerInformationPanel.getComponents()).indexOf(serverItem);
+									if (componentIndex >= 0 && componentIndex + 1 < newServerInformationPanel.getComponentCount() && newServerInformationPanel.getComponent(componentIndex + 1) instanceof Box.Filler) {
+										newServerInformationPanel.remove(componentIndex + 1);
 									}
-									serverInformationPanel.remove(serverItem);
+									newServerInformationPanel.remove(serverItem);
 									break;
 								}
 							}
 						}
 
+						rebuildTableOfContents();
+
 						// Without this the removed items stayed visible until the next repaint
-						serverInformationPanel.revalidate();
-						serverInformationPanel.repaint();
+						newServerInformationPanel.revalidate();
+						newServerInformationPanel.repaint();
 
 						// Scroll to start
 						final JScrollBar verticalScrollBar = serverInformationScrollPane.getVerticalScrollBar();

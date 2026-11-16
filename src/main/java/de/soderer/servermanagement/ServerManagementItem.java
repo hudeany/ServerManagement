@@ -20,12 +20,14 @@ import java.io.StringReader;
 import java.net.Proxy;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyStore;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -34,6 +36,8 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
 import javax.swing.BorderFactory;
 import javax.swing.BoundedRangeModel;
 import javax.swing.Box;
@@ -152,13 +156,15 @@ public class ServerManagementItem extends JPanel {
 		serverManagementConfiguration = serverManagementGui.getServerManagementConfiguration();
 		this.server = server;
 
+		// TLS trust for all requests (HttpUtilities, OIDC login and OIDC version requests): the keystore configured in the
+		// servers configuration, otherwise the default trust store of the JVM (cacerts); the hostname is always verified.
+		// Before, without keystore all certificates were trusted and the hostname was not verified.
 		if (StringUtilities.isNotBlank(serverManagementConfiguration.getKeystore())) {
 			trustManager = TrustManagerUtilities.createTrustManagerForKeyStore(new File(serverManagementConfiguration.getKeystore()));
-			deactivateHostnameVerification = false;
 		} else {
-			trustManager = TrustManagerUtilities.createTrustAllTrustManager();
-			deactivateHostnameVerification = true;
+			trustManager = createJvmDefaultTrustManager();
 		}
+		deactivateHostnameVerification = false;
 
 		createComponents();
 	}
@@ -2107,7 +2113,7 @@ public class ServerManagementItem extends JPanel {
 	 * @throws Exception
 	 *             if the login failed, with the reason as message
 	 */
-	private static OidcLoginCheck.LoginSession loginWithOidc(final Login login) throws Exception {
+	private OidcLoginCheck.LoginSession loginWithOidc(final Login login) throws Exception {
 		final URI startUri = parseHttpUri(login.getUrl());
 		final char[] passwordArray = login.getPasswordArray();
 		final String password = passwordArray == null ? null : new String(passwordArray);
@@ -2115,12 +2121,29 @@ public class ServerManagementItem extends JPanel {
 		// Proxy of the login; null means system proxy settings
 		final String proxyUrl = StringUtilities.isBlank(login.getProxyUrl()) ? null : login.getProxyUrl();
 
-		final OidcLoginCheck check = new OidcLoginCheck(false, false, false, Duration.ofSeconds(30), null, null, null, null, idpSelection, proxyUrl);
+		// Same TLS trust as all other requests: configured keystore or default trust store of the JVM
+		final OidcLoginCheck check = new OidcLoginCheck(false, false, false, Duration.ofSeconds(30), null, null, null, null, idpSelection, proxyUrl, trustManager);
 		final OidcLoginCheck.LoginSession session = check.check(startUri, login.getUsername(), password, null);
 		if (session == null) {
 			throw new Exception("OIDC login of user '" + login.getUsername() + "' at " + startUri + " failed: " + check.getLastFailureMessage());
 		}
 		return session;
+	}
+
+	/**
+	 * Trust manager of the default trust store of the JVM (cacerts, or the trust store set by
+	 * -Djavax.net.ssl.trustStore).
+	 */
+	private static TrustManager createJvmDefaultTrustManager() throws Exception {
+		final TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+		// null: default trust store of the JVM
+		trustManagerFactory.init((KeyStore) null);
+		for (final TrustManager defaultTrustManager : trustManagerFactory.getTrustManagers()) {
+			if (defaultTrustManager instanceof X509TrustManager) {
+				return defaultTrustManager;
+			}
+		}
+		throw new Exception("No default X509 trust manager of the JVM available");
 	}
 
 	/**
@@ -2221,7 +2244,6 @@ public class ServerManagementItem extends JPanel {
 		final Login login = findLoginByUsername(username, targetUri);
 		final HttpMethod method = "POST".equalsIgnoreCase(httpMethod) ? HttpMethod.POST : HttpMethod.GET;
 
-		final HttpResponse response;
 		if (login.getLoginType() == LoginType.OIDC) {
 			LoginAttempt loginAttempt = loginSessionCache.get(login);
 			if (loginAttempt == null) {
@@ -2239,29 +2261,30 @@ public class ServerManagementItem extends JPanel {
 			final OidcLoginCheck.LoginSession session = loginAttempt.session();
 
 			final String csrfToken = session.getCsrfToken();
-			HttpResponse sessionResponse = executeSessionRequest(login, session, method, url, targetUri, csrfToken, jsonRequest);
+			OidcLoginCheck.LoginSession.SessionResponse sessionResponse = executeSessionRequest(session, httpMethod, targetUri, csrfToken, jsonRequest);
 			String retryInfo = "";
-			if (sessionResponse.getHttpCode() == 403) {
+			if (sessionResponse.statusCode() == 403) {
 				// The token may be outdated or bound to the endpoint: request a new one and retry once
 				final String newCsrfToken = session.fetchCsrfToken(targetUri);
 				if (newCsrfToken != null && !newCsrfToken.equals(csrfToken)) {
-					sessionResponse = executeSessionRequest(login, session, method, url, targetUri, newCsrfToken, jsonRequest);
+					sessionResponse = executeSessionRequest(session, httpMethod, targetUri, newCsrfToken, jsonRequest);
 					retryInfo = ", retried with new CSRF token";
 				} else {
 					retryInfo = ", no new CSRF token for retry";
 				}
 			}
-			if (sessionResponse.getHttpCode() < 200 || sessionResponse.getHttpCode() >= 300) {
+			if (sessionResponse.statusCode() < 200 || sessionResponse.statusCode() >= 300) {
 				// TEMPORARY DEBUG: details of the session for the error dialog (no secret values, only whether they exist)
 				final String cookieHeader = session.getCookieHeader(targetUri);
-				throw new Exception("HTTP " + sessionResponse.getHttpCode() + " for " + httpMethod + " " + url
+				throw new Exception("HTTP " + sessionResponse.statusCode() + " for " + httpMethod + " " + url
 						+ " (login OK at " + session.getFinalPageUri()
 						+ ", CSRF token: " + (csrfToken == null ? "not found" : "found")
 						+ ", cookies for URL: " + (cookieHeader == null ? "none" : cookieHeader.split("; ").length)
-						+ retryInfo + ")\nResponse: " + shorten(sessionResponse.getContent(), 500));
+						+ retryInfo + ")\nResponse: " + shorten(sessionResponse.body(), 500));
 			}
-			response = sessionResponse;
+			return sessionResponse.body();
 		} else {
+			// BasicAuth: same trust manager and proxy rules as the BasicAuth login check
 			final HttpRequest request = new HttpRequest(method, url);
 			if (jsonRequest) {
 				request.addHeader("Content-Type", "application/json");
@@ -2269,13 +2292,12 @@ public class ServerManagementItem extends JPanel {
 			final char[] password = login.getPasswordArray();
 			final String credentials = (login.getUsername() == null ? "" : login.getUsername()) + ":" + (password == null ? "" : new String(password));
 			request.addHeader("Authorization", "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8)));
-			response = HttpUtilities.executeHttpRequest(request, getSessionProxy(login, targetUri), trustManager, deactivateHostnameVerification);
+			final HttpResponse response = HttpUtilities.executeHttpRequest(request, getSessionProxy(login, targetUri), trustManager, deactivateHostnameVerification);
+			if (response.getHttpCode() < 200 || response.getHttpCode() >= 300) {
+				throw new Exception("HTTP " + response.getHttpCode() + " for " + httpMethod + " " + url + "\nResponse: " + shorten(response.getContent(), 500));
+			}
+			return response.getContent();
 		}
-
-		if (response.getHttpCode() < 200 || response.getHttpCode() >= 300) {
-			throw new Exception("HTTP " + response.getHttpCode() + " for " + httpMethod + " " + url + "\nResponse: " + shorten(response.getContent(), 500));
-		}
-		return response.getContent();
 	}
 
 	/**
@@ -2292,27 +2314,24 @@ public class ServerManagementItem extends JPanel {
 	}
 
 	/**
-	 * Sends a request with the cookies and the CSRF token of a logged in OIDC session.
+	 * Sends a request with the CSRF token of a logged in OIDC session. The request is sent by the HttpClient of the
+	 * session, so TLS trust, proxy and cookies are the same as for the login (the "Cookie" header is set by the session).
 	 */
-	private HttpResponse executeSessionRequest(final Login login, final OidcLoginCheck.LoginSession session, final HttpMethod method, final String url, final URI targetUri, final String csrfToken, final boolean jsonRequest) throws Exception {
-		final HttpRequest request = new HttpRequest(method, url);
+	private static OidcLoginCheck.LoginSession.SessionResponse executeSessionRequest(final OidcLoginCheck.LoginSession session, final String httpMethod, final URI targetUri, final String csrfToken, final boolean jsonRequest) throws Exception {
+		final Map<String, String> headers = new LinkedHashMap<>();
 		if (jsonRequest) {
-			request.addHeader("Content-Type", "application/json");
-		}
-		final String cookieHeader = session.getCookieHeader(targetUri);
-		if (cookieHeader != null) {
-			request.addHeader("Cookie", cookieHeader);
+			headers.put("Content-Type", "application/json");
 		}
 		if (csrfToken != null) {
-			request.addHeader("X-CSRF-TOKEN", csrfToken);
+			headers.put("X-CSRF-TOKEN", csrfToken);
 		}
 		// Same headers as the web application itself sends for its REST calls
 		final URI finalPageUri = session.getFinalPageUri();
-		request.addHeader("X-Requested-With", "XMLHttpRequest");
-		request.addHeader("Accept", "application/json, text/plain, */*");
-		request.addHeader("Origin", finalPageUri.getScheme() + "://" + finalPageUri.getRawAuthority());
-		request.addHeader("Referer", finalPageUri.toString());
-		return HttpUtilities.executeHttpRequest(request, getSessionProxy(login, targetUri), trustManager, deactivateHostnameVerification);
+		headers.put("X-Requested-With", "XMLHttpRequest");
+		headers.put("Accept", "application/json, text/plain, */*");
+		headers.put("Origin", finalPageUri.getScheme() + "://" + finalPageUri.getRawAuthority());
+		headers.put("Referer", finalPageUri.toString());
+		return session.send(httpMethod, targetUri, headers, null);
 	}
 
 	public String getStatus() {

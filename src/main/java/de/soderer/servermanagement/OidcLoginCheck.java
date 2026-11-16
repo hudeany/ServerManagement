@@ -266,6 +266,24 @@ public class OidcLoginCheck {
 	public OidcLoginCheck(final boolean insecure, final boolean verbose, final boolean quiet, final Duration timeout,
 			final String usernameFieldOverride, final String passwordFieldOverride, final String finalHtmlDumpPath,
 			final String tokenTypeFilter, final String idpSelectionText, final String proxyUrl) throws Exception {
+		this(insecure, verbose, quiet, timeout, usernameFieldOverride, passwordFieldOverride, finalHtmlDumpPath, tokenTypeFilter, idpSelectionText, proxyUrl, null);
+	}
+
+	/**
+	 * Creates a check with an explicit proxy and an explicit TLS trust manager.
+	 *
+	 * @param proxyUrl
+	 *            "http://host:port" or "host:port" for an HTTP proxy, "none"/"direct" for a direct connection, null or
+	 *            blank for the system proxy settings
+	 * @param trustManager
+	 *            trust manager for the TLS server certificates (e.g. of a configured keystore); null for the default
+	 *            trust store of the JVM (cacerts). Ignored if insecure is set. The hostname verification stays active.
+	 * @throws IllegalArgumentException
+	 *             if the proxy URL is invalid
+	 */
+	public OidcLoginCheck(final boolean insecure, final boolean verbose, final boolean quiet, final Duration timeout,
+			final String usernameFieldOverride, final String passwordFieldOverride, final String finalHtmlDumpPath,
+			final String tokenTypeFilter, final String idpSelectionText, final String proxyUrl, final TrustManager trustManager) throws Exception {
 		this.verbose = verbose;
 		this.quiet = quiet;
 		this.usernameFieldOverride = usernameFieldOverride;
@@ -299,7 +317,13 @@ public class OidcLoginCheck {
 				}
 			} }, new SecureRandom());
 			this.sslContext = sslContext;
+		} else if (trustManager != null) {
+			// Only the certificates of the given trust manager (e.g. of a configured keystore) are trusted
+			final SSLContext sslContext = SSLContext.getInstance("TLS");
+			sslContext.init(null, new TrustManager[] { trustManager }, new SecureRandom());
+			this.sslContext = sslContext;
 		} else {
+			// Default SSLContext of the HttpClient: trust store of the JVM (cacerts)
 			sslContext = null;
 		}
 
@@ -589,6 +613,48 @@ public class OidcLoginCheck {
 		 */
 		public List<HttpCookie> getCookies() {
 			return List.copyOf(cookieManager.getCookieStore().getCookies());
+		}
+
+		/**
+		 * Response of a request sent with {@link #send(String, URI, Map, String)}.
+		 */
+		public record SessionResponse(int statusCode, String body, Map<String, List<String>> headers) {
+		}
+
+		/**
+		 * Sends a request with this session: same HttpClient as the login, so the same TLS trust (default JVM trust
+		 * store, or trust all for "insecure"), the same proxy and the session cookies (the "Cookie" header is added
+		 * automatically and cookies set by the response are kept in the session). Redirects are not followed.
+		 *
+		 * @param method
+		 *            "GET" or "POST"
+		 * @param headers
+		 *            additional headers, e.g. "X-CSRF-TOKEN" and "Content-Type"; may be null
+		 * @param body
+		 *            request body for POST, may be null (empty body)
+		 */
+		public SessionResponse send(final String method, final URI uri, final Map<String, String> headers, final String body) throws Exception {
+			final HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(uri)
+					.timeout(requestTimeout)
+					.header("User-Agent", USER_AGENT);
+			if (headers != null) {
+				for (final Map.Entry<String, String> header : headers.entrySet()) {
+					if (header.getValue() != null) {
+						requestBuilder.header(header.getKey(), header.getValue());
+					}
+				}
+			}
+			if ("POST".equalsIgnoreCase(method)) {
+				requestBuilder.POST(body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
+			} else if ("GET".equalsIgnoreCase(method)) {
+				requestBuilder.GET();
+			} else {
+				throw new IllegalArgumentException("Unsupported HTTP method: " + method);
+			}
+			log(method.toUpperCase(Locale.ROOT) + " " + uri + " with session");
+			final HttpResponse<String> response = httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString());
+			log("-> " + response.statusCode());
+			return new SessionResponse(response.statusCode(), response.body() == null ? "" : response.body(), response.headers().map());
 		}
 
 		/**

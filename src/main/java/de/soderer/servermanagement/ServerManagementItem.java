@@ -31,6 +31,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.Callable;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -1751,12 +1752,15 @@ public class ServerManagementItem extends JPanel {
 	}
 
 	private void refreshVersions() throws Exception {
-		SftpConnection sftpConnection = null;
-		String cachedSftpConnectionString = "";
-
-		// Locations "[<GET|POST>:]<http(s)://username@host/path>": one login per login configuration and one request per location
+		// Several versions are often read from the same location (e.g. one JSON response or one file with several
+		// versions), so each location is read only once per version check, independent of its type
+		// Locations "[<GET|POST>:]<http(s)://username@host/path>": one login per login configuration
 		final Map<Login, LoginAttempt> loginSessionCache = new HashMap<>();
-		final Map<String, String> loginLocationDataCache = new HashMap<>();
+		// Data per location; a failed location is cached as null, so it is not repeated for each version
+		final Map<String, String> locationDataCache = new HashMap<>();
+		// Open SSH connections per user, host and port; a failed connection is not opened again
+		final Map<String, SftpConnection> sftpConnections = new HashMap<>();
+		final Map<String, Exception> failedSftpConnections = new HashMap<>();
 
 		// TEMPORARY DEBUG: collected errors of this version check, shown in a dialog at the end
 		final List<String> debugErrors = new ArrayList<>();
@@ -1767,152 +1771,20 @@ public class ServerManagementItem extends JPanel {
 				// the check of all further versions of this server
 				String data = null;
 				try {
-					final Matcher loginLocationMatcher = LOGIN_LOCATION_PATTERN.matcher(version.getLocation());
-					if (loginLocationMatcher.matches()) {
-						// JSON paths request JSON ("Content-Type: application/json"), so the content type is part of the cache key
-						final boolean jsonRequest = version.getPath() != null && version.getPath().toLowerCase().startsWith("json:");
-						final String locationKey = version.getLocation().trim() + (jsonRequest ? " [json]" : "");
-						if (loginLocationDataCache.containsKey(locationKey)) {
-							data = loginLocationDataCache.get(locationKey);
-							if (data == null) {
-								addDebugError(debugErrors, version, "Login request", "Same location already failed before (see error above)", null, null);
-							}
-						} else {
-							try {
-								// Without method prefix a GET request is used
-								final String httpMethod = loginLocationMatcher.group(1) != null ? loginLocationMatcher.group(1).toUpperCase() : "GET";
-								data = readWithLogin(httpMethod, loginLocationMatcher.group(2), jsonRequest, loginSessionCache);
-							} catch (final Exception e) {
-								data = null;
-								addDebugError(debugErrors, version, "Login and request", null, e, null);
-							}
-							// Also a failure is cached (null), so the request is not repeated for each version
-							loginLocationDataCache.put(locationKey, data);
-						}
-						// data == null is shown as ERROR below
-					} else if (version.getLocation().toLowerCase().startsWith("http://")
-							|| version.getLocation().toLowerCase().startsWith("https://")) {
-						// URL without username: GET request without login
-						try {
-							final HttpRequest request = new HttpRequest(HttpMethod.GET, version.getLocation());
-							final HttpResponse response = HttpUtilities.executeHttpRequest(request, applicationConfiguration.getProxyConfiguration().getProxy(request.getUrl()), trustManager, deactivateHostnameVerification);
-							if (response.getHttpCode() == 200) {
-								data = response.getContent();
-							} else {
-								addDebugError(debugErrors, version, "HTTP GET without login", "HTTP " + response.getHttpCode() + "\nResponse: " + shorten(response.getContent(), 500), null, null);
-								setVersion(version.getName(), "ERROR");
-								status = "ERROR";
-							}
-						} catch (final Exception e) {
-							addDebugError(debugErrors, version, "HTTP GET without login", null, e, null);
-							setVersion(version.getName(), "ERROR");
-							status = "ERROR";
-						}
-					} else if (version.getLocation().toLowerCase().startsWith("ssh://")) {
-						final SshLocation sshLocation = SshLocation.parse(version.getLocation());
-						final SshConnectionData connectionData = resolveSshConnectionData(sshLocation.username(), sshLocation.password(), sshLocation.host(), sshLocation.port());
-						final String filePath = sshLocation.path();
-
-						if (sftpConnection == null || !cachedSftpConnectionString.equals(connectionData.cacheKey())) {
-							if (sftpConnection != null) {
-								sftpConnection.close();
-								// Must not be used again, if the new connection fails
-								sftpConnection = null;
-								cachedSftpConnectionString = "";
-							}
-							sftpConnection = connectionData.open();
-							cachedSftpConnectionString = connectionData.cacheKey();
-						}
-
-						if (filePath.endsWith("/")) {
-							try {
-								data = StringUtilities.join(sftpConnection.listFiles(filePath), "\n");
-							} catch (final Exception e) {
-								addDebugError(debugErrors, version, "SSH list directory " + filePath + " (" + connectionData + ")", null, e, null);
-								setVersion(version.getName(), "ERROR");
-								status = "ERROR";
-							}
-						} else {
-							try (InputStream inputStream = sftpConnection.downloadFile(filePath)) {
-								data = new String(IoUtilities.toByteArray(inputStream), StandardCharsets.UTF_8);
-							} catch (final Exception e) {
-								addDebugError(debugErrors, version, "SSH download " + filePath + " (" + connectionData + ")", null, e, null);
-								setVersion(version.getName(), "ERROR");
-								status = "ERROR";
-							}
-						}
-					} else if (version.getLocation().toLowerCase().startsWith("ssh-cmd://")) {
-						// "ssh-cmd://[user[:password]@][host][:port] <command>"
-						final SshCommandLocation sshCommandLocation = SshCommandLocation.parse(version.getLocation());
-						final SshConnectionData connectionData = resolveSshConnectionData(sshCommandLocation.username(), sshCommandLocation.password(), sshCommandLocation.host(), sshCommandLocation.port());
-
-						if (sftpConnection == null || !cachedSftpConnectionString.equals(connectionData.cacheKey())) {
-							if (sftpConnection != null) {
-								sftpConnection.close();
-								// Must not be used again, if the new connection fails
-								sftpConnection = null;
-								cachedSftpConnectionString = "";
-							}
-							sftpConnection = connectionData.open();
-							cachedSftpConnectionString = connectionData.cacheKey();
-						}
-
-						try {
-							data = sftpConnection.executeCommand(sshCommandLocation.command());
-						} catch (final Exception e) {
-							addDebugError(debugErrors, version, "SSH command (" + connectionData + ")", null, e, null);
-							setVersion(version.getName(), "ERROR");
-							status = "ERROR";
-						}
-					} else if (version.getLocation().toLowerCase().startsWith("ssh-cmd:")) {
-						// Old syntax "ssh-cmd:[user[:password]@host:]<command>" (the command must not contain ":")
-						String hostnameForSsh = server.getHost();
-						String usernameForSsh = server.getSshAdmin().getUsername();
-						File privateKeyFileForSsh = server.getSshAdmin().getPrivateKeyFile();
-						char[] passwordForSsh = server.getSshAdmin().getPasswordArray();
-
-						String command = version.getLocation().substring(8);
-
-						if (command.contains(":")) {
-							hostnameForSsh = command.substring(0, command.lastIndexOf(":"));
-							command = command.substring(command.lastIndexOf(":") + 1);
-						}
-
-						if (hostnameForSsh.contains("@")) {
-							usernameForSsh = hostnameForSsh.substring(0, hostnameForSsh.lastIndexOf("@"));
-							hostnameForSsh = hostnameForSsh.substring(hostnameForSsh.lastIndexOf("@") + 1);
-						}
-
-						if (usernameForSsh.contains(":")) {
-							privateKeyFileForSsh = null;
-							passwordForSsh = usernameForSsh.substring(usernameForSsh.lastIndexOf(":") + 1).toCharArray();
-							usernameForSsh = usernameForSsh.substring(0, usernameForSsh.lastIndexOf(":"));
-						}
-
-						final String sftpConnectionString = usernameForSsh + "@" + hostnameForSsh;
-
-						if (sftpConnection == null || !cachedSftpConnectionString.equals(sftpConnectionString)) {
-							if (sftpConnection != null) {
-								sftpConnection.close();
-								// Must not be used again, if the new connection fails
-								sftpConnection = null;
-								cachedSftpConnectionString = "";
-							}
-							sftpConnection = openSftpConnection(hostnameForSsh, usernameForSsh, privateKeyFileForSsh, passwordForSsh);
-							cachedSftpConnectionString = sftpConnectionString;
-						}
-
-						try {
-							data = sftpConnection.executeCommand(command);
-						} catch (final Exception e) {
-							addDebugError(debugErrors, version, "SSH command (old syntax, " + sftpConnectionString + ")", null, e, null);
-							setVersion(version.getName(), "ERROR");
-							status = "ERROR";
+					final String locationKey = getLocationCacheKey(version);
+					if (locationDataCache.containsKey(locationKey)) {
+						data = locationDataCache.get(locationKey);
+						if (data == null) {
+							addDebugError(debugErrors, version, "Location", "Same location already failed before (see error above)", null, null);
 						}
 					} else {
-						addDebugError(debugErrors, version, "Location", "Unsupported location type (expected http(s)://, GET:/POST:http(s)://user@..., ssh://, ssh-cmd://, ssh-cmd:)", null, null);
-						setVersion(version.getName(), "ERROR");
-						status = "ERROR";
+						try {
+							data = readLocationData(version, loginSessionCache, sftpConnections, failedSftpConnections, debugErrors);
+						} catch (final Exception e) {
+							data = null;
+							addDebugError(debugErrors, version, "Location", null, e, null);
+						}
+						locationDataCache.put(locationKey, data);
 					}
 
 					if (data != null) {
@@ -1988,11 +1860,166 @@ public class ServerManagementItem extends JPanel {
 				}
 			}
 		} finally {
-			if (sftpConnection != null) {
-				sftpConnection.close();
+			for (final SftpConnection sftpConnection : sftpConnections.values()) {
+				try {
+					sftpConnection.close();
+				} catch (@SuppressWarnings("unused") final Exception e) {
+					// Closing errors are irrelevant for the result
+				}
 			}
 			showDebugErrors(debugErrors);
 		}
+	}
+
+	/**
+	 * Key of the data of a version location for the cache of a version check. Login locations with a JSON path are
+	 * requested with "Content-Type: application/json", so the content type is part of their key.
+	 */
+	private static String getLocationCacheKey(final Version version) {
+		final String location = version.getLocation().trim();
+		if (LOGIN_LOCATION_PATTERN.matcher(location).matches() && isJsonPath(version)) {
+			return location + " [json]";
+		} else {
+			return location;
+		}
+	}
+
+	private static boolean isJsonPath(final Version version) {
+		return version.getPath() != null && version.getPath().toLowerCase().startsWith("json:");
+	}
+
+	/**
+	 * Reads the data of a version location (HTTP with or without login, SSH file or directory, SSH command).
+	 *
+	 * @return the data or null, if reading failed (the error is added to the debug errors)
+	 * @throws Exception
+	 *             if the location itself is invalid
+	 */
+	private String readLocationData(final Version version, final Map<Login, LoginAttempt> loginSessionCache, final Map<String, SftpConnection> sftpConnections,
+			final Map<String, Exception> failedSftpConnections, final List<String> debugErrors) throws Exception {
+		final String location = version.getLocation().trim();
+		final Matcher loginLocationMatcher = LOGIN_LOCATION_PATTERN.matcher(location);
+		if (loginLocationMatcher.matches()) {
+			try {
+				// Without method prefix a GET request is used
+				final String httpMethod = loginLocationMatcher.group(1) != null ? loginLocationMatcher.group(1).toUpperCase() : "GET";
+				return readWithLogin(httpMethod, loginLocationMatcher.group(2), isJsonPath(version), loginSessionCache);
+			} catch (final Exception e) {
+				addDebugError(debugErrors, version, "Login and request", null, e, null);
+				return null;
+			}
+		} else if (location.toLowerCase().startsWith("http://") || location.toLowerCase().startsWith("https://")) {
+			// URL without username: GET request without login
+			try {
+				final HttpRequest request = new HttpRequest(HttpMethod.GET, location);
+				final HttpResponse response = HttpUtilities.executeHttpRequest(request, applicationConfiguration.getProxyConfiguration().getProxy(request.getUrl()), trustManager, deactivateHostnameVerification);
+				if (response.getHttpCode() == 200) {
+					return response.getContent();
+				} else {
+					addDebugError(debugErrors, version, "HTTP GET without login", "HTTP " + response.getHttpCode() + "\nResponse: " + shorten(response.getContent(), 500), null, null);
+					return null;
+				}
+			} catch (final Exception e) {
+				addDebugError(debugErrors, version, "HTTP GET without login", null, e, null);
+				return null;
+			}
+		} else if (location.toLowerCase().startsWith("ssh://")) {
+			final SshLocation sshLocation = SshLocation.parse(location);
+			final SshConnectionData connectionData = resolveSshConnectionData(sshLocation.username(), sshLocation.password(), sshLocation.host(), sshLocation.port());
+			final String filePath = sshLocation.path();
+			final boolean directory = filePath.endsWith("/");
+			try {
+				final SftpConnection sftpConnection = getSftpConnection(sftpConnections, failedSftpConnections, connectionData.cacheKey(), connectionData::open);
+				if (directory) {
+					return StringUtilities.join(sftpConnection.listFiles(filePath), "\n");
+				} else {
+					try (InputStream inputStream = sftpConnection.downloadFile(filePath)) {
+						return new String(IoUtilities.toByteArray(inputStream), StandardCharsets.UTF_8);
+					}
+				}
+			} catch (final Exception e) {
+				addDebugError(debugErrors, version, "SSH " + (directory ? "list directory " : "download ") + filePath + " (" + connectionData + ")", null, e, null);
+				return null;
+			}
+		} else if (location.toLowerCase().startsWith("ssh-cmd://")) {
+			// "ssh-cmd://[user[:password]@][host][:port] <command>"
+			final SshCommandLocation sshCommandLocation = SshCommandLocation.parse(location);
+			final SshConnectionData connectionData = resolveSshConnectionData(sshCommandLocation.username(), sshCommandLocation.password(), sshCommandLocation.host(), sshCommandLocation.port());
+			try {
+				final SftpConnection sftpConnection = getSftpConnection(sftpConnections, failedSftpConnections, connectionData.cacheKey(), connectionData::open);
+				return sftpConnection.executeCommand(sshCommandLocation.command());
+			} catch (final Exception e) {
+				addDebugError(debugErrors, version, "SSH command (" + connectionData + ")", null, e, null);
+				return null;
+			}
+		} else if (location.toLowerCase().startsWith("ssh-cmd:")) {
+			// Old syntax "ssh-cmd:[user[:password]@host:]<command>" (the command must not contain ":")
+			String hostnameForSsh = server.getHost();
+			String usernameForSsh = server.getSshAdmin().getUsername();
+			File privateKeyFileForSsh = server.getSshAdmin().getPrivateKeyFile();
+			char[] passwordForSsh = server.getSshAdmin().getPasswordArray();
+
+			String command = location.substring(8);
+
+			if (command.contains(":")) {
+				hostnameForSsh = command.substring(0, command.lastIndexOf(":"));
+				command = command.substring(command.lastIndexOf(":") + 1);
+			}
+
+			if (hostnameForSsh.contains("@")) {
+				usernameForSsh = hostnameForSsh.substring(0, hostnameForSsh.lastIndexOf("@"));
+				hostnameForSsh = hostnameForSsh.substring(hostnameForSsh.lastIndexOf("@") + 1);
+			}
+
+			if (usernameForSsh.contains(":")) {
+				privateKeyFileForSsh = null;
+				passwordForSsh = usernameForSsh.substring(usernameForSsh.lastIndexOf(":") + 1).toCharArray();
+				usernameForSsh = usernameForSsh.substring(0, usernameForSsh.lastIndexOf(":"));
+			}
+
+			final String sftpConnectionString = usernameForSsh + "@" + hostnameForSsh;
+			final String effectiveHostname = hostnameForSsh;
+			final String effectiveUsername = usernameForSsh;
+			final File effectivePrivateKeyFile = privateKeyFileForSsh;
+			final char[] effectivePassword = passwordForSsh;
+			try {
+				// Own key prefix: the old syntax opens the connection differently (port within the host)
+				final SftpConnection sftpConnection = getSftpConnection(sftpConnections, failedSftpConnections, "old-syntax:" + sftpConnectionString,
+						() -> openSftpConnection(effectiveHostname, effectiveUsername, effectivePrivateKeyFile, effectivePassword));
+				return sftpConnection.executeCommand(command);
+			} catch (final Exception e) {
+				addDebugError(debugErrors, version, "SSH command (old syntax, " + sftpConnectionString + ")", null, e, null);
+				return null;
+			}
+		} else {
+			addDebugError(debugErrors, version, "Location", "Unsupported location type (expected http(s)://, GET:/POST:http(s)://user@..., ssh://, ssh-cmd://, ssh-cmd:)", null, null);
+			return null;
+		}
+	}
+
+	/**
+	 * Returns an open SSH connection of the current version check or opens it. A connection that failed to open is not
+	 * tried again within the same version check.
+	 */
+	private static SftpConnection getSftpConnection(final Map<String, SftpConnection> sftpConnections, final Map<String, Exception> failedSftpConnections, final String key,
+			final Callable<SftpConnection> opener) throws Exception {
+		final SftpConnection openConnection = sftpConnections.get(key);
+		if (openConnection != null) {
+			return openConnection;
+		}
+		final Exception formerError = failedSftpConnections.get(key);
+		if (formerError != null) {
+			throw new Exception("SSH connection " + key + " already failed before: " + formerError.getMessage(), formerError);
+		}
+		final SftpConnection newConnection;
+		try {
+			newConnection = opener.call();
+		} catch (final Exception e) {
+			failedSftpConnections.put(key, e);
+			throw e;
+		}
+		sftpConnections.put(key, newConnection);
+		return newConnection;
 	}
 
 	/**

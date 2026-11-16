@@ -299,8 +299,8 @@ public class OidcLoginCheck {
 		if (insecure) {
 			// Must be set before the first HttpClient is created
 			System.setProperty("jdk.internal.httpclient.disableHostnameVerification", "true");
-			final SSLContext sslContext = SSLContext.getInstance("TLS");
-			sslContext.init(null, new TrustManager[] { new X509TrustManager() {
+			final SSLContext checkSslContext = SSLContext.getInstance("TLS");
+			checkSslContext.init(null, new TrustManager[] { new X509TrustManager() {
 				@Override
 				public void checkClientTrusted(final X509Certificate[] chain, final String authType) {
 					// Trust all
@@ -316,12 +316,12 @@ public class OidcLoginCheck {
 					return new X509Certificate[0];
 				}
 			} }, new SecureRandom());
-			this.sslContext = sslContext;
+			this.sslContext = checkSslContext;
 		} else if (trustManager != null) {
 			// Only the certificates of the given trust manager (e.g. of a configured keystore) are trusted
-			final SSLContext sslContext = SSLContext.getInstance("TLS");
-			sslContext.init(null, new TrustManager[] { trustManager }, new SecureRandom());
-			this.sslContext = sslContext;
+			final SSLContext checkSslContext = SSLContext.getInstance("TLS");
+			checkSslContext.init(null, new TrustManager[] { trustManager }, new SecureRandom());
+			this.sslContext = checkSslContext;
 		} else {
 			// Default SSLContext of the HttpClient: trust store of the JVM (cacerts)
 			sslContext = null;

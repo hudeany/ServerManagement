@@ -3,6 +3,7 @@ package de.soderer.servermanagement;
 import java.io.Console;
 import java.net.CookieManager;
 import java.net.CookiePolicy;
+import java.net.HttpCookie;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.net.ProxySelector;
@@ -39,6 +40,10 @@ import javax.net.ssl.X509TrustManager;
  * two-step forms), submits auto-post forms (response_mode=form_post) and finally checks
  * whether the main page of the web application is delivered successfully.
  *
+ * A successful {@link #check(URI, String, String, String)} returns a {@link LoginSession} for further requests:
+ * {@link LoginSession#getCookieHeader(URI)} delivers the "Cookie" header value and
+ * {@link LoginSession#getCsrfToken()} the CSRF token (header "X-CSRF-TOKEN") of the logged in session.
+ *
  * No external dependencies, Java 17+.
  *
  * Exit codes: 0 = OK, 1 = check failed, 2 = usage error
@@ -54,16 +59,35 @@ public class OidcLoginCheck {
 	private static final Pattern PROVIDER_PAIR_PATTERN = Pattern.compile("(?is)\"displayName\"\\s*:\\s*\"([^\"]+)\".{0,1500}?\"loginUrl\"\\s*:\\s*\"([^\"]+)\"");
 	private static final Pattern ANCHOR_PATTERN = Pattern.compile("(?is)<a\\b([^>]*)>(.*?)</a>");
 	private static final Pattern HREF_ATTR_PATTERN = Pattern.compile("(?is)\\bhref\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s\"'>]+))");
+	private static final Pattern SCRIPT_SRC_PATTERN = Pattern.compile("(?is)<script\\b[^>]*\\bsrc\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s\"'>]+))");
+	private static final Pattern CSRF_META_PATTERN = Pattern.compile("(?is)<meta\\b[^>]*name\\s*=\\s*[\"'](?:_csrf_token|_csrf|csrf|xsrf-token|xsrf_token|x-csrf-token|x_csrf_token)[\"'][^>]*content\\s*=\\s*[\"']([^\"']+)[\"']");
+	private static final Pattern CSRF_JS_PATTERN = Pattern.compile("(?is)(?:\"(?:csrfToken|_csrf_token|_csrf|csrf|X-CSRF-TOKEN|X_CSRF_TOKEN)\"\\s*:\\s*\"([^\"]+)\"|(?:csrfToken|_csrf_token|_csrf|csrf|X-CSRF-TOKEN|X_CSRF_TOKEN)\\s*=\\s*[\"']([^\"']+)[\"'])");
+
+	/** Typical CSRF endpoints, probed relative to the final page if the token is not contained in the page itself */
+	private static final String[] CSRF_PROBE_PATHS = {
+			"/cid/ui/csrf",
+			"/cid/ui/rest/csrf",
+			"/cid/ui/gwt/rest/csrf",
+			"/cid/ui/api/csrf",
+			"/cid/ui/security/csrf"
+	};
+	private static final int MAX_CSRF_PROBES = 10;
 
 	private final boolean verbose;
 	private final boolean quiet;
-	private final HttpClient httpClient;
 	private final String usernameFieldOverride;
 	private final String passwordFieldOverride;
 	private final Duration requestTimeout;
 	private final String finalHtmlDumpPath;
 	private final String tokenTypeFilter;
 	private final String idpSelectionText;
+
+	/** Settings for the HttpClient, which is created per check, so every login session has its own cookies */
+	private final ProxySelector proxySelector;
+	private final SSLContext sslContext;
+
+	/** HttpClient of the currently running check */
+	private HttpClient httpClient;
 	private String securityTokenType;
 	private String securityToken;
 
@@ -177,7 +201,7 @@ public class OidcLoginCheck {
 		try {
 			final OidcLoginCheck check = new OidcLoginCheck(insecure, verbose, quiet, Duration.ofSeconds(timeoutSeconds), usernameField, passwordField,
 					dumpFinalHtmlPath, tokenType, idpSelection, proxyUrl);
-			return check.check(startUri, user, password, expectText) ? 0 : 1;
+			return check.check(startUri, user, password, expectText) != null ? 0 : 1;
 		} catch (final Exception e) {
 			System.out.println("RESULT: FAILED - " + e.getClass().getSimpleName() + ": " + e.getMessage());
 			if (verbose) {
@@ -248,13 +272,8 @@ public class OidcLoginCheck {
 		this.tokenTypeFilter = tokenTypeFilter;
 		this.idpSelectionText = idpSelectionText;
 
-		final HttpClient.Builder builder = HttpClient.newBuilder()
-				.cookieHandler(new CookieManager(null, CookiePolicy.ACCEPT_ALL))
-				// Redirects are followed manually to keep track of the hops
-				.followRedirects(HttpClient.Redirect.NEVER)
-				.connectTimeout(timeout)
-				// Explicit proxy, or the system default (honors -Dhttps.proxyHost etc. and -Djava.net.useSystemProxies=true)
-				.proxy(createProxySelector(proxyUrl));
+		// Explicit proxy, or the system default (honors -Dhttps.proxyHost etc. and -Djava.net.useSystemProxies=true)
+		proxySelector = createProxySelector(proxyUrl);
 		log("Proxy: " + describeProxy(proxyUrl));
 
 		if (insecure) {
@@ -277,25 +296,47 @@ public class OidcLoginCheck {
 					return new X509Certificate[0];
 				}
 			} }, new SecureRandom());
-			builder.sslContext(sslContext);
+			this.sslContext = sslContext;
+		} else {
+			sslContext = null;
 		}
 
-		httpClient = builder.build();
 		requestTimeout = timeout;
+	}
+
+	/**
+	 * Creates a new HttpClient with its own cookie store, so each check starts without session and the resulting
+	 * session is independent of later checks.
+	 */
+	private HttpClient createHttpClient(final CookieManager cookieManager) {
+		final HttpClient.Builder builder = HttpClient.newBuilder()
+				.cookieHandler(cookieManager)
+				// Redirects are followed manually to keep track of the hops
+				.followRedirects(HttpClient.Redirect.NEVER)
+				.connectTimeout(requestTimeout)
+				.proxy(proxySelector);
+		if (sslContext != null) {
+			builder.sslContext(sslContext);
+		}
+		return builder.build();
 	}
 
 	/**
 	 * Executes the complete login flow and checks the resulting page.
 	 *
-	 * @return true if the web application main page was delivered successfully after login
+	 * @return the logged in session (CSRF token, cookie header) if the web application main page was delivered
+	 *         successfully after login, otherwise null
 	 */
-	public boolean check(final URI startUri, final String user, final String password, final String expectText) throws Exception {
+	public LoginSession check(final URI startUri, final String user, final String password, final String expectText) throws Exception {
 		final long startTime = System.currentTimeMillis();
 		if (!quiet) {
 			System.out.println("Checking " + startUri);
 		}
 		securityTokenType = null;
 		securityToken = null;
+		// Each check gets its own cookie store, a new check must not reuse the session of a previous check
+		final CookieManager cookieManager = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
+		httpClient = createHttpClient(cookieManager);
 
 		Page page = send("GET", startUri, null, null);
 		boolean loginPageSeen = false;
@@ -425,8 +466,15 @@ public class OidcLoginCheck {
 			}
 		}
 
+		final LoginSession session = new LoginSession(httpClient, cookieManager, page.uri, page.body, requestTimeout, securityTokenType, securityToken, verbose && !quiet);
+
 		if (!quiet) {
 			printPageInfo(page, startTime);
+		}
+		if (verbose && !quiet) {
+			final String cookieHeader = session.getCookieHeader();
+			System.out.println("Session cookies: " + (cookieHeader == null ? "<none>" : maskCookieHeader(cookieHeader)));
+			System.out.println("CSRF token in page: " + (session.csrfToken == null ? "<not found, probed on demand>" : maskSensitiveValue(session.csrfToken)));
 		}
 		if (securityToken != null) {
 			System.out.println("Security token (" + securityTokenType + "): " + securityToken);
@@ -434,10 +482,305 @@ public class OidcLoginCheck {
 			System.out.println("Security token: <not found>");
 		}
 		System.out.println("RESULT: OK");
-		return true;
+		return session;
 	}
 
-	private boolean fail(final String message, final Page page, final long startTime) {
+	/**
+	 * Result of a successful login: the logged in session of the web application with its cookies and CSRF token, to
+	 * be used for further requests (headers "Cookie" and "X-CSRF-TOKEN").
+	 *
+	 * Each session has its own HttpClient and cookie store, so it stays valid after further checks.
+	 */
+	public static final class LoginSession {
+		private final HttpClient httpClient;
+		private final CookieManager cookieManager;
+		private final URI finalPageUri;
+		private final String finalPageBody;
+		private final Duration requestTimeout;
+		private final String securityTokenType;
+		private final String securityToken;
+		private final boolean logEnabled;
+
+		private String csrfToken;
+		/** The probing for the CSRF token is expensive (several requests), so it is done once and only on demand */
+		private boolean csrfTokenDetermined;
+
+		private LoginSession(final HttpClient httpClient, final CookieManager cookieManager, final URI finalPageUri, final String finalPageBody, final Duration requestTimeout,
+				final String securityTokenType, final String securityToken, final boolean logEnabled) {
+			this.httpClient = httpClient;
+			this.cookieManager = cookieManager;
+			this.finalPageUri = finalPageUri;
+			this.finalPageBody = finalPageBody;
+			this.requestTimeout = requestTimeout;
+			this.securityTokenType = securityTokenType;
+			this.securityToken = securityToken;
+			this.logEnabled = logEnabled;
+
+			// Cheap detection without further requests: page content and cookies
+			csrfToken = findCsrfToken(finalPageBody);
+			csrfTokenDetermined = csrfToken != null;
+		}
+
+		/**
+		 * URI of the final page after the login (the main page of the web application).
+		 */
+		public URI getFinalPageUri() {
+			return finalPageUri;
+		}
+
+		/**
+		 * Security token found in the redirects of the login (id_token, access_token or code), may be null.
+		 */
+		public String getSecurityToken() {
+			return securityToken;
+		}
+
+		/**
+		 * Type of {@link #getSecurityToken()}: "id_token", "access_token" or "code", may be null.
+		 */
+		public String getSecurityTokenType() {
+			return securityTokenType;
+		}
+
+		/**
+		 * Value for the "Cookie" header of further requests to the final page.
+		 *
+		 * @return null if there are no cookies
+		 */
+		public String getCookieHeader() {
+			return getCookieHeader(finalPageUri);
+		}
+
+		/**
+		 * Value for the "Cookie" header of further requests to the given URI of the logged in application (only the
+		 * cookies matching domain and path of this URI).
+		 *
+		 * @return null if there are no matching cookies
+		 */
+		public String getCookieHeader(final URI targetUri) {
+			if (targetUri == null) {
+				return null;
+			}
+			final StringBuilder header = new StringBuilder();
+			for (final HttpCookie cookie : cookieManager.getCookieStore().get(targetUri)) {
+				if (header.length() > 0) {
+					header.append("; ");
+				}
+				header.append(cookie.getName()).append('=').append(cookie.getValue());
+			}
+			return header.length() == 0 ? null : header.toString();
+		}
+
+		/**
+		 * All cookies of the session (copy).
+		 */
+		public List<HttpCookie> getCookies() {
+			return List.copyOf(cookieManager.getCookieStore().getCookies());
+		}
+
+		/**
+		 * CSRF token of the session (to be sent as header "X-CSRF-TOKEN").
+		 *
+		 * The token is searched in the final page and the cookies first. If it is not found there, typical CSRF
+		 * endpoints and the scripts of the final page are probed with the session (several requests, done only once).
+		 *
+		 * @return null if no token was found
+		 */
+		public synchronized String getCsrfToken() {
+			if (!csrfTokenDetermined) {
+				csrfTokenDetermined = true;
+				csrfToken = autoDetectCsrfToken();
+				if (csrfToken == null) {
+					// SAP/Spring style: the token is delivered on request with "X-CSRF-TOKEN: Fetch"
+					csrfToken = fetchCsrfToken(finalPageUri);
+				}
+			}
+			return csrfToken;
+		}
+
+		/**
+		 * Requests a (new) CSRF token for the given endpoint with this session by sending "X-CSRF-TOKEN: Fetch". Useful
+		 * if a request with {@link #getCsrfToken()} was rejected. A delivered token replaces the token of this session.
+		 *
+		 * @return the token or null if none was delivered
+		 */
+		public synchronized String fetchCsrfToken(final URI endpoint) {
+			if (endpoint == null) {
+				return null;
+			}
+			try {
+				log("CSRF probe: GET " + endpoint + " with X-CSRF-TOKEN: Fetch");
+				final HttpRequest request = HttpRequest.newBuilder(endpoint)
+						.timeout(requestTimeout)
+						.header("User-Agent", USER_AGENT)
+						.header("Accept", "*/*")
+						.header("X-Requested-With", "XMLHttpRequest")
+						.header("X-CSRF-TOKEN", "Fetch")
+						.header("Referer", finalPageUri.toString())
+						.header("Origin", finalPageUri.getScheme() + "://" + finalPageUri.getRawAuthority())
+						.GET()
+						.build();
+				final HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+				final String headerToken = extractCsrfTokenFromHeaders(response);
+				final String token = headerToken != null ? headerToken : findCsrfToken(response.body());
+				if (token != null) {
+					csrfToken = token;
+					csrfTokenDetermined = true;
+				}
+				return token;
+			} catch (final Exception e) {
+				log("CSRF fetch probe failed (" + e.getMessage() + ")");
+			}
+			return null;
+		}
+
+		/**
+		 * Probes the final page, typical CSRF endpoints and the scripts of the final page for a CSRF token.
+		 */
+		private String autoDetectCsrfToken() {
+			final List<URI> probeUris = new ArrayList<>();
+			probeUris.add(finalPageUri);
+			for (final String path : CSRF_PROBE_PATHS) {
+				probeUris.add(resolveHttpUri(finalPageUri, path));
+			}
+			probeUris.addAll(extractScriptUris(finalPageUri, finalPageBody));
+
+			int probeCount = 0;
+			for (final URI probeUri : probeUris) {
+				if (probeUri == null) {
+					continue;
+				}
+				if (probeCount >= MAX_CSRF_PROBES) {
+					break;
+				}
+				probeCount++;
+				try {
+					log("CSRF probe: GET " + probeUri);
+					final HttpRequest request = HttpRequest.newBuilder(probeUri)
+							.timeout(requestTimeout)
+							.header("User-Agent", USER_AGENT)
+							.header("Accept", "*/*")
+							.header("Referer", finalPageUri.toString())
+							.GET()
+							.build();
+					final HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+					final String headerToken = extractCsrfTokenFromHeaders(response);
+					if (headerToken != null) {
+						log("CSRF token found in response headers from " + probeUri);
+						return headerToken;
+					}
+					final String bodyToken = findCsrfToken(response.body());
+					if (bodyToken != null) {
+						log("CSRF token found in response body/cookies from " + probeUri);
+						return bodyToken;
+					}
+				} catch (final Exception e) {
+					log("CSRF probe failed at " + probeUri + " (" + e.getMessage() + ")");
+				}
+			}
+			return null;
+		}
+
+		/**
+		 * Searches a CSRF token in HTML (meta tag or JavaScript variable) and then in the cookies of the session.
+		 */
+		private String findCsrfToken(final String html) {
+			if (html != null) {
+				final Matcher metaMatcher = CSRF_META_PATTERN.matcher(html);
+				if (metaMatcher.find()) {
+					return decodeEntities(metaMatcher.group(1));
+				}
+				final Matcher jsMatcher = CSRF_JS_PATTERN.matcher(html);
+				if (jsMatcher.find()) {
+					return unescapeJsString(jsMatcher.group(1) != null ? jsMatcher.group(1) : jsMatcher.group(2));
+				}
+			}
+
+			for (final HttpCookie cookie : cookieManager.getCookieStore().getCookies()) {
+				final String name = cookie.getName().toLowerCase(Locale.ROOT);
+				if ((name.contains("csrf") || name.contains("xsrf")) && cookie.getValue() != null && !cookie.getValue().isBlank()) {
+					return cookie.getValue();
+				}
+			}
+			return null;
+		}
+
+		private void log(final String message) {
+			if (logEnabled) {
+				System.out.println("  " + message);
+			}
+		}
+
+		@Override
+		public String toString() {
+			// Cookies and tokens must never appear in log output
+			return "LoginSession @ " + finalPageUri;
+		}
+	}
+
+	private static String extractCsrfTokenFromHeaders(final HttpResponse<String> response) {
+		for (final Map.Entry<String, List<String>> header : response.headers().map().entrySet()) {
+			final String name = header.getKey().toLowerCase(Locale.ROOT);
+			if (!(name.contains("csrf") || name.contains("xsrf"))) {
+				continue;
+			}
+			for (final String value : header.getValue()) {
+				// "Required"/"Fetch" are protocol values of servers that demand or offer a token, no token itself
+				if (value != null && !value.isBlank() && !"Required".equalsIgnoreCase(value.trim()) && !"Fetch".equalsIgnoreCase(value.trim())) {
+					return value.trim();
+				}
+			}
+		}
+		return null;
+	}
+
+	private static List<URI> extractScriptUris(final URI baseUri, final String html) {
+		final List<URI> uris = new ArrayList<>();
+		if (html == null || html.isBlank()) {
+			return uris;
+		}
+		final Matcher matcher = SCRIPT_SRC_PATTERN.matcher(html);
+		while (matcher.find()) {
+			final String src = matcher.group(1) != null ? matcher.group(1) : matcher.group(2) != null ? matcher.group(2) : matcher.group(3);
+			final URI resolved = resolveHttpUri(baseUri, src);
+			if (resolved != null) {
+				uris.add(resolved);
+			}
+		}
+		return uris;
+	}
+
+	/**
+	 * Shortens secret values for log output.
+	 */
+	private static String maskSensitiveValue(final String value) {
+		if (value == null || value.isEmpty()) {
+			return "<empty>";
+		} else if (value.length() <= 8) {
+			return "<len=" + value.length() + ">";
+		} else {
+			return value.substring(0, 4) + "..." + value.substring(value.length() - 4) + " (len=" + value.length() + ")";
+		}
+	}
+
+	private static String maskCookieHeader(final String cookieHeader) {
+		final StringBuilder masked = new StringBuilder();
+		for (final String cookie : cookieHeader.split("; ")) {
+			if (masked.length() > 0) {
+				masked.append("; ");
+			}
+			final int equalsIndex = cookie.indexOf('=');
+			masked.append(equalsIndex < 0 ? cookie : cookie.substring(0, equalsIndex + 1) + maskSensitiveValue(cookie.substring(equalsIndex + 1)));
+		}
+		return masked.toString();
+	}
+
+	/**
+	 * Prints the failure.
+	 *
+	 * @return always null (no session)
+	 */
+	private LoginSession fail(final String message, final Page page, final long startTime) {
 		if (!quiet) {
 			printPageInfo(page, startTime);
 		}
@@ -446,7 +789,7 @@ public class OidcLoginCheck {
 		}
 		dumpFinalHtmlIfRequested(page);
 		System.out.println("RESULT: FAILED - " + message);
-		return false;
+		return null;
 	}
 
 	private void dumpFinalHtmlIfRequested(final Page page) {
@@ -822,6 +1165,20 @@ public class OidcLoginCheck {
 			final URI proxyUri = parseProxyUri(proxyUrl);
 			return new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyUri.getHost(), proxyUri.getPort()));
 		}
+	}
+
+	/**
+	 * Determines the proxy for a request to the given target with the same rules as the login itself: null or blank
+	 * means the system proxy settings (JVM properties, -Djava.net.useSystemProxies=true), "none"/"direct" a direct
+	 * connection, otherwise the given HTTP proxy.
+	 *
+	 * @return the proxy to use, never null ({@link Proxy#NO_PROXY} for a direct connection)
+	 * @throws IllegalArgumentException
+	 *             if the proxy URL is invalid
+	 */
+	public static Proxy resolveProxy(final String proxyUrl, final URI targetUri) {
+		final List<Proxy> proxies = createProxySelector(proxyUrl).select(targetUri);
+		return proxies == null || proxies.isEmpty() ? Proxy.NO_PROXY : proxies.get(0);
 	}
 
 	private static String describeProxy(final String proxyUrl) {

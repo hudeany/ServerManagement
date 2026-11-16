@@ -127,6 +127,12 @@ public class ServerManagementItem extends JPanel {
 	/** Column of the check result in the logins table */
 	private static final int LOGINS_RESULT_COLUMN = 3;
 
+	/**
+	 * Version location with login: "&lt;username&gt; @ &lt;GET|POST&gt;:&lt;http(s)-url&gt;", e.g.
+	 * "monitor @ POST:https://host/cid/ui/gwt/rest/versions/getVersionData". The username may contain "@" itself.
+	 */
+	private static final Pattern LOGIN_LOCATION_PATTERN = Pattern.compile("^\\s*(.+?)\\s*@\\s*(GET|POST)\\s*:\\s*(https?://\\S+)\\s*$", Pattern.CASE_INSENSITIVE);
+
 	private RefreshServerItemStatusWorker worker;
 
 	/** Maximum number of table rows visible without scrolling */
@@ -1735,13 +1741,34 @@ public class ServerManagementItem extends JPanel {
 		SftpConnection sftpConnection = null;
 		String cachedSftpConnectionString = "";
 
+		// Locations "<username> @ <GET|POST>:<url>": one login per login configuration and one request per location
+		final Map<Login, OidcLoginCheck.LoginSession> loginSessionCache = new HashMap<>();
+		final Map<String, String> loginLocationDataCache = new HashMap<>();
+
 		try {
 			for (final Version version : server.getVersions()) {
 				// Each version separately: before, a failing SSH connection, an invalid regex or a missing property aborted
 				// the check of all further versions of this server
 				try {
 					String data = null;
-					if (version.getLocation().toLowerCase().startsWith("http://")
+					final Matcher loginLocationMatcher = LOGIN_LOCATION_PATTERN.matcher(version.getLocation());
+					if (loginLocationMatcher.matches()) {
+						// JSON paths request JSON ("Content-Type: application/json"), so the content type is part of the cache key
+						final boolean jsonRequest = version.getPath() != null && version.getPath().toLowerCase().startsWith("json:");
+						final String locationKey = version.getLocation().trim() + (jsonRequest ? " [json]" : "");
+						if (loginLocationDataCache.containsKey(locationKey)) {
+							data = loginLocationDataCache.get(locationKey);
+						} else {
+							try {
+								data = readWithLogin(loginLocationMatcher.group(1), loginLocationMatcher.group(2), loginLocationMatcher.group(3), jsonRequest, loginSessionCache);
+							} catch (@SuppressWarnings("unused") final Exception e) {
+								data = null;
+							}
+							// Also a failure is cached (null), so the request is not repeated for each version
+							loginLocationDataCache.put(locationKey, data);
+						}
+						// data == null is shown as ERROR below
+					} else if (version.getLocation().toLowerCase().startsWith("http://")
 							|| version.getLocation().toLowerCase().startsWith("https://")) {
 						try {
 							final HttpRequest request = new HttpRequest(HttpMethod.GET, version.getLocation());
@@ -1954,10 +1981,7 @@ public class ServerManagementItem extends JPanel {
 				final char[] password = login.getPasswordArray();
 				final String credentials = (login.getUsername() == null ? "" : login.getUsername()) + ":" + (password == null ? "" : new String(password));
 				request.addHeader("Authorization", "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8)));
-				// Proxy of the login, otherwise the proxy of the application configuration
-				final Proxy loginProxy = OidcLoginCheck.createProxy(login.getProxyUrl());
-				final Proxy proxy = loginProxy != null ? loginProxy : applicationConfiguration.getProxyConfiguration().getProxy(request.getUrl());
-				final HttpResponse response = HttpUtilities.executeHttpRequest(request, proxy, trustManager, deactivateHostnameVerification);
+				final HttpResponse response = HttpUtilities.executeHttpRequest(request, getProxyForLogin(login, request.getUrl()), trustManager, deactivateHostnameVerification);
 				final int httpCode = response.getHttpCode();
 				if (httpCode >= 200 && httpCode < 300) {
 					return LOGIN_RESULT_OK;
@@ -1971,42 +1995,177 @@ public class ServerManagementItem extends JPanel {
 			}
 		} else if (login.getLoginType() == LoginType.OIDC) {
 			try {
-				final String url = login.getUrl();
-				final String user = login.getUsername();
-				final char[] passwordArray = login.getPasswordArray();
-				final String password = passwordArray == null ? null : new String(passwordArray);
-				final String expectText = null;
-				final String usernameField = null;
-				final String passwordField = null;
-				final String dumpFinalHtmlPath = null;
-				final String tokenType = null;
-				final String idpSelection = StringUtilities.isBlank(login.getIdpSelection()) ? null : login.getIdpSelection();
-				final boolean insecure = false;
-				final boolean verbose = false;
-				final boolean quiet = false;
-				final int timeoutSeconds = 30;
-
-				final URI startUri;
-				try {
-					startUri = URI.create(url);
-					if (startUri.getScheme() == null || startUri.getHost() == null) {
-						throw new IllegalArgumentException();
-					}
-				} catch (@SuppressWarnings("unused") final IllegalArgumentException e) {
-					throw new Exception("Invalid URL: " + url);
-				}
-
-				// Proxy of the login; null means system proxy settings
-				final String proxyUrl = StringUtilities.isBlank(login.getProxyUrl()) ? null : login.getProxyUrl();
-
-				final OidcLoginCheck check = new OidcLoginCheck(insecure, verbose, quiet, Duration.ofSeconds(timeoutSeconds), usernameField, passwordField, dumpFinalHtmlPath, tokenType, idpSelection, proxyUrl);
-				return check.check(startUri, user, password, expectText) ? LOGIN_RESULT_OK : LOGIN_RESULT_FAILED;
+				return loginWithOidc(login) != null ? LOGIN_RESULT_OK : LOGIN_RESULT_FAILED;
 			} catch (@SuppressWarnings("unused") final Exception e) {
 				return LOGIN_RESULT_FAILED;
 			}
 		} else {
 			return LOGIN_RESULT_ERROR;
 		}
+	}
+
+	/**
+	 * Executes the OIDC login of the given login configuration.
+	 *
+	 * @return the logged in session (cookies, CSRF token) or null, if the login failed
+	 */
+	private static OidcLoginCheck.LoginSession loginWithOidc(final Login login) throws Exception {
+		final URI startUri = parseHttpUri(login.getUrl());
+		final char[] passwordArray = login.getPasswordArray();
+		final String password = passwordArray == null ? null : new String(passwordArray);
+		final String idpSelection = StringUtilities.isBlank(login.getIdpSelection()) ? null : login.getIdpSelection();
+		// Proxy of the login; null means system proxy settings
+		final String proxyUrl = StringUtilities.isBlank(login.getProxyUrl()) ? null : login.getProxyUrl();
+
+		final OidcLoginCheck check = new OidcLoginCheck(false, false, false, Duration.ofSeconds(30), null, null, null, null, idpSelection, proxyUrl);
+		return check.check(startUri, login.getUsername(), password, null);
+	}
+
+	/**
+	 * Proxy for requests of a login: the proxy of the login, otherwise the proxy of the application configuration.
+	 */
+	private Proxy getProxyForLogin(final Login login, final String url) throws Exception {
+		final Proxy loginProxy = OidcLoginCheck.createProxy(login.getProxyUrl());
+		return loginProxy != null ? loginProxy : applicationConfiguration.getProxyConfiguration().getProxy(url);
+	}
+
+	/**
+	 * Proxy for the requests of a version location with login: the same proxy as for the OIDC login, so the proxy of the
+	 * login, or the system proxy settings if the login has no proxy.
+	 */
+	private static Proxy getSessionProxy(final Login login, final URI targetUri) {
+		return OidcLoginCheck.resolveProxy(login.getProxyUrl(), targetUri);
+	}
+
+	private static URI parseHttpUri(final String url) throws Exception {
+		try {
+			final URI uri = URI.create(url == null ? "" : url.trim());
+			if (uri.getScheme() == null || uri.getHost() == null
+					|| !("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))) {
+				throw new IllegalArgumentException();
+			}
+			return uri;
+		} catch (@SuppressWarnings("unused") final IllegalArgumentException e) {
+			throw new Exception("Invalid URL: " + url);
+		}
+	}
+
+	/**
+	 * Finds the login of this server by its username. With several logins of the same username the login on the host of
+	 * the target URL is preferred.
+	 */
+	private Login findLoginByUsername(final String username, final URI targetUri) throws Exception {
+		Login firstMatchingLogin = null;
+		if (server.getLogins() != null) {
+			for (final Login login : server.getLogins()) {
+				if (username.equals(login.getUsername())) {
+					if (firstMatchingLogin == null) {
+						firstMatchingLogin = login;
+					}
+					try {
+						final URI loginUri = URI.create(login.getUrl());
+						if (loginUri.getHost() != null && loginUri.getHost().equalsIgnoreCase(targetUri.getHost())) {
+							return login;
+						}
+					} catch (@SuppressWarnings("unused") final Exception e) {
+						// Invalid login URL, the login may still be used as fallback
+					}
+				}
+			}
+		}
+		if (firstMatchingLogin == null) {
+			throw new Exception("No login with username '" + username + "' configured for server '" + server.getName() + "'");
+		}
+		return firstMatchingLogin;
+	}
+
+	/**
+	 * Reads the data of a version location "&lt;username&gt; @ &lt;GET|POST&gt;:&lt;url&gt;": logs in with the login of
+	 * the username and requests the URL with the session (cookies and CSRF token for OIDC, Basic authentication for
+	 * BasicAuth logins).
+	 *
+	 * @param jsonRequest
+	 *            true to send the header "Content-Type: application/json" (for version paths "json:...")
+	 * @param loginSessionCache
+	 *            OIDC sessions of the current version refresh, so each login is only executed once (also failed logins
+	 *            are cached as null)
+	 * @return the response content
+	 * @throws Exception
+	 *             if the login fails or the request does not return HTTP 2xx
+	 */
+	private String readWithLogin(final String username, final String httpMethod, final String url, final boolean jsonRequest, final Map<Login, OidcLoginCheck.LoginSession> loginSessionCache) throws Exception {
+		final URI targetUri = parseHttpUri(url);
+		final Login login = findLoginByUsername(username, targetUri);
+		final HttpMethod method = "POST".equalsIgnoreCase(httpMethod) ? HttpMethod.POST : HttpMethod.GET;
+
+		final HttpResponse response;
+		if (login.getLoginType() == LoginType.OIDC) {
+			final OidcLoginCheck.LoginSession session;
+			if (loginSessionCache.containsKey(login)) {
+				session = loginSessionCache.get(login);
+			} else {
+				OidcLoginCheck.LoginSession newSession = null;
+				try {
+					newSession = loginWithOidc(login);
+				} finally {
+					// Cached even if the login failed, so it is not repeated for each version
+					loginSessionCache.put(login, newSession);
+				}
+				session = newSession;
+			}
+			if (session == null) {
+				throw new Exception("Login of user '" + username + "' failed");
+			}
+
+			final String csrfToken = session.getCsrfToken();
+			HttpResponse sessionResponse = executeSessionRequest(login, session, method, url, targetUri, csrfToken, jsonRequest);
+			if (sessionResponse.getHttpCode() == 403) {
+				// The token may be outdated or bound to the endpoint: request a new one and retry once
+				final String newCsrfToken = session.fetchCsrfToken(targetUri);
+				if (newCsrfToken != null && !newCsrfToken.equals(csrfToken)) {
+					sessionResponse = executeSessionRequest(login, session, method, url, targetUri, newCsrfToken, jsonRequest);
+				}
+			}
+			response = sessionResponse;
+		} else {
+			final HttpRequest request = new HttpRequest(method, url);
+			if (jsonRequest) {
+				request.addHeader("Content-Type", "application/json");
+			}
+			final char[] password = login.getPasswordArray();
+			final String credentials = (login.getUsername() == null ? "" : login.getUsername()) + ":" + (password == null ? "" : new String(password));
+			request.addHeader("Authorization", "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8)));
+			response = HttpUtilities.executeHttpRequest(request, getSessionProxy(login, targetUri), trustManager, deactivateHostnameVerification);
+		}
+
+		if (response.getHttpCode() < 200 || response.getHttpCode() >= 300) {
+			throw new Exception("HTTP " + response.getHttpCode() + " for " + httpMethod + " " + url);
+		}
+		return response.getContent();
+	}
+
+	/**
+	 * Sends a request with the cookies and the CSRF token of a logged in OIDC session.
+	 */
+	private HttpResponse executeSessionRequest(final Login login, final OidcLoginCheck.LoginSession session, final HttpMethod method, final String url, final URI targetUri, final String csrfToken, final boolean jsonRequest) throws Exception {
+		final HttpRequest request = new HttpRequest(method, url);
+		if (jsonRequest) {
+			request.addHeader("Content-Type", "application/json");
+		}
+		final String cookieHeader = session.getCookieHeader(targetUri);
+		if (cookieHeader != null) {
+			request.addHeader("Cookie", cookieHeader);
+		}
+		if (csrfToken != null) {
+			request.addHeader("X-CSRF-TOKEN", csrfToken);
+		}
+		// Same headers as the web application itself sends for its REST calls
+		final URI finalPageUri = session.getFinalPageUri();
+		request.addHeader("X-Requested-With", "XMLHttpRequest");
+		request.addHeader("Accept", "application/json, text/plain, */*");
+		request.addHeader("Origin", finalPageUri.getScheme() + "://" + finalPageUri.getRawAuthority());
+		request.addHeader("Referer", finalPageUri.toString());
+		return HttpUtilities.executeHttpRequest(request, getSessionProxy(login, targetUri), trustManager, deactivateHostnameVerification);
 	}
 
 	public String getStatus() {

@@ -1,0 +1,611 @@
+ServerManagement - Manual
+=========================
+
+ServerManagement is a desktop application to watch and maintain a set of
+servers. For each server it shows in one card:
+
+  - Managed SSH users and their authorized public keys
+  - Logins (HTTP Basic authentication or OIDC) and whether they work
+  - URLs and whether they are reachable
+  - Versions of installed software, read from web services, files or commands
+  - Logs, shown live in an SSH log viewer
+
+Most of this manual describes the "Location" and "Path" values of versions
+(chapter 8), because they are the most flexible part of the configuration.
+
+
+Contents
+--------
+
+  1. Start and files
+  2. User interface
+  3. Server, host and SSH admin
+  4. Managed SSH users and public keys
+  5. Logins
+  6. URLs
+  7. Logs
+  8. Versions: locations and paths
+     8.1 Overview
+     8.2 Location forms
+     8.3 Path forms
+     8.4 Caching within one version check
+     8.5 Results and errors
+     8.6 Examples
+  9. TLS certificates and proxies
+ 10. Security notes
+
+
+1. Start and files
+------------------
+
+Start:
+
+    java -jar ServerManagement.jar [serversConfigurationFile]
+
+  serversConfigurationFile
+      Optional path of the servers configuration file (JSON).
+      Default: ~/.ServerManagement/.ServerManagement.servers.config
+      A given file must exist. Without the parameter, the default file is
+      created on the first save.
+
+Global parameters (each only as single or first parameter):
+
+  help                          Show the command line help
+  version                       Show the installed version
+  update [username [password]]  Check for an online update and install it
+                                after confirmation
+
+Files next to the servers configuration file:
+
+  <configuration file>.masterkey
+      Random AES-256 key, created on first use, readable only by the current
+      user. It decrypts the passwords in the configuration file. Without this
+      file the stored passwords cannot be used anymore, so include it in your
+      backups (but keep it apart from copies of the configuration you share).
+
+The servers configuration file is written by the application ("Save server
+settings"). The only setting without a dialog is "keystore" (see chapter 9).
+
+
+2. User interface
+-----------------
+
+The main window shows one card per server. With many servers, a table of
+contents at the top jumps to a server card.
+
+Global buttons:
+
+  Add server             Asks for the server name and the host
+  Remove server          Removes the selected servers
+  Manage public keys     Maintains the set of known public SSH keys
+  Check server status    Checks all servers (users, URLs, versions, logins)
+  Save server settings   Writes the servers configuration file
+
+Each server card has the sections "Managed SSH users", "Logins", "URLs",
+"Versions" and "Logs". Each section has its own buttons (add, edit, remove,
+check). A double click on a table row edits the entry; in the "Logs" section
+it opens the log viewer.
+
+Changes are only kept after "Save server settings". On closing with unsaved
+changes, the application asks for confirmation.
+
+After a check, each table is colored by its worst result: red for an error,
+yellow for a warning (e.g. surplus SSH keys), green if everything is fine.
+"Check server status" checks all servers and then lists the servers with an
+error.
+
+
+3. Server, host and SSH admin
+-----------------------------
+
+Host
+    "hostname", "hostname:port", "[ipv6address]", "[ipv6address]:port" or a
+    plain IPv6 address without port. The default SSH port is 22.
+
+SSH admin ("Admindata")
+    User for all SSH access to the server: reading and writing the
+    authorized_keys of the managed users, SSH versions (if no other user is
+    given in the location) and the log viewer.
+      Username          SSH user name
+      Private key file  File with the private SSH key (optional if a password
+                        is given)
+      Password          Password of the user, or passphrase of the private key
+
+
+4. Managed SSH users and public keys
+------------------------------------
+
+Known public keys ("Manage public keys") are the central list of public SSH
+keys with a key id and a readable name.
+
+For each managed SSH user of a server, a list of key ids is configured (the
+expected keys). The check reads the user's authorized_keys on the server and
+shows:
+
+  Expected keys   Number of configured keys
+  Current keys    Number of configured keys found on the server
+  Surplus keys    Keys on the server that are not configured for this user
+
+Red: the authorized_keys could not be read or expected keys are missing.
+Yellow: there are surplus keys.
+
+"Edit user" shows the keys on the server, the configured keys and the known
+keys side by side. From there keys can be transferred to the server, dropped
+from the server, added to the configuration or downloaded into the set of
+known keys. "Read available users" lists the users of the server.
+
+
+5. Logins
+---------
+
+A login describes how to log in to a web application of the server. It is
+checked with "Check logins" and is used by version locations with a username
+(see 8.2.2).
+
+Fields:
+
+  Login type
+      BasicAuth  HTTP Basic authentication (header "Authorization: Basic ...")
+      OIDC       Login via an OpenID Connect identity provider (e.g. Keycloak)
+  URL
+      BasicAuth: URL that requires the authentication.
+      OIDC: start page of the web application. It must redirect to the
+      identity provider and, after the login, back to the application.
+  Username, Password
+      Credentials. The password is stored encrypted.
+  IdP selection (OIDC only, optional)
+      Text of the button or link of the identity provider to choose on the
+      login page, for login pages that offer several providers (federated
+      login). Compared case-insensitively with the displayed name.
+  Proxy URL (optional)
+      "http://host:port" or "host:port": this HTTP proxy
+      "none" or "direct": direct connection without proxy
+      empty: see chapter 9
+      Only plain HTTP proxies without credentials are supported.
+
+Results of "Check logins":
+
+  OK      BasicAuth: HTTP 2xx. OIDC: the login succeeded and the application
+          start page was delivered.
+  FAILED  BasicAuth: HTTP 401 or 403 (credentials rejected).
+          OIDC: the login did not succeed (wrong credentials, login form not
+          recognized, application page not reached).
+  ERROR   BasicAuth: any other HTTP status or no connection.
+
+How the OIDC login works:
+
+  The application behaves like a simple browser without JavaScript. It
+  follows redirects, keeps cookies and fills in the login form of the identity
+  provider. Two-step forms (username first, password on the next page) and
+  forms that submit themselves (response_mode=form_post) work too. At the end,
+  the start page of the application must be delivered on the application's
+  own host. Login pages that need JavaScript to show the form are not
+  supported (exception: Keycloak pages that only contain a "loginAction" in a
+  script).
+
+  After the login the CSRF token of the application is taken from the page
+  (meta tag such as <meta name="_csrf" content="...">, otherwise a JavaScript
+  variable or a CSRF/XSRF cookie). If there is none, it is requested once with
+  the header "X-CSRF-TOKEN: Fetch".
+
+
+6. URLs
+-------
+
+Each URL is requested with HTTP GET (no login). The table shows the response
+time in seconds.
+
+  HTTP 200, 302 or 400   Reachable, the time in seconds is shown
+  anything else          -1 (error)
+
+Proxy: the proxy of the application configuration. TLS: see chapter 9.
+
+
+7. Logs
+-------
+
+A log entry has a name, a location and a path:
+
+  Location   ssh://host  or  ssh://host:port
+             The SSH admin of the server is used (no user in the location).
+  Path       Absolute path of the log file on that host,
+             e.g. /var/log/nginx/access.log
+
+A double click opens the SSH log viewer. It runs "tail -F" on the file, so it
+shows the whole file and then follows new lines, also across log rotation.
+The viewer offers text search (case sensitive, regular expression), a filter
+mode that only shows matching lines, scroll lock and line wrap.
+
+
+8. Versions: locations and paths
+--------------------------------
+
+8.1 Overview
+
+A version entry has three values:
+
+  Version name   Displayed name, e.g. "nexInsure" or "Java"
+  Location       WHERE the data comes from: a URL, a file or a command
+  Path           HOW the version is extracted from that data:
+                 json:, xml:, regex:, regex(n): or properties:
+
+"Read versions" (or "Check server status") loads the data of each location
+and applies the path. The table shows the version or "ERROR".
+
+
+8.2 Location forms
+
+Overview:
+
+  http(s)://host/path                      HTTP GET without login
+  [GET:|POST:]http(s)://user@host/path     HTTP request with a login
+  ssh://[user[:password]@][host][:port]/path      File or directory via SSH
+  ssh://[user[:password]@][host]:relative/path    (scp style)
+  ssh-cmd://[user[:password]@][host][:port] <command>   Command via SSH
+  ssh-cmd:[user[:password]@host:]<command>       Old command form
+
+The prefixes are not case sensitive.
+
+
+8.2.1 http://... and https://... (without username)
+
+    https://host.example.com/app/version.json
+
+  - HTTP GET without login.
+  - Only HTTP 200 is accepted; any other status is an ERROR.
+  - Proxy: the proxy of the application configuration.
+
+
+8.2.2 [GET:|POST:]http(s)://user@host/path (with login)
+
+    https://monitor@host.example.com/app/version.json
+    GET:https://monitor@host.example.com/app/version.json
+    POST:https://monitor@host.example.com/cid/ui/gwt/rest/versions/getVersionData
+
+  - The username before "@" selects the login of this server (chapter 5).
+    The username is only used to find the login and is not sent as part of
+    the URL.
+  - If several logins of the server have this username, the login whose URL
+    has the same host as the location is preferred, otherwise the first one
+    is used.
+  - Special characters in the username must be URL encoded, for example an
+    e-mail address "max@firma.de" as "max%40firma.de":
+        https://max%40firma.de@host.example.com/version
+  - A password in the URL ("user:password@") is rejected; the password is
+    always taken from the login.
+  - Without "GET:" or "POST:" a GET request is sent. POST requests are sent
+    without request body.
+  - Only HTTP 2xx is accepted; any other status is an ERROR.
+  - If the path of the version starts with "json:", the request is sent with
+    "Content-Type: application/json".
+
+  With an OIDC login:
+  - The login runs once per version check, its session (cookies) is reused
+    for all locations with this login.
+  - Each request carries the session cookies, the CSRF token
+    ("X-CSRF-TOKEN") and the headers a browser application sends for its
+    REST calls ("X-Requested-With: XMLHttpRequest", "Origin", "Referer").
+  - If the server answers HTTP 403, a new CSRF token is requested for this
+    URL and the request is repeated once.
+  - Proxy and TLS are the same as for the login.
+
+  With a BasicAuth login:
+  - The request carries "Authorization: Basic ..." with the credentials of
+    the login.
+  - Proxy: the proxy of the login, otherwise the system proxy settings
+    (chapter 9).
+
+
+8.2.3 ssh://... (file or directory)
+
+  Reads a file via SFTP. If the path ends with "/", the location delivers the
+  list of file names in this directory instead (one name per line).
+
+  Supported forms:
+
+    ssh:///etc/os-release
+        Host, port and SSH admin of the server
+    ssh://homebase/etc/os-release
+        Other host, port 22, SSH admin of the server
+    ssh://andreas@homebase/etc/os-release
+        Other user (authenticated with the private key or password of the
+        SSH admin)
+    ssh://andreas@homebase:2222/etc/os-release
+        Other port
+    ssh://andreas:secret@homebase/etc/os-release
+        User with its own password
+    ssh://andreas@homebase:/etc/os-release
+        Colon before an absolute path (scp style)
+    ssh://andreas@homebase:app/version.txt
+        scp style: path relative to the home directory of the user
+    ssh://[2001:db8::1]:2222/etc/os-release
+        IPv6 address in brackets
+    ssh://andreas@homebase/opt/app/releases/
+        Directory listing
+
+  Rules:
+  - Without host: the host of the server (and its port, if the server host
+    contains one).
+  - With host but without port: port 22.
+  - Without user: the user of the SSH admin.
+  - Without password: the authentication of the SSH admin (private key and/or
+    password).
+  - The password may contain ":" and "@", but no "/".
+  - "host:2222" must be followed by "/path"; "ssh://host:2222" alone is an
+    error.
+
+
+8.2.4 ssh-cmd://... (command)
+
+  Runs a command via SSH and delivers its output.
+
+    ssh-cmd://andreas@homebase java -version
+    ssh-cmd://andreas@homebase:2222 cat /opt/app/VERSION
+    ssh-cmd://andreas:secret@homebase /opt/app/bin/app --version
+    ssh-cmd:// rpm -q nginx
+        Host and SSH admin of the server (note the space after "//")
+    ssh-cmd://[2001:db8::1]:2222 uname -r
+
+  Rules:
+  - The connection part ends at the first space; everything after it is the
+    command. The command may contain any characters (":", "/", "@", pipes,
+    quotes), for example:
+        ssh-cmd://admin@db1 psql -tAc "select version()" | head -1
+  - Host, port, user and password follow the same rules as for ssh://.
+  - The password may contain ":" and "@", but no space.
+  - Commands like "java -version" write to stderr; whether stderr is part of
+    the output depends on the SSH command execution. If the output is empty,
+    redirect it: "java -version 2>&1".
+
+
+8.2.5 ssh-cmd:... (old form)
+
+    ssh-cmd:cat /opt/app/VERSION
+    ssh-cmd:andreas@homebase:cat /opt/app/VERSION
+    ssh-cmd:andreas:secret@homebase:cat /opt/app/VERSION
+
+  Kept for existing configurations. Everything after the last ":" is the
+  command, so the command must not contain ":". Prefer ssh-cmd://.
+
+
+8.3 Path forms
+
+The path tells how to find the version in the loaded data. The prefixes are
+not case sensitive. Write the expression directly after the prefix:
+for regex:, regex(n): and properties: a space after the colon becomes part of
+the expression.
+
+Overview:
+
+  json:<JSON path>         Value of a JSON document
+  xml:<XPath>              Text of an XML document
+  regex:<regex>            First match of a regular expression
+  regex(<n>):<regex>       Group n of the first match
+  properties:<key>         Value of a properties file
+
+
+8.3.1 json:<JSON path>
+
+  The data is read as JSON and the JSON path (RFC 9535) is applied. The
+  version is the FIRST matching value. Strings, numbers and booleans are
+  accepted; an object, an array or null as first match is an ERROR.
+
+  The path starts with "$" (root). Supported:
+
+    $.a.b                       Child by name
+    $['a b']  $["a.b"]          Names with special characters
+    $.a[0]  $.a[-1]             Array index, negative counts from the end
+    $.a[1:3]  $.a[::2]          Slices
+    $.a[0,2]  $.a['x','y']      Unions
+    $.a[*]  $.a.*               Wildcard
+    $..version                  Recursive descent (anywhere below)
+    $.a[?(@.name=='x')]         Filter on the elements of an array
+    $.a[?@.name=='x']           Filter without parentheses
+
+  Filter expressions:
+
+    ==  !=  <  <=  >  >=        Comparison (numbers, strings, true, false, null)
+    &&  ||  !  ( )              Logical operators and grouping
+    @.field                     Field of the current element
+    $.field                     Field of the document root
+    @.tags                      Existence: true if the field exists
+
+  Filter functions (RFC 9535):
+
+    length(x)            Length of a string (characters), array or object
+    count(@.list[*])     Number of matched nodes
+    value(@..color)      Value of exactly one matched node
+    match(@.v, 'regex')  True if the WHOLE string matches the regex
+    search(@.v, 'regex') True if a PART of the string matches the regex
+
+  match() and search() use I-Regexp (RFC 9485): "." matches any character
+  except line breaks, "^" and "$" are normal characters, character classes
+  like \p{L} or \P{Nd} are supported; \d, \w, lazy quantifiers ("*?") and
+  back references are not. An invalid regex simply does not match. Inside a
+  JSON path string a backslash must be doubled: match(@.v, '25\\..*')
+
+  Examples with this data:
+
+    { "versionData": [
+        { "name": "Gateway",   "version": "CSS-264.0.0-22" },
+        { "name": "nexInsure", "version": "25.4.28" } ],
+      "build": 4711 }
+
+    json:$.versionData[?(@.name=='nexInsure')].version   -> 25.4.28
+    json:$.versionData[1].version                        -> 25.4.28
+    json:$.versionData[-1].version                       -> 25.4.28
+    json:$..version                                      -> CSS-264.0.0-22
+                                                            (first match)
+    json:$.versionData[?(match(@.version, '25\\..*'))].version  -> 25.4.28
+    json:$.versionData[?(search(@.name, 'Insure'))].version    -> 25.4.28
+    json:$.build                                          -> 4711
+
+  Common mistake:
+
+    json:$.versionData[?(@.name=='nexInsure')].version[0]
+
+  delivers nothing: "[0]" is applied to the version value (a string), not to
+  the list of filter results. Leave it out, the first match is used anyway.
+
+
+8.3.2 xml:<XPath>
+
+  The data is read as XML and the XPath 1.0 expression is evaluated as a
+  string (text of the first matching node).
+
+    xml:/project/version
+    xml://dependency[artifactId='app']/version
+    xml:string(/manifest/@version)
+
+  An XPath that matches nothing delivers an empty version, not an ERROR.
+  XML namespaces are not supported in the expression; use local-name(), e.g.
+    xml://*[local-name()='version']
+
+
+8.3.3 regex:<regex>
+
+  Java regular expression, searched in the whole data. The version is the
+  whole first match.
+
+    regex:\d+\.\d+\.\d+
+        "nginx version: nginx/1.24.0" -> 1.24.0
+
+  No match is an ERROR.
+
+
+8.3.4 regex(<n>):<regex>
+
+  Like regex:, but the version is group <n> of the first match. Everything
+  after the FIRST colon is the regex, including spaces.
+
+    regex(1):version "([^"]+)"
+        openjdk version "21.0.5" 2024-10-15  -> 21.0.5
+    regex(2):(\w+) (\d+\.\d+)
+        "Server 4.2"                         -> 4.2
+
+  No match, or a group number that does not exist, is an ERROR.
+
+
+8.3.5 properties:<key>
+
+  The data is read as a Java properties file (key=value). The version is the
+  value of the key. Values in double quotes are unquoted and Java escape
+  sequences (\n, \t, \uXXXX, ...) are decoded, so this also works for files
+  like /etc/os-release:
+
+    properties:VERSION_ID
+        VERSION_ID="22.04"  -> 22.04
+
+  A missing key is an ERROR.
+
+
+8.4 Caching within one version check
+
+Several versions often use the same location (one JSON response with many
+versions, one file, one command). Within one version check:
+
+  - Each location is loaded only once. The cache key is the location text
+    (for login locations plus whether the path is "json:", because that
+    changes the request header).
+  - A location that failed is not loaded again; the further versions with
+    this location are shown as ERROR as well.
+  - Each OIDC login runs only once and its session is used for all its
+    locations; a failed login is not repeated.
+  - SSH connections are reused per user, host and port, also when servers
+    alternate; a connection that could not be opened is not tried again.
+    All connections are closed at the end of the check.
+
+The next check ("Read versions" again) loads everything anew.
+
+
+8.5 Results and errors
+
+  <version text>   The extracted version
+  ERROR            The location could not be loaded (connection, login,
+                   HTTP status, missing file, invalid location) or the path
+                   did not find a value
+
+An ERROR in any version colors the versions table red and marks the server
+as erroneous for "Check server status".
+
+Checklist for ERROR:
+
+  1. Location: try the URL in a browser, the file with "ssh user@host cat
+     <path>" or the command in an SSH shell.
+  2. Login locations: does "Check logins" show OK for the login with this
+     username? Is the username URL encoded?
+  3. Path: is the prefix right (json:, xml:, regex:, regex(n):, properties:)?
+     Is there a space after the colon that should not be there?
+  4. JSON path: does it start with "$"? Is there an index after a filter
+     (see 8.3.1)?
+
+
+8.6 Examples
+
+  Version name   Location                                Path
+  -------------  --------------------------------------  ------------------------------------------
+  OS             ssh:///etc/os-release                   properties:PRETTY_NAME
+  Kernel         ssh-cmd:// uname -r                     regex:.+
+  Java           ssh-cmd:// java -version 2>&1           regex(1):version "([^"]+)"
+  nginx          ssh-cmd:// nginx -v 2>&1                regex(1):nginx/(\S+)
+  App (file)     ssh:///opt/app/version.properties       properties:app.version
+  App (JSON)     https://host/app/actuator/info          json:$.build.version
+  App (POM)      ssh:///opt/app/pom.xml                  xml:/*[local-name()='project']/*[local-name()='version']
+  Portal         POST:https://monitor@host/cid/ui/gwt/rest/versions/getVersionData
+                                                         json:$.versionData[?(@.name=='nexInsure')].version
+  Gateway        POST:https://monitor@host/cid/ui/gwt/rest/versions/getVersionData
+                                                         json:$.versionData[?(search(@.name, 'Gateway'))].version
+  Releases       ssh://deploy@host:2222/opt/app/releases/  regex:app-[\d.]+\.jar
+
+The two "Portal" and "Gateway" entries share one location, so the OIDC login
+and the request run only once.
+
+
+9. TLS certificates and proxies
+-------------------------------
+
+TLS certificates (all HTTPS requests: URLs, logins, versions):
+
+  - If the servers configuration contains "keystore" with the path of a
+    keystore file (PKCS12 or JKS, without password), only the certificates in
+    this keystore are trusted.
+  - Otherwise the default trust store of the Java runtime (cacerts, or the
+    trust store set with -Djavax.net.ssl.trustStore) is used.
+  - The host name of the certificate is always verified.
+
+  Typical error with a self-signed or internal CA certificate: "Cannot
+  validate TLS server certificate". Import the CA certificate into the
+  keystore and set "keystore" in the servers configuration.
+
+Proxies:
+
+  Request                                    Proxy
+  -----------------------------------------  ---------------------------------
+  URL checks                                 Application proxy setting
+  Versions http(s):// without username       Application proxy setting
+  BasicAuth "Check logins"                   Proxy of the login, otherwise
+                                             the application proxy setting
+  OIDC login and OIDC version locations      Proxy of the login, otherwise
+                                             the system proxy settings
+  BasicAuth version locations                Proxy of the login, otherwise
+                                             the system proxy settings
+
+  The application proxy setting is part of the application configuration
+  ("Configuration" dialog). System proxy settings are the Java properties
+  (-Dhttps.proxyHost, -Dhttps.proxyPort, -Dhttp.nonProxyHosts) or, with
+  -Djava.net.useSystemProxies=true, the proxy of the operating system.
+  The proxy URL "none" of a login always means a direct connection.
+
+
+10. Security notes
+------------------
+
+  - Passwords of logins and SSH admins are stored encrypted (AES-256-GCM)
+    with the master key file (chapter 1).
+  - Passwords inside SSH version locations (ssh://user:password@...,
+    ssh-cmd://user:password@...) are part of the location text and are stored
+    as PLAIN TEXT in the configuration file. Prefer the SSH admin or a key
+    based login for such locations.
+  - Login locations never contain a password; it always comes from the login.
+  - Locations and errors are shown without passwords where possible, but the
+    location column of the versions table shows the location as configured.

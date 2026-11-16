@@ -11,31 +11,48 @@ servers. For each server it shows in one card:
   - Logs, shown live in an SSH log viewer
 
 Most of this manual describes the "Location" and "Path" values of versions
-(chapter 8), because they are the most flexible part of the configuration.
+(chapter 9), because they are the most flexible part of the configuration.
 
 
 Contents
 --------
 
-  1. Start and files
-  2. User interface
-  3. Server, host and SSH admin
-  4. Managed SSH users and public keys
-  5. Logins
-  6. URLs
-  7. Logs
-  8. Versions: locations and paths
-     8.1 Overview
-     8.2 Location forms
-     8.3 Path forms
-     8.4 Caching within one version check
-     8.5 Results and errors
-     8.6 Examples
-  9. TLS certificates and proxies
- 10. Security notes
+  1. Disclaimer
+  2. Start and files
+  3. User interface
+  4. Server, host and SSH admin
+  5. Managed SSH users and public keys
+  6. Logins
+  7. URLs
+  8. Logs
+  9. Versions: locations and paths
+     9.1 Overview
+     9.2 Location forms
+     9.3 Path forms
+     9.4 Caching within one version check
+     9.5 Results and errors
+     9.6 Examples
+ 10. TLS certificates and proxies
+ 11. Security notes
 
 
-1. Start and files
+1. Disclaimer
+-------------
+
+ServerManagement is a tool to watch and maintain servers: SSH users and their
+authorized public keys, logins, URLs, versions of installed software and logs.
+It accesses the servers via SSH and HTTP(S) and can change data on them (e.g.
+the authorized_keys of SSH users).
+This tool is intended for experimental use only.
+Any use is at your own risk.
+The developer accepts NO LIABILITY WHATSOEVER, neither for the correct
+function nor for any damage resulting from the use of the program (e.g. lost
+access to a server).
+Please send suggestions for improvement or bug reports to:
+servermanagement@soderer.de
+
+
+2. Start and files
 ------------------
 
 Start:
@@ -64,30 +81,54 @@ Files next to the servers configuration file:
       backups (but keep it apart from copies of the configuration you share).
 
 The servers configuration file is written by the application ("Save server
-settings"). The only setting without a dialog is "keystore" (see chapter 9).
+settings"). Settings that cannot be changed in the application:
+
+  keystore      No dialog at all, edit the configuration file (chapter 10)
+  Server name   Only entered when adding the server
+  Host          Only entered when adding the server
+
+To change them, close the application, edit the configuration file and
+start the application again.
 
 
-2. User interface
+3. User interface
 -----------------
 
 The main window shows one card per server. With many servers, a table of
 contents at the top jumps to a server card.
 
-Global buttons:
+Buttons in the header:
+
+  Help                   Version info, this manual and the update check
+  Configuration          Language, proxy, daily update check, desktop link
+
+Buttons at the bottom:
 
   Add server             Asks for the server name and the host
   Remove server          Removes the selected servers
   Manage public keys     Maintains the set of known public SSH keys
+  Save server settings   Writes the servers configuration file (asks before
+                         overwriting an existing file)
   Check server status    Checks all servers (users, URLs, versions, logins)
-  Save server settings   Writes the servers configuration file
+  Close                  Closes the application
 
 Each server card has the sections "Managed SSH users", "Logins", "URLs",
-"Versions" and "Logs". Each section has its own buttons (add, edit, remove,
-check). A double click on a table row edits the entry; in the "Logs" section
-it opens the log viewer.
+"Versions" and "Logs":
+
+  Section             Buttons                              Double click
+  ------------------  -----------------------------------  ----------------------
+  Managed SSH users   Admindata, Read available users,     Public key assignment
+                      Remove user                          of the user (ch. 5)
+  Logins              Add login, Remove login,             Edit login
+                      Check logins
+  URLs                Add URL, Remove URL                  Edit URL
+  Versions            Add version, Remove version,         Edit version
+                      Read versions
+  Logs                Add log, Edit log, Remove log        Open the log viewer
 
 Changes are only kept after "Save server settings". On closing with unsaved
-changes, the application asks for confirmation.
+changes, the application asks for confirmation. Exception: changes of the
+authorized_keys of an SSH user (chapter 5) are written to the server at once.
 
 After a check, each table is colored by its worst result: red for an error,
 yellow for a warning (e.g. surplus SSH keys), green if everything is fine.
@@ -95,7 +136,7 @@ yellow for a warning (e.g. surplus SSH keys), green if everything is fine.
 error.
 
 
-3. Server, host and SSH admin
+4. Server, host and SSH admin
 -----------------------------
 
 Host
@@ -112,11 +153,14 @@ SSH admin ("Admindata")
       Password          Password of the user, or passphrase of the private key
 
 
-4. Managed SSH users and public keys
+5. Managed SSH users and public keys
 ------------------------------------
 
 Known public keys ("Manage public keys") are the central list of public SSH
-keys with a key id and a readable name.
+keys with a key id and a readable name. Keys are added from a public key file
+(asking for id and name), the id and name can be edited later. A new key can
+optionally be added to all managed users of all servers; when removing keys,
+the application asks whether to remove them from the users as well.
 
 For each managed SSH user of a server, a list of key ids is configured (the
 expected keys). The check reads the user's authorized_keys on the server and
@@ -129,18 +173,24 @@ shows:
 Red: the authorized_keys could not be read or expected keys are missing.
 Yellow: there are surplus keys.
 
-"Edit user" shows the keys on the server, the configured keys and the known
-keys side by side. From there keys can be transferred to the server, dropped
-from the server, added to the configuration or downloaded into the set of
-known keys. "Read available users" lists the users of the server.
+A double click on a user shows the keys on the server, the configured keys
+and the known keys side by side. From there keys can be transferred to the
+server, dropped from the server, added to the configuration or downloaded
+into the set of known keys. On OK, the changed authorized_keys are written to
+the server immediately.
+
+"Read available users" reads the users of the server and adds the users that
+are missing in the list as managed users (without configured keys). Managed
+users cannot be added or renamed manually. All of this needs the SSH admin
+("Admindata", chapter 4).
 
 
-5. Logins
+6. Logins
 ---------
 
 A login describes how to log in to a web application of the server. It is
 checked with "Check logins" and is used by version locations with a username
-(see 8.2.2).
+(see 9.2.2).
 
 Fields:
 
@@ -160,7 +210,7 @@ Fields:
   Proxy URL (optional)
       "http://host:port" or "host:port": this HTTP proxy
       "none" or "direct": direct connection without proxy
-      empty: see chapter 9
+      empty: see chapter 10
       Only plain HTTP proxies without credentials are supported.
 
 Results of "Check logins":
@@ -189,19 +239,23 @@ How the OIDC login works:
   the header "X-CSRF-TOKEN: Fetch".
 
 
-6. URLs
+7. URLs
 -------
 
-Each URL is requested with HTTP GET (no login). The table shows the response
-time in seconds.
+Each URL is requested with HTTP GET (no login) by "Check server status". The
+table shows the response time in whole seconds.
 
-  HTTP 200, 302 or 400   Reachable, the time in seconds is shown
-  anything else          -1 (error)
+  HTTP 200, 302 or 400   Reachable, the time is shown (green; yellow if it
+                         took more than 5 seconds)
+  anything else          ERROR (red), also if the URL cannot be reached
 
-Proxy: the proxy of the application configuration. TLS: see chapter 9.
+Redirects are not followed, so a redirect (HTTP 302) counts as reachable.
+A double click on a URL edits it.
+
+Proxy: the proxy of the application configuration. TLS: see chapter 10.
 
 
-7. Logs
+8. Logs
 -------
 
 A log entry has a name, a location and a path:
@@ -211,16 +265,19 @@ A log entry has a name, a location and a path:
   Path       Absolute path of the log file on that host,
              e.g. /var/log/nginx/access.log
 
+The log viewer needs the SSH admin of the server (chapter 4). A log entry is
+changed with "Edit log".
+
 A double click opens the SSH log viewer. It runs "tail -F" on the file, so it
 shows the whole file and then follows new lines, also across log rotation.
 The viewer offers text search (case sensitive, regular expression), a filter
 mode that only shows matching lines, scroll lock and line wrap.
 
 
-8. Versions: locations and paths
+9. Versions: locations and paths
 --------------------------------
 
-8.1 Overview
+9.1 Overview
 
 A version entry has three values:
 
@@ -233,7 +290,7 @@ A version entry has three values:
 and applies the path. The table shows the version or "ERROR".
 
 
-8.2 Location forms
+9.2 Location forms
 
 Overview:
 
@@ -247,7 +304,7 @@ Overview:
 The prefixes are not case sensitive.
 
 
-8.2.1 http://... and https://... (without username)
+9.2.1 http://... and https://... (without username)
 
     https://host.example.com/app/version.json
 
@@ -256,13 +313,13 @@ The prefixes are not case sensitive.
   - Proxy: the proxy of the application configuration.
 
 
-8.2.2 [GET:|POST:]http(s)://user@host/path (with login)
+9.2.2 [GET:|POST:]http(s)://user@host/path (with login)
 
     https://monitor@host.example.com/app/version.json
     GET:https://monitor@host.example.com/app/version.json
     POST:https://monitor@host.example.com/cid/ui/gwt/rest/versions/getVersionData
 
-  - The username before "@" selects the login of this server (chapter 5).
+  - The username before "@" selects the login of this server (chapter 6).
     The username is only used to find the login and is not sent as part of
     the URL.
   - If several logins of the server have this username, the login whose URL
@@ -293,10 +350,10 @@ The prefixes are not case sensitive.
   - The request carries "Authorization: Basic ..." with the credentials of
     the login.
   - Proxy: the proxy of the login, otherwise the system proxy settings
-    (chapter 9).
+    (chapter 10).
 
 
-8.2.3 ssh://... (file or directory)
+9.2.3 ssh://... (file or directory)
 
   Reads a file via SFTP. If the path ends with "/", the location delivers the
   list of file names in this directory instead (one name per line).
@@ -335,7 +392,7 @@ The prefixes are not case sensitive.
     error.
 
 
-8.2.4 ssh-cmd://... (command)
+9.2.4 ssh-cmd://... (command)
 
   Runs a command via SSH and delivers its output.
 
@@ -358,7 +415,7 @@ The prefixes are not case sensitive.
     redirect it: "java -version 2>&1".
 
 
-8.2.5 ssh-cmd:... (old form)
+9.2.5 ssh-cmd:... (old form)
 
     ssh-cmd:cat /opt/app/VERSION
     ssh-cmd:andreas@homebase:cat /opt/app/VERSION
@@ -368,7 +425,7 @@ The prefixes are not case sensitive.
   command, so the command must not contain ":". Prefer ssh-cmd://.
 
 
-8.3 Path forms
+9.3 Path forms
 
 The path tells how to find the version in the loaded data. The prefixes are
 not case sensitive. Write the expression directly after the prefix:
@@ -384,7 +441,7 @@ Overview:
   properties:<key>         Value of a properties file
 
 
-8.3.1 json:<JSON path>
+9.3.1 json:<JSON path>
 
   The data is read as JSON and the JSON path (RFC 9535) is applied. The
   version is the FIRST matching value. Strings, numbers and booleans are
@@ -448,7 +505,7 @@ Overview:
   the list of filter results. Leave it out, the first match is used anyway.
 
 
-8.3.2 xml:<XPath>
+9.3.2 xml:<XPath>
 
   The data is read as XML and the XPath 1.0 expression is evaluated as a
   string (text of the first matching node).
@@ -462,7 +519,7 @@ Overview:
     xml://*[local-name()='version']
 
 
-8.3.3 regex:<regex>
+9.3.3 regex:<regex>
 
   Java regular expression, searched in the whole data. The version is the
   whole first match.
@@ -473,7 +530,7 @@ Overview:
   No match is an ERROR.
 
 
-8.3.4 regex(<n>):<regex>
+9.3.4 regex(<n>):<regex>
 
   Like regex:, but the version is group <n> of the first match. Everything
   after the FIRST colon is the regex, including spaces.
@@ -486,12 +543,12 @@ Overview:
   No match, or a group number that does not exist, is an ERROR.
 
 
-8.3.5 properties:<key>
+9.3.5 properties:<key>
 
   The data is read as a Java properties file (key=value). The version is the
-  value of the key. Values in double quotes are unquoted and Java escape
-  sequences (\n, \t, \uXXXX, ...) are decoded, so this also works for files
-  like /etc/os-release:
+  value of the key. Values in double quotes are unquoted and their Java
+  escape sequences (\n, \t, \uXXXX, ...) are decoded, so this also works for
+  files like /etc/os-release:
 
     properties:VERSION_ID
         VERSION_ID="22.04"  -> 22.04
@@ -499,10 +556,11 @@ Overview:
   A missing key is an ERROR.
 
 
-8.4 Caching within one version check
+9.4 Caching within one version check
 
 Several versions often use the same location (one JSON response with many
-versions, one file, one command). Within one version check:
+versions, one file, one command). Within one version check of a server
+(each server is checked separately, also by "Check server status"):
 
   - Each location is loaded only once. The cache key is the location text
     (for login locations plus whether the path is "json:", because that
@@ -511,14 +569,14 @@ versions, one file, one command). Within one version check:
     this location are shown as ERROR as well.
   - Each OIDC login runs only once and its session is used for all its
     locations; a failed login is not repeated.
-  - SSH connections are reused per user, host and port, also when servers
-    alternate; a connection that could not be opened is not tried again.
-    All connections are closed at the end of the check.
+  - SSH connections are reused per user, host and port; a connection that
+    could not be opened is not tried again. All connections are closed at
+    the end of the check.
 
 The next check ("Read versions" again) loads everything anew.
 
 
-8.5 Results and errors
+9.5 Results and errors
 
   <version text>   The extracted version
   ERROR            The location could not be loaded (connection, login,
@@ -537,10 +595,10 @@ Checklist for ERROR:
   3. Path: is the prefix right (json:, xml:, regex:, regex(n):, properties:)?
      Is there a space after the colon that should not be there?
   4. JSON path: does it start with "$"? Is there an index after a filter
-     (see 8.3.1)?
+     (see 9.3.1)?
 
 
-8.6 Examples
+9.6 Examples
 
   Version name   Location                                Path
   -------------  --------------------------------------  ------------------------------------------
@@ -561,8 +619,8 @@ The two "Portal" and "Gateway" entries share one location, so the OIDC login
 and the request run only once.
 
 
-9. TLS certificates and proxies
--------------------------------
+10. TLS certificates and proxies
+--------------------------------
 
 TLS certificates (all HTTPS requests: URLs, logins, versions):
 
@@ -572,6 +630,8 @@ TLS certificates (all HTTPS requests: URLs, logins, versions):
   - Otherwise the default trust store of the Java runtime (cacerts, or the
     trust store set with -Djavax.net.ssl.trustStore) is used.
   - The host name of the certificate is always verified.
+  - The keystore is read when the application starts; after changing it,
+    restart the application.
 
   Typical error with a self-signed or internal CA certificate: "Cannot
   validate TLS server certificate". Import the CA certificate into the
@@ -597,11 +657,11 @@ Proxies:
   The proxy URL "none" of a login always means a direct connection.
 
 
-10. Security notes
+11. Security notes
 ------------------
 
   - Passwords of logins and SSH admins are stored encrypted (AES-256-GCM)
-    with the master key file (chapter 1).
+    with the master key file (chapter 2).
   - Passwords inside SSH version locations (ssh://user:password@...,
     ssh-cmd://user:password@...) are part of the location text and are stored
     as PLAIN TEXT in the configuration file. Prefer the SSH admin or a key

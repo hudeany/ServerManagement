@@ -12,32 +12,49 @@ ServerManagement ist eine Desktop-Anwendung, um eine Reihe von Servern zu
   - Logs, live angezeigt in einem SSH-Log-Viewer
 
 Der größte Teil dieses Handbuchs beschreibt die Werte "Location" und "Path"
-von Versionen (Kapitel 8), weil sie der flexibelste Teil der Konfiguration
+von Versionen (Kapitel 9), weil sie der flexibelste Teil der Konfiguration
 sind.
 
 
 Inhalt
 ------
 
-  1. Start und Dateien
-  2. Benutzeroberfläche
-  3. Server, Host und SSH-Admin
-  4. Verwaltete SSH-User und Public Keys
-  5. Logins
-  6. URLs
-  7. Logs
-  8. Versionen: Locations und Paths
-     8.1 Überblick
-     8.2 Formen der Location
-     8.3 Formen des Path
-     8.4 Caching innerhalb einer Versionsprüfung
-     8.5 Ergebnisse und Fehler
-     8.6 Beispiele
-  9. TLS-Zertifikate und Proxies
- 10. Sicherheitshinweise
+  1. Disclaimer
+  2. Start und Dateien
+  3. Benutzeroberfläche
+  4. Server, Host und SSH-Admin
+  5. Verwaltete SSH-User und Public Keys
+  6. Logins
+  7. URLs
+  8. Logs
+  9. Versionen: Locations und Paths
+     9.1 Überblick
+     9.2 Formen der Location
+     9.3 Formen des Path
+     9.4 Caching innerhalb einer Versionsprüfung
+     9.5 Ergebnisse und Fehler
+     9.6 Beispiele
+ 10. TLS-Zertifikate und Proxies
+ 11. Sicherheitshinweise
 
 
-1. Start und Dateien
+1. Disclaimer
+-------------
+
+ServerManagement ist ein Tool zur Überwachung und Pflege von Servern:
+SSH-User und ihre autorisierten Public Keys, Logins, URLs, Versionen
+installierter Software und Logs. Es greift per SSH und HTTP(S) auf die Server
+zu und kann dort Daten ändern (z.B. die authorized_keys von SSH-Usern).
+Dieses Tool dient dabei ausschließlich dem experimentellen Einsatz.
+Jede Verwendung findet auf eigene Gefahr statt.
+Der Entwickler übernimmt KEINERLEI GEWÄHRLEISTUNG, sowohl der korrekten
+Funktion, sowie für Schäden die aus der Verwendung des Programms entstehen
+(z.B. ein verlorener Zugang zu einem Server).
+Verbesserungsvorschläge oder Bughinweise bitte an:
+servermanagement@soderer.de
+
+
+2. Start und Dateien
 --------------------
 
 Start:
@@ -68,33 +85,63 @@ Dateien neben der Server-Konfigurationsdatei:
       Konfiguration auf, die du weitergibst).
 
 Die Server-Konfigurationsdatei wird von der Anwendung geschrieben
-("Servereinstellungen speichern"). Die einzige Einstellung ohne Dialog ist
-"keystore" (siehe Kapitel 9).
+("Server Einstellungen speichern"). Einstellungen, die in der Anwendung nicht
+geändert werden können:
+
+  keystore      Gar kein Dialog, nur in der Konfigurationsdatei (Kapitel 10)
+  Servername    Wird nur beim Hinzufügen des Servers eingegeben
+  Host          Wird nur beim Hinzufügen des Servers eingegeben
+
+Um sie zu ändern, die Anwendung schließen, die Konfigurationsdatei
+bearbeiten und die Anwendung neu starten.
 
 
-2. Benutzeroberfläche
+3. Benutzeroberfläche
 ---------------------
 
 Das Hauptfenster zeigt eine Karte pro Server. Bei vielen Servern springt ein
 Inhaltsverzeichnis oben zur jeweiligen Serverkarte.
 
-Globale Buttons:
+Buttons im Kopfbereich:
 
-  Server hinzufügen              Fragt nach Servername und Host
-  Server entfernen               Entfernt die ausgewählten Server
-  Public Keys verwalten          Pflegt die Menge der bekannten Public SSH Keys
-  Serverstatus prüfen            Prüft alle Server (User, URLs, Versionen,
-                                 Logins)
-  Servereinstellungen speichern  Schreibt die Server-Konfigurationsdatei
+  Hilfe                           Versionsinfo, dieses Handbuch und die
+                                  Update-Prüfung
+  Konfiguration                   Sprache, Proxy, tägliche Update-Prüfung,
+                                  Desktop Link
 
-Jede Serverkarte hat die Abschnitte "Verwaltete SSH-User", "Logins", "URLs",
-"Versionen" und "Logs". Jeder Abschnitt hat eigene Buttons (hinzufügen,
-bearbeiten, entfernen, prüfen). Ein Doppelklick auf eine Tabellenzeile
-bearbeitet den Eintrag; im Abschnitt "Logs" öffnet er den Log-Viewer.
+Buttons unten:
 
-Änderungen bleiben nur nach "Servereinstellungen speichern" erhalten. Beim
+  Server hinzufügen               Fragt nach Servername und Host
+  Server löschen                  Entfernt die ausgewählten Server
+  Public Keys verwalten           Pflegt die Menge der bekannten Public SSH
+                                  Keys
+  Server Einstellungen speichern  Schreibt die Server-Konfigurationsdatei
+                                  (fragt vor dem Überschreiben einer
+                                  vorhandenen Datei)
+  Serverstatus prüfen             Prüft alle Server (User, URLs, Versionen,
+                                  Logins)
+  Schließen                       Beendet die Anwendung
+
+Jede Serverkarte hat die Abschnitte "Verwaltete SSH User", "Logins", "URLs",
+"Versionen" und "Logs":
+
+  Abschnitt            Buttons                             Doppelklick
+  -------------------  ----------------------------------  -------------------
+  Verwaltete SSH User  Admindaten, verfügbare User lesen,  Public Key
+                       User entfernen                      Zuweisungen des
+                                                           Users (Kapitel 5)
+  Logins               Login hinzufügen, Login entfernen,  Login bearbeiten
+                       Logins prüfen
+  URLs                 URL hinzufügen, URL entfernen       URL bearbeiten
+  Versionen            Version hinzufügen,                 Version bearbeiten
+                       Version entfernen, Versionen lesen
+  Logs                 Log hinzufügen, Log bearbeiten,     Log-Viewer öffnen
+                       Log entfernen
+
+Änderungen bleiben nur nach "Server Einstellungen speichern" erhalten. Beim
 Schließen mit ungespeicherten Änderungen fragt die Anwendung nach einer
-Bestätigung.
+Bestätigung. Ausnahme: Änderungen an den authorized_keys eines SSH-Users
+(Kapitel 5) werden sofort auf den Server geschrieben.
 
 Nach einer Prüfung wird jede Tabelle nach ihrem schlechtesten Ergebnis
 eingefärbt: rot bei einem Fehler, gelb bei einer Warnung (z.B. überzählige
@@ -102,7 +149,7 @@ SSH-Keys), grün wenn alles in Ordnung ist. "Serverstatus prüfen" prüft alle
 Server und listet danach die Server mit einem Fehler auf.
 
 
-3. Server, Host und SSH-Admin
+4. Server, Host und SSH-Admin
 -----------------------------
 
 Host
@@ -120,18 +167,22 @@ SSH-Admin ("Admindaten")
                           Schlüssels
 
 
-4. Verwaltete SSH-User und Public Keys
+5. Verwaltete SSH-User und Public Keys
 --------------------------------------
 
 Die bekannten Public Keys ("Public Keys verwalten") sind die zentrale Liste
-der Public SSH Keys mit einer Key-ID und einem lesbaren Namen.
+der Public SSH Keys mit einer Key-ID und einem lesbaren Namen. Keys werden
+aus einer Public-Key-Datei hinzugefügt (mit Abfrage von ID und Name); ID und
+Name lassen sich später bearbeiten. Ein neuer Key kann optional allen
+verwalteten Usern aller Server zugewiesen werden; beim Löschen von Keys fragt
+die Anwendung, ob sie auch bei den Usern entfernt werden sollen.
 
 Für jeden verwalteten SSH-User eines Servers wird eine Liste von Key-IDs
 konfiguriert (die erwarteten Keys). Die Prüfung liest die authorized_keys des
 Users auf dem Server und zeigt:
 
   Erwartete Keys     Anzahl der konfigurierten Keys
-  Aktuelle Keys      Anzahl der konfigurierten Keys, die auf dem Server
+  Vorhandene Keys    Anzahl der konfigurierten Keys, die auf dem Server
                      gefunden wurden
   Überzählige Keys   Keys auf dem Server, die für diesen User nicht
                      konfiguriert sind
@@ -140,19 +191,25 @@ Rot: die authorized_keys konnten nicht gelesen werden oder erwartete Keys
 fehlen.
 Gelb: es gibt überzählige Keys.
 
-"User bearbeiten" zeigt die Keys auf dem Server, die konfigurierten Keys und
-die bekannten Keys nebeneinander. Von dort aus können Keys auf den Server
-übertragen, vom Server entfernt, in die Konfiguration übernommen oder in die
-Menge der bekannten Keys übernommen werden. "Verfügbare User lesen" listet
-die User des Servers auf.
+Ein Doppelklick auf einen User zeigt die Keys auf dem Server, die
+konfigurierten Keys und die bekannten Keys nebeneinander. Von dort aus
+können Keys auf den Server übertragen, vom Server entfernt, in die
+Konfiguration übernommen oder in die Menge der bekannten Keys übernommen
+werden. Bei OK werden die geänderten authorized_keys sofort auf den Server
+geschrieben.
+
+"verfügbare User lesen" liest die User des Servers und übernimmt die User,
+die in der Liste noch fehlen, als verwaltete User (ohne konfigurierte Keys).
+Verwaltete User lassen sich nicht manuell anlegen oder umbenennen. All das
+braucht den SSH-Admin ("Admindaten", Kapitel 4).
 
 
-5. Logins
+6. Logins
 ---------
 
 Ein Login beschreibt, wie man sich bei einer Webanwendung des Servers
 anmeldet. Er wird mit "Logins prüfen" geprüft und von Versions-Locations mit
-Username verwendet (siehe 8.2.2).
+Username verwendet (siehe 9.2.2).
 
 Felder:
 
@@ -174,7 +231,7 @@ Felder:
   Proxy-URL (optional)
       "http://host:port" oder "host:port": dieser HTTP-Proxy
       "none" oder "direct": direkte Verbindung ohne Proxy
-      leer: siehe Kapitel 9
+      leer: siehe Kapitel 10
       Unterstützt werden nur einfache HTTP-Proxies ohne Zugangsdaten.
 
 Ergebnisse von "Logins prüfen":
@@ -204,19 +261,24 @@ So funktioniert die OIDC-Anmeldung:
   einmal mit dem Header "X-CSRF-TOKEN: Fetch" angefordert.
 
 
-6. URLs
+7. URLs
 -------
 
-Jede URL wird mit HTTP GET abgerufen (ohne Login). Die Tabelle zeigt die
-Antwortzeit in Sekunden.
+Jede URL wird bei "Serverstatus prüfen" mit HTTP GET abgerufen (ohne Login).
+Die Tabelle zeigt die Antwortzeit in ganzen Sekunden.
 
-  HTTP 200, 302 oder 400   Erreichbar, die Zeit in Sekunden wird angezeigt
-  alles andere             -1 (Fehler)
+  HTTP 200, 302 oder 400   Erreichbar, die Zeit wird angezeigt (grün; gelb,
+                           wenn es länger als 5 Sekunden gedauert hat)
+  alles andere             ERROR (rot), auch wenn die URL nicht erreichbar
+                           ist
 
-Proxy: der Proxy der Anwendungskonfiguration. TLS: siehe Kapitel 9.
+Weiterleitungen werden nicht verfolgt, eine Weiterleitung (HTTP 302) gilt
+also als erreichbar. Ein Doppelklick auf eine URL bearbeitet sie.
+
+Proxy: der Proxy der Anwendungskonfiguration. TLS: siehe Kapitel 10.
 
 
-7. Logs
+8. Logs
 -------
 
 Ein Log-Eintrag hat einen Namen, eine Location und einen Path:
@@ -227,6 +289,9 @@ Ein Log-Eintrag hat einen Namen, eine Location und einen Path:
   Path       Absoluter Pfad der Logdatei auf diesem Host,
              z.B. /var/log/nginx/access.log
 
+Der Log-Viewer braucht den SSH-Admin des Servers (Kapitel 4). Ein
+Log-Eintrag wird mit "Log bearbeiten" geändert.
+
 Ein Doppelklick öffnet den SSH-Log-Viewer. Er führt "tail -F" auf der Datei
 aus, zeigt also die ganze Datei und folgt dann neuen Zeilen, auch über eine
 Log-Rotation hinweg. Der Viewer bietet Textsuche (Groß-/Kleinschreibung
@@ -234,10 +299,10 @@ beachten, regulärer Ausdruck), einen Filtermodus, der nur passende Zeilen
 zeigt, Scroll-Sperre und Zeilenumbruch.
 
 
-8. Versionen: Locations und Paths
+9. Versionen: Locations und Paths
 ---------------------------------
 
-8.1 Überblick
+9.1 Überblick
 
 Ein Versionseintrag hat drei Werte:
 
@@ -251,7 +316,7 @@ Ein Versionseintrag hat drei Werte:
 und wendet den Path an. Die Tabelle zeigt die Version oder "ERROR".
 
 
-8.2 Formen der Location
+9.2 Formen der Location
 
 Überblick:
 
@@ -265,7 +330,7 @@ und wendet den Path an. Die Tabelle zeigt die Version oder "ERROR".
 Bei den Präfixen wird Groß- und Kleinschreibung nicht unterschieden.
 
 
-8.2.1 http://... und https://... (ohne Username)
+9.2.1 http://... und https://... (ohne Username)
 
     https://host.example.com/app/version.json
 
@@ -274,13 +339,13 @@ Bei den Präfixen wird Groß- und Kleinschreibung nicht unterschieden.
   - Proxy: der Proxy der Anwendungskonfiguration.
 
 
-8.2.2 [GET:|POST:]http(s)://user@host/path (mit Login)
+9.2.2 [GET:|POST:]http(s)://user@host/path (mit Login)
 
     https://monitor@host.example.com/app/version.json
     GET:https://monitor@host.example.com/app/version.json
     POST:https://monitor@host.example.com/cid/ui/gwt/rest/versions/getVersionData
 
-  - Der Username vor "@" wählt den Login dieses Servers aus (Kapitel 5).
+  - Der Username vor "@" wählt den Login dieses Servers aus (Kapitel 6).
     Der Username dient nur dazu, den Login zu finden, und wird nicht als
     Teil der URL gesendet.
   - Haben mehrere Logins des Servers diesen Username, wird der Login
@@ -312,10 +377,10 @@ Bei den Präfixen wird Groß- und Kleinschreibung nicht unterschieden.
   - Der Request enthält "Authorization: Basic ..." mit den Zugangsdaten des
     Logins.
   - Proxy: der Proxy des Logins, sonst die System-Proxy-Einstellungen
-    (Kapitel 9).
+    (Kapitel 10).
 
 
-8.2.3 ssh://... (Datei oder Verzeichnis)
+9.2.3 ssh://... (Datei oder Verzeichnis)
 
   Liest eine Datei per SFTP. Endet der Pfad mit "/", liefert die Location
   stattdessen die Liste der Dateinamen in diesem Verzeichnis (ein Name pro
@@ -355,7 +420,7 @@ Bei den Präfixen wird Groß- und Kleinschreibung nicht unterschieden.
     Fehler.
 
 
-8.2.4 ssh-cmd://... (Kommando)
+9.2.4 ssh-cmd://... (Kommando)
 
   Führt ein Kommando per SSH aus und liefert dessen Ausgabe.
 
@@ -378,7 +443,7 @@ Bei den Präfixen wird Groß- und Kleinschreibung nicht unterschieden.
     leer, leite sie um: "java -version 2>&1".
 
 
-8.2.5 ssh-cmd:... (alte Form)
+9.2.5 ssh-cmd:... (alte Form)
 
     ssh-cmd:cat /opt/app/VERSION
     ssh-cmd:andreas@homebase:cat /opt/app/VERSION
@@ -389,7 +454,7 @@ Bei den Präfixen wird Groß- und Kleinschreibung nicht unterschieden.
   besser ssh-cmd://.
 
 
-8.3 Formen des Path
+9.3 Formen des Path
 
 Der Path gibt an, wie die Version in den geladenen Daten gefunden wird. Bei
 den Präfixen wird Groß- und Kleinschreibung nicht unterschieden. Schreibe den
@@ -405,7 +470,7 @@ wird ein Leerzeichen nach dem Doppelpunkt Teil des Ausdrucks.
   properties:<Key>         Wert einer Properties-Datei
 
 
-8.3.1 json:<JSON-Path>
+9.3.1 json:<JSON-Path>
 
   Die Daten werden als JSON gelesen und der JSON-Path (RFC 9535) wird
   angewendet. Die Version ist der ERSTE passende Wert. Strings, Zahlen und
@@ -472,7 +537,7 @@ wird ein Leerzeichen nach dem Doppelpunkt Teil des Ausdrucks.
   wird ohnehin verwendet.
 
 
-8.3.2 xml:<XPath>
+9.3.2 xml:<XPath>
 
   Die Daten werden als XML gelesen und der XPath-1.0-Ausdruck wird als
   String ausgewertet (Text des ersten passenden Knotens).
@@ -487,7 +552,7 @@ wird ein Leerzeichen nach dem Doppelpunkt Teil des Ausdrucks.
     xml://*[local-name()='version']
 
 
-8.3.3 regex:<Regex>
+9.3.3 regex:<Regex>
 
   Regulärer Ausdruck von Java, gesucht in den gesamten Daten. Die Version ist
   der gesamte erste Treffer.
@@ -498,7 +563,7 @@ wird ein Leerzeichen nach dem Doppelpunkt Teil des Ausdrucks.
   Kein Treffer ist ein ERROR.
 
 
-8.3.4 regex(<n>):<Regex>
+9.3.4 regex(<n>):<Regex>
 
   Wie regex:, aber die Version ist Gruppe <n> des ersten Treffers. Alles nach
   dem ERSTEN Doppelpunkt ist die Regex, einschließlich Leerzeichen.
@@ -511,12 +576,13 @@ wird ein Leerzeichen nach dem Doppelpunkt Teil des Ausdrucks.
   Kein Treffer oder eine nicht existierende Gruppennummer ist ein ERROR.
 
 
-8.3.5 properties:<Key>
+9.3.5 properties:<Key>
 
   Die Daten werden als Java-Properties-Datei (key=value) gelesen. Die Version
   ist der Wert des Keys. Werte in doppelten Anführungszeichen werden von
-  diesen befreit und Java-Escape-Sequenzen (\n, \t, \uXXXX, ...) werden
-  dekodiert, so dass das auch für Dateien wie /etc/os-release funktioniert:
+  diesen befreit und ihre Java-Escape-Sequenzen (\n, \t, \uXXXX, ...)
+  werden dekodiert, so dass das auch für Dateien wie /etc/os-release
+  funktioniert:
 
     properties:VERSION_ID
         VERSION_ID="22.04"  -> 22.04
@@ -524,11 +590,12 @@ wird ein Leerzeichen nach dem Doppelpunkt Teil des Ausdrucks.
   Ein fehlender Key ist ein ERROR.
 
 
-8.4 Caching innerhalb einer Versionsprüfung
+9.4 Caching innerhalb einer Versionsprüfung
 
 Mehrere Versionen verwenden oft dieselbe Location (eine JSON-Antwort mit
 vielen Versionen, eine Datei, ein Kommando). Innerhalb einer
-Versionsprüfung gilt:
+Versionsprüfung eines Servers (jeder Server wird getrennt geprüft, auch bei
+"Serverstatus prüfen") gilt:
 
   - Jede Location wird nur einmal geladen. Der Cache-Schlüssel ist der Text
     der Location (bei Login-Locations zusätzlich, ob der Path "json:" ist,
@@ -537,15 +604,14 @@ Versionsprüfung gilt:
     Versionen mit dieser Location werden ebenfalls als ERROR angezeigt.
   - Jeder OIDC-Login läuft nur einmal und seine Session wird für alle seine
     Locations verwendet; ein fehlgeschlagener Login wird nicht wiederholt.
-  - SSH-Verbindungen werden pro User, Host und Port wiederverwendet, auch
-    wenn sich die Server abwechseln; eine Verbindung, die nicht geöffnet
-    werden konnte, wird nicht erneut versucht. Alle Verbindungen werden am
-    Ende der Prüfung geschlossen.
+  - SSH-Verbindungen werden pro User, Host und Port wiederverwendet; eine
+    Verbindung, die nicht geöffnet werden konnte, wird nicht erneut
+    versucht. Alle Verbindungen werden am Ende der Prüfung geschlossen.
 
 Die nächste Prüfung ("Versionen lesen" erneut) lädt alles neu.
 
 
-8.5 Ergebnisse und Fehler
+9.5 Ergebnisse und Fehler
 
   <Versionstext>   Die extrahierte Version
   ERROR            Die Location konnte nicht geladen werden (Verbindung,
@@ -564,10 +630,10 @@ Checkliste bei ERROR:
   3. Path: stimmt das Präfix (json:, xml:, regex:, regex(n):, properties:)?
      Steht nach dem Doppelpunkt ein Leerzeichen, das dort nicht hingehört?
   4. JSON-Path: beginnt er mit "$"? Steht ein Index hinter einem Filter
-     (siehe 8.3.1)?
+     (siehe 9.3.1)?
 
 
-8.6 Beispiele
+9.6 Beispiele
 
   Versionsname   Location                                Path
   -------------  --------------------------------------  ------------------------------------------
@@ -588,8 +654,8 @@ Die beiden Einträge "Portal" und "Gateway" teilen sich eine Location, daher
 laufen der OIDC-Login und der Request nur einmal.
 
 
-9. TLS-Zertifikate und Proxies
-------------------------------
+10. TLS-Zertifikate und Proxies
+-------------------------------
 
 TLS-Zertifikate (alle HTTPS-Requests: URLs, Logins, Versionen):
 
@@ -599,6 +665,8 @@ TLS-Zertifikate (alle HTTPS-Requests: URLs, Logins, Versionen):
   - Sonst wird der Standard-Truststore der Java-Laufzeit verwendet (cacerts
     oder der mit -Djavax.net.ssl.trustStore gesetzte Truststore).
   - Der Hostname des Zertifikats wird immer geprüft.
+  - Der Keystore wird beim Start der Anwendung gelesen; nach einer Änderung
+    die Anwendung neu starten.
 
   Typischer Fehler bei einem selbstsignierten oder internen
   CA-Zertifikat: "Cannot validate TLS server certificate". Importiere das
@@ -625,11 +693,11 @@ Proxies:
   Die Proxy-URL "none" eines Logins bedeutet immer eine direkte Verbindung.
 
 
-10. Sicherheitshinweise
+11. Sicherheitshinweise
 -----------------------
 
   - Passwörter von Logins und SSH-Admins werden verschlüsselt gespeichert
-    (AES-256-GCM), mit der Master-Key-Datei (Kapitel 1).
+    (AES-256-GCM), mit der Master-Key-Datei (Kapitel 2).
   - Passwörter innerhalb von SSH-Versions-Locations
     (ssh://user:password@..., ssh-cmd://user:password@...) sind Teil des
     Location-Textes und werden im KLARTEXT in der Konfigurationsdatei

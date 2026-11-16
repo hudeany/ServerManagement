@@ -127,6 +127,7 @@ public class ServerManagementItem extends JPanel {
 	private Button removeUrlButton;
 	private Button removeVersionButton;
 	private Button removeLoginButton;
+	private Button editLogButton;
 	private Button removeLogButton;
 
 	/** Result texts of a login check */
@@ -568,6 +569,24 @@ public class ServerManagementItem extends JPanel {
 			}
 		});
 
+		urlsTable.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseClicked(final MouseEvent mouseEvent) {
+				if (mouseEvent.getClickCount() == 2) {
+					// Open Edit URL on doubleclick
+					try {
+						final JTable table = (JTable) mouseEvent.getSource();
+						final int row = table.rowAtPoint(mouseEvent.getPoint());
+						if (row >= 0) {
+							editUrl(table.convertRowIndexToModel(row));
+						}
+					} catch (final Exception e) {
+						new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
+					}
+				}
+			}
+		});
+
 		urlsTable.getColumnModel().getColumn(1).setPreferredWidth(100);
 		final DefaultTableCellRenderer rightRenderer1 = new PaddedCellRenderer();
 		rightRenderer1.setHorizontalAlignment(SwingConstants.RIGHT);
@@ -596,6 +615,26 @@ public class ServerManagementItem extends JPanel {
 				);
 
 		addTablePanel(urlsScrollPane);
+	}
+
+	/**
+	 * Edits an URL. The table rows have the same order as the URLs of the server, so the URL is addressed by index (the
+	 * same URL may be configured twice).
+	 */
+	private void editUrl(final int urlIndex) {
+		if (urlIndex < 0 || urlIndex >= server.getUrls().size()) {
+			return;
+		}
+		final SimpleInputDialog urlInputDialog = new SimpleInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("editUrl"), LangResources.get("editUrl"));
+		urlInputDialog.setDefaultText(server.getUrls().get(urlIndex));
+		final String url = urlInputDialog.open();
+		// Canceled or emptied: the URL stays unchanged (removing is done by the remove button)
+		if (StringUtilities.isNotBlank(url) && !url.trim().equals(server.getUrls().get(urlIndex))) {
+			server.getUrls().set(urlIndex, url.trim());
+			createComponents();
+			checkButtonStatus();
+			serverManagementGui.signalUnsavedChanges();
+		}
 	}
 
 	private void addVersionsPanel(final List<Version> versions) {
@@ -1137,6 +1176,20 @@ public class ServerManagementItem extends JPanel {
 		});
 		buttonPanel.add(addLogButton);
 
+		// A double click on a log opens the log viewer, so editing needs its own button
+		editLogButton = createSectionButton("editLog", IconKind.EDIT);
+		editLogButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(final ActionEvent event) {
+				try {
+					editLog();
+				} catch (final Exception e) {
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
+				}
+			}
+		});
+		buttonPanel.add(editLogButton);
+
 		removeLogButton = createSectionButton("removeLog", IconKind.TRASH);
 		removeLogButton.addActionListener(new ActionListener() {
 			@Override
@@ -1165,6 +1218,37 @@ public class ServerManagementItem extends JPanel {
 		buttonPanel.add(removeLogButton);
 
 		addSectionHeader(LangResources.get("section.logs"), buttonPanel);
+	}
+
+	/**
+	 * Edits name, location and path of the selected log. The table rows have the same order as the logs of the server,
+	 * so the log is addressed by index (log names do not have to be unique).
+	 */
+	private void editLog() throws Exception {
+		if (logsTable == null || logsTable.getSelectedRowCount() != 1) {
+			return;
+		}
+		final int rowIndex = logsTable.convertRowIndexToModel(logsTable.getSelectedRow());
+		if (rowIndex < 0 || rowIndex >= server.getLogs().size()) {
+			return;
+		}
+		final Log log = server.getLogs().get(rowIndex);
+
+		final List<String> dialogResult = new MultiInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("editLog"), LangResources.get("editLog"),
+				LangResources.get("logName"),
+				LangResources.get("location"),
+				LangResources.get("path"))
+				.withDefaultTexts(new String[] {
+						log.getName() == null ? "" : log.getName(),
+						log.getLocation() == null ? "" : log.getLocation(),
+						log.getPath() == null ? "" : log.getPath() })
+				.open();
+		if (dialogResult != null) {
+			log.setName(dialogResult.get(0)).setLocation(dialogResult.get(1)).setPath(dialogResult.get(2));
+			createComponents();
+			checkButtonStatus();
+			serverManagementGui.signalUnsavedChanges();
+		}
 	}
 
 	private static void loadUrlsData(final DefaultTableModel model, final List<String> urls) {
@@ -1571,13 +1655,11 @@ public class ServerManagementItem extends JPanel {
 		}
 
 		if (logsTable != null) {
-			if (logsTable.getSelectedRowCount() > 0) {
-				removeLogButton.setEnabled(true);
-			} else {
-				removeLogButton.setEnabled(false);
-			}
+			removeLogButton.setEnabled(logsTable.getSelectedRowCount() > 0);
+			editLogButton.setEnabled(logsTable.getSelectedRowCount() == 1);
 		} else {
 			removeLogButton.setEnabled(false);
+			editLogButton.setEnabled(false);
 		}
 	}
 

@@ -1000,7 +1000,7 @@ public class ServerManagementItem extends JPanel {
 					for (int i = 0; i < versionsTable.getModel().getRowCount(); i++) {
 						result += versionsTable.getModel().getValueAt(i, 0) + ": " + versionsTable.getModel().getValueAt(i, 3) + "\n";
 					}
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("readVersions"), result.trim()).withDialogStyle(DialogStyle.INFORMATION).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("readVersions"), server.getName() + ":\n\n" + result.trim()).withDialogStyle(DialogStyle.INFORMATION).open();
 				} catch (final Exception e) {
 					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
 				}
@@ -1077,7 +1077,7 @@ public class ServerManagementItem extends JPanel {
 							result += loginsTable.getModel().getValueAt(i, 1) + " @ " + loginsTable.getModel().getValueAt(i, 0) + " (" + loginsTable.getModel().getValueAt(i, 2) + "): " + loginsTable.getModel().getValueAt(i, LOGINS_RESULT_COLUMN) + "\n";
 						}
 					}
-					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("checkLogins"), result.trim()).withDialogStyle(DialogStyle.INFORMATION).open();
+					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("checkLogins") + " - " + server.getName(), result.trim()).withDialogStyle(DialogStyle.INFORMATION).open();
 				} catch (final Exception e) {
 					new QuestionDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " ERROR", "ERROR:\n" + e.getMessage()).withDialogStyle(DialogStyle.ERROR).open();
 				}

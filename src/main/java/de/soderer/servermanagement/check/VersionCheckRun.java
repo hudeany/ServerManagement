@@ -427,7 +427,11 @@ public class VersionCheckRun implements AutoCloseable {
 		} else {
 			throw new Exception("Unsupported version path for Jenkins location, expected empty path or 'json:...'");
 		}
-		return new VersionResult(version.getName(), versionText, build.isMostCurrent() ? StatusLevel.OK : StatusLevel.WARNING);
+		if (build.isMostCurrent()) {
+			return new VersionResult(version.getName(), versionText, StatusLevel.OK);
+		} else {
+			return new VersionResult(version.getName(), versionText, StatusLevel.WARNING, "a newer build of the Jenkins job failed");
+		}
 	}
 
 	/**

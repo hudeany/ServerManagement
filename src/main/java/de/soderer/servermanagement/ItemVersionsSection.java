@@ -118,7 +118,7 @@ class ItemVersionsSection extends ItemSection {
 	 */
 	void showResults(final List<VersionResult> results) {
 		for (int i = 0; i < results.size(); i++) {
-			showResult(i, VERSION_COLUMN, results.get(i).text(), results.get(i).level());
+			showResult(i, VERSION_COLUMN, results.get(i).text(), results.get(i).level(), results.get(i).message());
 		}
 	}
 
@@ -174,7 +174,7 @@ class ItemVersionsSection extends ItemSection {
 		for (final VersionResult result : results) {
 			item.raiseStatus(result.level());
 			// The dialog also shows the reason of an error
-			resultText.append(result.name()).append(": ").append(result.getTextWithErrorMessage()).append("\n");
+			resultText.append(result.name()).append(": ").append(result.getTextWithMessage()).append("\n");
 		}
 		showInformation(ServerManagement.APPLICATION_NAME + " " + LangResources.get("readVersions"), getServer().getName() + ":\n\n" + resultText.toString().trim());
 	}

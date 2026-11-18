@@ -7,16 +7,19 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.function.IntFunction;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoundedRangeModel;
 import javax.swing.Box;
+import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.SwingUtilities;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableCellRenderer;
 
 import de.soderer.servermanagement.check.StatusLevel;
 import de.soderer.swing.modern.Button;
@@ -87,9 +90,16 @@ final class ItemTables {
 
 	/**
 	 * Creates a read-only table: a click toggles the selection of a row, a selection change calls the selection listener,
-	 * a double click the double click action (errors are shown in an error dialog).
+	 * a double click the double click action (errors are shown in an error dialog). Each row is colored by its status of
+	 * the last check; the reason of an error or warning is shown as tooltip of the row.
+	 *
+	 * @param rowLevelProvider
+	 *            status of a row by model row index, null for a row without check result (white)
+	 * @param rowMessageProvider
+	 *            reason of an error or warning by model row index, null for none
 	 */
-	static JTable createTable(final DefaultTableModel model, final int selectionMode, final Runnable selectionListener, final RowAction doubleClickAction, final ServerManagementItem item) {
+	static JTable createTable(final DefaultTableModel model, final int selectionMode, final Runnable selectionListener, final RowAction doubleClickAction, final ServerManagementItem item,
+			final IntFunction<StatusLevel> rowLevelProvider, final IntFunction<String> rowMessageProvider) {
 		final JTable table = new JTable(model) {
 			private static final long serialVersionUID = 2804713458829412663L;
 
@@ -97,6 +107,21 @@ final class ItemTables {
 			public void changeSelection(final int rowIndex, final int columnIndex, final boolean toggle, final boolean extend) {
 				// Always toggle on single selection
 				super.changeSelection(rowIndex, columnIndex, !extend, extend);
+			}
+
+			@Override
+			public Component prepareRenderer(final TableCellRenderer renderer, final int row, final int column) {
+				final Component component = super.prepareRenderer(renderer, row, column);
+				final int modelRow = convertRowIndexToModel(row);
+				if (!isRowSelected(row)) {
+					// Always set, because DefaultTableCellRenderer keeps the last background for the following cells
+					final StatusLevel rowLevel = rowLevelProvider.apply(modelRow);
+					component.setBackground(rowLevel == null ? Color.WHITE : getStatusColor(rowLevel));
+				}
+				if (component instanceof JComponent) {
+					((JComponent) component).setToolTipText(rowMessageProvider.apply(modelRow));
+				}
+				return component;
 			}
 		};
 		table.setDefaultEditor(Object.class, null);
@@ -138,14 +163,13 @@ final class ItemTables {
 	}
 
 	/**
-	 * Gives a table of the server card the ModernUi look and limits its visible height; the background colors of the
-	 * status check stay visible.
+	 * Gives a table of the server card the ModernUi look and limits its visible height.
 	 */
 	static void styleTable(final JTable table) {
 		ModernUi.styleTable(table);
 		table.setDefaultRenderer(Object.class, new PaddedCellRenderer());
 		table.setShowVerticalLines(false);
-		// Background of not yet checked tables (the status check sets the status colors)
+		// Background of rows without check result and of the empty area below the rows
 		table.setBackground(Color.WHITE);
 
 		final Dimension preferredSize = table.getPreferredSize();
@@ -175,15 +199,8 @@ final class ItemTables {
 	}
 
 	/**
-	 * The background of a table shows the worst status of its rows, so a later good row must not hide an earlier error.
+	 * Background color of a row with the given status.
 	 */
-	static void raiseTableColor(final JTable table, final StatusLevel level) {
-		final Color color = getStatusColor(level);
-		if (getColorSeverity(color) > getColorSeverity(table.getBackground())) {
-			table.setBackground(color);
-		}
-	}
-
 	private static Color getStatusColor(final StatusLevel level) {
 		switch (level) {
 			case ERROR:
@@ -197,22 +214,7 @@ final class ItemTables {
 	}
 
 	/**
-	 * Severity of a table status color: none (white) &lt; green &lt; yellow &lt; red.
-	 */
-	private static int getColorSeverity(final Color color) {
-		if (CustomizedColor.RED.equals(color)) {
-			return 3;
-		} else if (CustomizedColor.YELLOW.equals(color)) {
-			return 2;
-		} else if (CustomizedColor.GREEN.equals(color)) {
-			return 1;
-		} else {
-			return 0;
-		}
-	}
-
-	/**
-	 * Cell renderer with padding; uses the background of the table, which shows the status color.
+	 * Cell renderer with padding; the background of a row is set by the table according to the status of the row.
 	 */
 	static class PaddedCellRenderer extends DefaultTableCellRenderer {
 		private static final long serialVersionUID = 4019347585127466351L;

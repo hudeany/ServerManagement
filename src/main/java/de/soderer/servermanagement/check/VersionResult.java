@@ -9,10 +9,10 @@ package de.soderer.servermanagement.check;
  *            the version or "ERROR"
  * @param level
  *            WARNING e.g. for a Jenkins version, whose newer builds failed
- * @param errorMessage
- *            reason of an error, null if unknown or no error
+ * @param message
+ *            reason of an error or warning, null if none
  */
-public record VersionResult(String name, String text, StatusLevel level, String errorMessage) {
+public record VersionResult(String name, String text, StatusLevel level, String message) {
 	public VersionResult(final String name, final String text, final StatusLevel level) {
 		this(name, text, level, null);
 	}
@@ -22,9 +22,9 @@ public record VersionResult(String name, String text, StatusLevel level, String 
 	}
 
 	/**
-	 * Version text with the error reason, e.g. "ERROR (HTTP 404 for ...)".
+	 * Version text with the reason of an error or warning, e.g. "ERROR (HTTP 404 for ...)".
 	 */
-	public String getTextWithErrorMessage() {
-		return errorMessage == null ? text : text + " (" + errorMessage + ")";
+	public String getTextWithMessage() {
+		return message == null ? text : text + " (" + message + ")";
 	}
 }

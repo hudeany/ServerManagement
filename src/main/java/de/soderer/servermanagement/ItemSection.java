@@ -1,7 +1,8 @@
 package de.soderer.servermanagement;
 
-import java.awt.Color;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import javax.swing.JPanel;
 import javax.swing.JTable;
@@ -23,6 +24,12 @@ abstract class ItemSection {
 
 	/** Table of the current card build, null if the section has no entries */
 	protected JTable table;
+
+	/** Status of the rows of the last check by model row index; rows without check result have no entry */
+	private final Map<Integer, StatusLevel> rowLevels = new HashMap<>();
+
+	/** Reason of an error or warning by model row index, shown as tooltip */
+	private final Map<Integer, String> rowMessages = new HashMap<>();
 
 	ItemSection(final ServerManagementItem item) {
 		this.item = item;
@@ -72,13 +79,15 @@ abstract class ItemSection {
 	 */
 	final void addTo(final JPanel contentPanel) {
 		table = null;
+		rowLevels.clear();
+		rowMessages.clear();
 
 		final JPanel buttonPanel = ItemTables.createSectionButtonPanel();
 		addButtons(buttonPanel);
 		ItemTables.addSectionHeader(contentPanel, getTitle(), buttonPanel);
 
 		if (hasEntries()) {
-			final JTable newTable = ItemTables.createTable(createTableModel(), getSelectionMode(), item::updateButtonStatus, getDoubleClickAction(), item);
+			final JTable newTable = ItemTables.createTable(createTableModel(), getSelectionMode(), item::updateButtonStatus, getDoubleClickAction(), item, rowLevels::get, rowMessages::get);
 			configureColumns(newTable);
 			ItemTables.styleTable(newTable);
 			ItemTables.addTablePanel(contentPanel, newTable, item);
@@ -90,9 +99,11 @@ abstract class ItemSection {
 	 * Clears the results of the last status check.
 	 */
 	final void resetStatus() {
+		rowLevels.clear();
+		rowMessages.clear();
 		if (table != null) {
 			clearResults(getModel());
-			table.setBackground(Color.WHITE);
+			table.repaint();
 		}
 	}
 
@@ -126,13 +137,29 @@ abstract class ItemSection {
 	}
 
 	/**
-	 * Shows a result in the table: sets the text of a cell and raises the table color.
+	 * Shows a result in the table: sets the text of a cell and colors the row by its status. Several results of the same
+	 * row (e.g. two columns) only raise the status of the row.
 	 */
 	protected void showResult(final int modelRow, final int column, final String text, final StatusLevel level) {
+		showResult(modelRow, column, text, level, null);
+	}
+
+	/**
+	 * Shows a result in the table like {@link #showResult(int, int, String, StatusLevel)}, with the reason of an error or
+	 * warning as tooltip of the row.
+	 *
+	 * @param message
+	 *            reason of an error or warning; null for none
+	 */
+	protected void showResult(final int modelRow, final int column, final String text, final StatusLevel level, final String message) {
 		if (hasRow(modelRow)) {
 			table.clearSelection();
 			table.getModel().setValueAt(text, modelRow, column);
-			ItemTables.raiseTableColor(table, level);
+			rowLevels.merge(modelRow, level, StatusLevel::max);
+			if (message != null) {
+				rowMessages.put(modelRow, message);
+			}
+			table.repaint();
 		}
 	}
 

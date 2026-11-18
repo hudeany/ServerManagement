@@ -122,9 +122,9 @@ public class AuthorizedKeysHelper {
 
 	/**
 	 * Opens a SFTP connection. The hostname may contain a port ("host:port", default port 22).
-	 * Also used by ServerManagementItem, so there is only one implementation of the host and port parsing.
+	 * Also used by the version check, so there is only one implementation of the host and port parsing.
 	 */
-	static SftpConnection openSftpConnection(final String hostname, final String sshAccessUsername, final File sshAccessPrivateKeyFile, final char[] sshAccessPassword) throws Exception, IOException {
+	public static SftpConnection openSftpConnection(final String hostname, final String sshAccessUsername, final File sshAccessPrivateKeyFile, final char[] sshAccessPassword) throws Exception, IOException {
 		final HostAndPort hostAndPort = parseHostAndPort(hostname);
 		return openSftpConnection(hostAndPort.host(), hostAndPort.port(), sshAccessUsername, sshAccessPrivateKeyFile, sshAccessPassword);
 	}
@@ -132,7 +132,7 @@ public class AuthorizedKeysHelper {
 	/**
 	 * Opens a SFTP connection on an explicit port (the hostname must not contain a port).
 	 */
-	static SftpConnection openSftpConnection(final String hostname, final int port, final String sshAccessUsername, final File sshAccessPrivateKeyFile, final char[] sshAccessPassword) throws Exception, IOException {
+	public static SftpConnection openSftpConnection(final String hostname, final int port, final String sshAccessUsername, final File sshAccessPrivateKeyFile, final char[] sshAccessPassword) throws Exception, IOException {
 		if (StringUtilities.isBlank(hostname)) {
 			throw new Exception("No host configured");
 		} else if (StringUtilities.isBlank(sshAccessUsername)) {

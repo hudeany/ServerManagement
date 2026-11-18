@@ -5,10 +5,11 @@ ServerManagement ist eine Desktop-Anwendung, um eine Reihe von Servern zu
 überwachen und zu pflegen. Für jeden Server zeigt sie in einer Karte:
 
   - Verwaltete SSH-User und ihre autorisierten Public Keys
-  - Logins (HTTP-Basic-Authentifizierung oder OIDC) und ob sie funktionieren
+  - Logins (HTTP-Basic-Authentifizierung, OIDC oder Jenkins) und ob sie
+    funktionieren
   - URLs und ob sie erreichbar sind
-  - Versionen installierter Software, gelesen aus Webservices, Dateien oder
-    Kommandos
+  - Versionen installierter Software, gelesen aus Webservices, Dateien,
+    Kommandos oder Jenkins-Jobs
   - Logs, live angezeigt in einem SSH-Log-Viewer
 
 Der größte Teil dieses Handbuchs beschreibt die Werte "Location" und "Path"
@@ -143,10 +144,13 @@ Schließen mit ungespeicherten Änderungen fragt die Anwendung nach einer
 Bestätigung. Ausnahme: Änderungen an den authorized_keys eines SSH-Users
 (Kapitel 5) werden sofort auf den Server geschrieben.
 
-Nach einer Prüfung wird jede Tabelle nach ihrem schlechtesten Ergebnis
-eingefärbt: rot bei einem Fehler, gelb bei einer Warnung (z.B. überzählige
-SSH-Keys), grün wenn alles in Ordnung ist. "Serverstatus prüfen" prüft alle
-Server und listet danach die Server mit einem Fehler auf.
+Nach einer Prüfung wird jede Zeile nach ihrem Ergebnis eingefärbt: rot bei
+einem Fehler, gelb bei einer Warnung (z.B. überzählige SSH-Keys), grün wenn
+alles in Ordnung ist; noch nicht geprüfte Zeilen bleiben weiß. Fährt man mit
+der Maus über eine rote oder gelbe Zeile, zeigt ein Tooltip den Grund, soweit
+er bekannt ist. Der Status eines Servers ist sein schlechtestes Ergebnis.
+"Serverstatus prüfen" prüft alle Server und listet danach die Server mit
+einem Fehler auf.
 
 
 4. Server, Host und SSH-Admin
@@ -217,12 +221,19 @@ Felder:
       BasicAuth  HTTP-Basic-Authentifizierung (Header "Authorization: Basic ...")
       OIDC       Anmeldung über einen OpenID-Connect-Identity-Provider
                  (z.B. Keycloak)
+      Jenkins    Anmeldung an einem Jenkins-Server (HTTP-Basic-
+                 Authentifizierung), für den letzten erfolgreichen Build von
+                 Jenkins-Jobs (9.2.3)
   URL
       BasicAuth: URL, die die Authentifizierung verlangt.
       OIDC: Startseite der Webanwendung. Sie muss zum Identity Provider
       weiterleiten und nach der Anmeldung zurück zur Anwendung.
+      Jenkins: Basis-URL des Jenkins-Servers, z.B.
+      "https://jenkins.example.com:8443" (mit Kontextpfad wie
+      "https://host/jenkins", falls Jenkins unter einem läuft).
   Username, Passwort
-      Zugangsdaten. Das Passwort wird verschlüsselt gespeichert.
+      Zugangsdaten. Das Passwort wird verschlüsselt gespeichert. Bei Jenkins
+      kann statt des Passworts ein API-Token des Users verwendet werden.
   IdP-Auswahl (nur OIDC, optional)
       Text des Buttons oder Links des Identity Providers, der auf der
       Login-Seite gewählt werden soll, für Login-Seiten mit mehreren
@@ -237,11 +248,16 @@ Felder:
 Ergebnisse von "Logins prüfen":
 
   OK      BasicAuth: HTTP 2xx. OIDC: die Anmeldung war erfolgreich und die
-          Startseite der Anwendung wurde geliefert.
-  FAILED  BasicAuth: HTTP 401 oder 403 (Zugangsdaten abgelehnt).
+          Startseite der Anwendung wurde geliefert. Jenkins:
+          "<url>/crumbIssuer/api/json" hat ein CSRF-Crumb geliefert.
+  FAILED  BasicAuth und Jenkins: HTTP 401 oder 403 (Zugangsdaten
+          abgelehnt).
           OIDC: die Anmeldung war nicht erfolgreich (falsche Zugangsdaten,
           Login-Formular nicht erkannt, Anwendungsseite nicht erreicht).
-  ERROR   BasicAuth: jeder andere HTTP-Status oder keine Verbindung.
+  ERROR   BasicAuth und Jenkins: jeder andere HTTP-Status oder keine
+          Verbindung. Jenkins: auch wenn der Server keinen Crumb-Issuer hat
+          (HTTP 404, CSRF-Schutz abgeschaltet); Versions-Locations
+          funktionieren in diesem Fall trotzdem.
 
 So funktioniert die OIDC-Anmeldung:
 
@@ -307,8 +323,8 @@ zeigt, Scroll-Sperre und Zeilenumbruch.
 Ein Versionseintrag hat drei Werte:
 
   Versionsname   Angezeigter Name, z.B. "nexInsure" oder "Java"
-  Location       WOHER die Daten kommen: eine URL, eine Datei oder ein
-                 Kommando
+  Location       WOHER die Daten kommen: eine URL, eine Datei, ein Kommando
+                 oder ein Jenkins-Job
   Path           WIE die Version aus diesen Daten extrahiert wird:
                  json:, xml:, regex:, regex(n): oder properties:
 
@@ -322,6 +338,7 @@ und wendet den Path an. Die Tabelle zeigt die Version oder "ERROR".
 
   http(s)://host/path                      HTTP GET ohne Login
   [GET:|POST:]http(s)://user@host/path     HTTP-Request mit Login
+  [GET:]http(s)://user@host/job/...        Jenkins-Job (mit Jenkins-Login)
   ssh://[user[:password]@][host][:port]/path      Datei oder Verzeichnis per SSH
   ssh://[user[:password]@][host]:relative/path    (scp-Stil)
   ssh-cmd://[user[:password]@][host][:port] <command>   Kommando per SSH
@@ -361,6 +378,8 @@ Bei den Präfixen wird Groß- und Kleinschreibung nicht unterschieden.
   - Nur HTTP 2xx wird akzeptiert; jeder andere Status ist ein ERROR.
   - Beginnt der Path der Version mit "json:", wird der Request mit
     "Content-Type: application/json" gesendet.
+  - Gehört der Username zu einem Jenkins-Login, ist die Location ein
+    Jenkins-Job, siehe 9.2.3.
 
   Mit einem OIDC-Login:
   - Die Anmeldung läuft einmal pro Versionsprüfung, ihre Session (Cookies)
@@ -380,7 +399,59 @@ Bei den Präfixen wird Groß- und Kleinschreibung nicht unterschieden.
     (Kapitel 10).
 
 
-9.2.3 ssh://... (Datei oder Verzeichnis)
+9.2.3 Jenkins-Jobs ([GET:]http(s)://user@host/job/...)
+
+    https://builder@jenkins.example.com:8443/job/IS/job/CSS-264.0.0/job/customer-integration
+    https://builder@jenkins.example.com:8443/job/IS/job/CSS-264.0.0/job/customer-integration/api/json?tree=builds[number,result,timestamp]
+
+  Gehört der Username einer Login-Location zu einem Login vom Typ "Jenkins"
+  (Kapitel 6), ist die Location ein Jenkins-Job und die Version ist dessen
+  letzter erfolgreicher Build.
+
+  - Die Location ist die Job-URL, wie sie im Browser angezeigt wird (Ordner
+    und Multibranch-Jobs als "/job/<name>" hintereinander), mit dem Username
+    des Jenkins-Logins vor "@". Die API-URL des Jobs (".../api/json?tree=...")
+    wird ebenfalls akzeptiert, der API-Teil wird ignoriert. Branch-Namen mit
+    "/" sind in der Job-URL URL-kodiert ("feature%2Fxyz"); übernimm sie so.
+  - Die Anwendung fordert einmal pro Versionsprüfung ein CSRF-Crumb an und
+    dann die Builds des Jobs ("<Job-URL>/api/json?tree=builds[number,result,
+    timestamp]", neuester Build zuerst). Hat der Server keinen Crumb-Issuer
+    (CSRF-Schutz abgeschaltet), werden die Builds ohne Crumb abgefragt.
+  - Die Version ist der neueste Build mit dem Ergebnis SUCCESS. Abgebrochene
+    und noch laufende Builds werden ignoriert.
+  - Ist ein neuerer Build als dieser fehlgeschlagen (jedes Ergebnis außer
+    SUCCESS oder ABORTED, z.B. FAILURE oder UNSTABLE), wird die Version als
+    Warnung angezeigt (gelb, Tooltip "a newer build of the Jenkins job
+    failed").
+  - ERROR: der Job existiert nicht (HTTP 404), der Job hat keinen
+    erfolgreichen Build, der Login wird abgelehnt oder der Server ist nicht
+    erreichbar.
+  - Nur GET wird unterstützt; "POST:" ist ein ERROR.
+  - Proxy: der Proxy des Logins, sonst die Proxy-Einstellung der Anwendung
+    (wie bei "Logins prüfen"). TLS: Kapitel 10.
+
+  Der Path wird nicht auf das JSON von Jenkins angewendet, sondern auf diese
+  Daten des letzten erfolgreichen Builds:
+
+    { "number": 50, "timestamp": 1794934624094,
+      "buildTime": "2026-11-17T17:57:04.094", "mostCurrent": true }
+
+    (leerer Path)       #50 (2026-11-17 17:57)     Build-Nummer und Startzeit
+    json:$.number       50
+    json:$.buildTime    2026-11-17T17:57:04.094    Startzeit (lokale Zeitzone)
+    json:$.timestamp    1794934624094              Startzeit (Epoch-Millis)
+    json:$.mostCurrent  true                       false, wenn ein neuerer
+                                                   Build fehlgeschlagen ist
+
+  Andere Path-Formen (xml:, regex:, ...) sind bei Jenkins-Locations ein
+  ERROR.
+
+  Hinweis: Mit einem Login vom Typ BasicAuth statt Jenkins liefert dieselbe
+  URL das rohe JSON von Jenkins (9.2.2); dann muss der Path dieses
+  ansprechen, z.B. json:$.builds[?(@.result=='SUCCESS')].number.
+
+
+9.2.4 ssh://... (Datei oder Verzeichnis)
 
   Liest eine Datei per SFTP. Endet der Pfad mit "/", liefert die Location
   stattdessen die Liste der Dateinamen in diesem Verzeichnis (ein Name pro
@@ -420,7 +491,7 @@ Bei den Präfixen wird Groß- und Kleinschreibung nicht unterschieden.
     Fehler.
 
 
-9.2.4 ssh-cmd://... (Kommando)
+9.2.5 ssh-cmd://... (Kommando)
 
   Führt ein Kommando per SSH aus und liefert dessen Ausgabe.
 
@@ -443,7 +514,7 @@ Bei den Präfixen wird Groß- und Kleinschreibung nicht unterschieden.
     leer, leite sie um: "java -version 2>&1".
 
 
-9.2.5 ssh-cmd:... (alte Form)
+9.2.6 ssh-cmd:... (alte Form)
 
     ssh-cmd:cat /opt/app/VERSION
     ssh-cmd:andreas@homebase:cat /opt/app/VERSION
@@ -456,8 +527,9 @@ Bei den Präfixen wird Groß- und Kleinschreibung nicht unterschieden.
 
 9.3 Formen des Path
 
-Der Path gibt an, wie die Version in den geladenen Daten gefunden wird. Bei
-den Präfixen wird Groß- und Kleinschreibung nicht unterschieden. Schreibe den
+Der Path gibt an, wie die Version in den geladenen Daten gefunden wird
+(Jenkins-Locations: siehe 9.2.3). Bei den Präfixen wird Groß- und
+Kleinschreibung nicht unterschieden. Schreibe den
 Ausdruck direkt hinter das Präfix: bei regex:, regex(n): und properties:
 wird ein Leerzeichen nach dem Doppelpunkt Teil des Ausdrucks.
 
@@ -604,6 +676,10 @@ Versionsprüfung eines Servers (jeder Server wird getrennt geprüft, auch bei
     Versionen mit dieser Location werden ebenfalls als ERROR angezeigt.
   - Jeder OIDC-Login läuft nur einmal und seine Session wird für alle seine
     Locations verwendet; ein fehlgeschlagener Login wird nicht wiederholt.
+  - Jeder Jenkins-Login fordert sein Crumb nur einmal an, und die Builds
+    jedes Jenkins-Jobs werden nur einmal abgefragt, auch für mehrere
+    Versionen desselben Jobs (z.B. Build-Nummer und Build-Zeit); Fehler
+    werden nicht wiederholt.
   - SSH-Verbindungen werden pro User, Host und Port wiederverwendet; eine
     Verbindung, die nicht geöffnet werden konnte, wird nicht erneut
     versucht. Alle Verbindungen werden am Ende der Prüfung geschlossen.
@@ -613,13 +689,18 @@ Die nächste Prüfung ("Versionen lesen" erneut) lädt alles neu.
 
 9.5 Ergebnisse und Fehler
 
-  <Versionstext>   Die extrahierte Version
+  <Versionstext>   Die extrahierte Version (grün)
+  <Versionstext>   Gelb: eine Warnung, z.B. ein neuerer Build des
+                   Jenkins-Jobs ist fehlgeschlagen (9.2.3)
   ERROR            Die Location konnte nicht geladen werden (Verbindung,
                    Login, HTTP-Status, fehlende Datei, ungültige Location)
                    oder der Path hat keinen Wert gefunden
 
-Ein ERROR in irgendeiner Version färbt die Versionstabelle rot und markiert
-den Server bei "Serverstatus prüfen" als fehlerhaft.
+Ein ERROR färbt die Zeile der Version rot und markiert den Server bei
+"Serverstatus prüfen" als fehlerhaft. Der Grund eines Fehlers oder einer
+Warnung erscheint als Tooltip der Zeile und nach "Versionen lesen" im
+Ergebnisdialog hinter der Version, z.B. "ERROR (Jenkins job not found:
+HTTP 404 for ...)".
 
 Checkliste bei ERROR:
 
@@ -631,6 +712,9 @@ Checkliste bei ERROR:
      Steht nach dem Doppelpunkt ein Leerzeichen, das dort nicht hingehört?
   4. JSON-Path: beginnt er mit "$"? Steht ein Index hinter einem Filter
      (siehe 9.3.1)?
+  5. Jenkins: ist der Login dieses Usernames vom Typ "Jenkins"? Bei
+     BasicAuth wird der Path auf das rohe JSON von Jenkins angewendet
+     (9.2.3).
 
 
 9.6 Beispiele
@@ -649,9 +733,14 @@ Checkliste bei ERROR:
   Gateway        POST:https://monitor@host/cid/ui/gwt/rest/versions/getVersionData
                                                          json:$.versionData[?(search(@.name, 'Gateway'))].version
   Releases       ssh://deploy@host:2222/opt/app/releases/  regex:app-[\d.]+\.jar
+  Build          https://builder@jenkins:8443/job/IS/job/CSS-264.0.0/job/customer-integration
+                                                         (leer)
+  Build-Nummer   https://builder@jenkins:8443/job/IS/job/CSS-264.0.0/job/customer-integration
+                                                         json:$.number
 
 Die beiden Einträge "Portal" und "Gateway" teilen sich eine Location, daher
-laufen der OIDC-Login und der Request nur einmal.
+laufen der OIDC-Login und der Request nur einmal. Dasselbe gilt für "Build"
+und "Build-Nummer": die Builds des Jenkins-Jobs werden nur einmal abgefragt.
 
 
 10. TLS-Zertifikate und Proxies
@@ -685,6 +774,8 @@ Proxies:
                                              System-Proxy-Einstellungen
   BasicAuth-Versions-Locations               Proxy des Logins, sonst die
                                              System-Proxy-Einstellungen
+  Jenkins "Logins prüfen" und                Proxy des Logins, sonst die
+  Jenkins-Versions-Locations                 Proxy-Einstellung der Anwendung
 
   Die Proxy-Einstellung der Anwendung ist Teil der Anwendungskonfiguration
   (Dialog "Konfiguration"). System-Proxy-Einstellungen sind die

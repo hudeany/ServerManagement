@@ -5,9 +5,10 @@ ServerManagement is a desktop application to watch and maintain a set of
 servers. For each server it shows in one card:
 
   - Managed SSH users and their authorized public keys
-  - Logins (HTTP Basic authentication or OIDC) and whether they work
+  - Logins (HTTP Basic authentication, OIDC or Jenkins) and whether they work
   - URLs and whether they are reachable
-  - Versions of installed software, read from web services, files or commands
+  - Versions of installed software, read from web services, files, commands
+    or Jenkins jobs
   - Logs, shown live in an SSH log viewer
 
 Most of this manual describes the "Location" and "Path" values of versions
@@ -130,8 +131,10 @@ Changes are only kept after "Save server settings". On closing with unsaved
 changes, the application asks for confirmation. Exception: changes of the
 authorized_keys of an SSH user (chapter 5) are written to the server at once.
 
-After a check, each table is colored by its worst result: red for an error,
-yellow for a warning (e.g. surplus SSH keys), green if everything is fine.
+After a check, each row is colored by its result: red for an error, yellow
+for a warning (e.g. surplus SSH keys), green if everything is fine; rows not
+checked yet stay white. Hovering over a red or yellow row shows the reason as
+tooltip, where it is known. The status of a server is its worst result.
 "Check server status" checks all servers and then lists the servers with an
 error.
 
@@ -197,12 +200,18 @@ Fields:
   Login type
       BasicAuth  HTTP Basic authentication (header "Authorization: Basic ...")
       OIDC       Login via an OpenID Connect identity provider (e.g. Keycloak)
+      Jenkins    Login at a Jenkins server (HTTP Basic authentication), used
+                 for the latest successful build of Jenkins jobs (9.2.3)
   URL
       BasicAuth: URL that requires the authentication.
       OIDC: start page of the web application. It must redirect to the
       identity provider and, after the login, back to the application.
+      Jenkins: base URL of the Jenkins server, e.g.
+      "https://jenkins.example.com:8443" (with a context path like
+      "https://host/jenkins" if Jenkins runs under one).
   Username, Password
-      Credentials. The password is stored encrypted.
+      Credentials. The password is stored encrypted. For Jenkins, an API token
+      of the user can be used instead of the password.
   IdP selection (OIDC only, optional)
       Text of the button or link of the identity provider to choose on the
       login page, for login pages that offer several providers (federated
@@ -216,11 +225,14 @@ Fields:
 Results of "Check logins":
 
   OK      BasicAuth: HTTP 2xx. OIDC: the login succeeded and the application
-          start page was delivered.
-  FAILED  BasicAuth: HTTP 401 or 403 (credentials rejected).
+          start page was delivered. Jenkins: a CSRF crumb was delivered by
+          "<url>/crumbIssuer/api/json".
+  FAILED  BasicAuth and Jenkins: HTTP 401 or 403 (credentials rejected).
           OIDC: the login did not succeed (wrong credentials, login form not
           recognized, application page not reached).
-  ERROR   BasicAuth: any other HTTP status or no connection.
+  ERROR   BasicAuth and Jenkins: any other HTTP status or no connection.
+          Jenkins: also if the server has no crumb issuer (HTTP 404, CSRF
+          protection disabled); version locations still work in that case.
 
 How the OIDC login works:
 
@@ -282,7 +294,8 @@ mode that only shows matching lines, scroll lock and line wrap.
 A version entry has three values:
 
   Version name   Displayed name, e.g. "nexInsure" or "Java"
-  Location       WHERE the data comes from: a URL, a file or a command
+  Location       WHERE the data comes from: a URL, a file, a command or a
+                 Jenkins job
   Path           HOW the version is extracted from that data:
                  json:, xml:, regex:, regex(n): or properties:
 
@@ -296,6 +309,7 @@ Overview:
 
   http(s)://host/path                      HTTP GET without login
   [GET:|POST:]http(s)://user@host/path     HTTP request with a login
+  [GET:]http(s)://user@host/job/...        Jenkins job (with a Jenkins login)
   ssh://[user[:password]@][host][:port]/path      File or directory via SSH
   ssh://[user[:password]@][host]:relative/path    (scp style)
   ssh-cmd://[user[:password]@][host][:port] <command>   Command via SSH
@@ -335,6 +349,8 @@ The prefixes are not case sensitive.
   - Only HTTP 2xx is accepted; any other status is an ERROR.
   - If the path of the version starts with "json:", the request is sent with
     "Content-Type: application/json".
+  - If the username belongs to a Jenkins login, the location is a Jenkins
+    job, see 9.2.3.
 
   With an OIDC login:
   - The login runs once per version check, its session (cookies) is reused
@@ -353,7 +369,56 @@ The prefixes are not case sensitive.
     (chapter 10).
 
 
-9.2.3 ssh://... (file or directory)
+9.2.3 Jenkins jobs ([GET:]http(s)://user@host/job/...)
+
+    https://builder@jenkins.example.com:8443/job/IS/job/CSS-264.0.0/job/customer-integration
+    https://builder@jenkins.example.com:8443/job/IS/job/CSS-264.0.0/job/customer-integration/api/json?tree=builds[number,result,timestamp]
+
+  If the username of a login location belongs to a login of type "Jenkins"
+  (chapter 6), the location is a Jenkins job and the version is its latest
+  successful build.
+
+  - The location is the job URL as shown in the browser (folders and
+    multibranch jobs as "/job/<name>" one after the other), with the
+    username of the Jenkins login before "@". The API URL of the job
+    (".../api/json?tree=...") is accepted as well, the API part is ignored.
+    Branch names with "/" are URL encoded in the job URL ("feature%2Fxyz"),
+    copy them as they are.
+  - The application requests a CSRF crumb once per version check and then
+    the builds of the job ("<job URL>/api/json?tree=builds[number,result,
+    timestamp]", newest build first). If the server has no crumb issuer
+    (CSRF protection disabled), the builds are requested without crumb.
+  - The version is the newest build with the result SUCCESS. Aborted builds
+    and builds still running are ignored.
+  - If a build newer than this one failed (any result other than SUCCESS
+    or ABORTED, e.g. FAILURE or UNSTABLE), the version is shown as warning
+    (yellow, tooltip "a newer build of the Jenkins job failed").
+  - ERROR: the job does not exist (HTTP 404), the job has no successful
+    build, the login is rejected or the server cannot be reached.
+  - Only GET is supported; "POST:" is an ERROR.
+  - Proxy: the proxy of the login, otherwise the application proxy setting
+    (as for "Check logins"). TLS: chapter 10.
+
+  The path is not applied to the JSON of Jenkins, but to this data of the
+  latest successful build:
+
+    { "number": 50, "timestamp": 1794934624094,
+      "buildTime": "2026-11-17T17:57:04.094", "mostCurrent": true }
+
+    (empty path)        #50 (2026-11-17 17:57)     build number and start time
+    json:$.number       50
+    json:$.buildTime    2026-11-17T17:57:04.094    start time (local time zone)
+    json:$.timestamp    1794934624094              start time (epoch millis)
+    json:$.mostCurrent  true                       false if a newer build failed
+
+  Other path forms (xml:, regex:, ...) are an ERROR for Jenkins locations.
+
+  Note: with a login of type BasicAuth instead of Jenkins, the same URL
+  delivers the raw JSON of Jenkins (9.2.2); then the path must address it,
+  e.g. json:$.builds[?(@.result=='SUCCESS')].number.
+
+
+9.2.4 ssh://... (file or directory)
 
   Reads a file via SFTP. If the path ends with "/", the location delivers the
   list of file names in this directory instead (one name per line).
@@ -392,7 +457,7 @@ The prefixes are not case sensitive.
     error.
 
 
-9.2.4 ssh-cmd://... (command)
+9.2.5 ssh-cmd://... (command)
 
   Runs a command via SSH and delivers its output.
 
@@ -415,7 +480,7 @@ The prefixes are not case sensitive.
     redirect it: "java -version 2>&1".
 
 
-9.2.5 ssh-cmd:... (old form)
+9.2.6 ssh-cmd:... (old form)
 
     ssh-cmd:cat /opt/app/VERSION
     ssh-cmd:andreas@homebase:cat /opt/app/VERSION
@@ -427,8 +492,8 @@ The prefixes are not case sensitive.
 
 9.3 Path forms
 
-The path tells how to find the version in the loaded data. The prefixes are
-not case sensitive. Write the expression directly after the prefix:
+The path tells how to find the version in the loaded data (Jenkins
+locations: see 9.2.3). The prefixes are not case sensitive. Write the expression directly after the prefix:
 for regex:, regex(n): and properties: a space after the colon becomes part of
 the expression.
 
@@ -569,6 +634,9 @@ versions, one file, one command). Within one version check of a server
     this location are shown as ERROR as well.
   - Each OIDC login runs only once and its session is used for all its
     locations; a failed login is not repeated.
+  - Each Jenkins login requests its crumb only once, and the builds of each
+    Jenkins job are requested only once, also for several versions of the
+    same job (e.g. build number and build time); failures are not repeated.
   - SSH connections are reused per user, host and port; a connection that
     could not be opened is not tried again. All connections are closed at
     the end of the check.
@@ -578,13 +646,18 @@ The next check ("Read versions" again) loads everything anew.
 
 9.5 Results and errors
 
-  <version text>   The extracted version
+  <version text>   The extracted version (green)
+  <version text>   Yellow: a warning, e.g. a newer build of the Jenkins job
+                   failed (9.2.3)
   ERROR            The location could not be loaded (connection, login,
                    HTTP status, missing file, invalid location) or the path
                    did not find a value
 
-An ERROR in any version colors the versions table red and marks the server
-as erroneous for "Check server status".
+An ERROR colors the row of the version red and marks the server as
+erroneous for "Check server status". The reason of an error or warning is
+shown as tooltip of the row and, after "Read versions", in the result
+dialog behind the version, e.g. "ERROR (Jenkins job not found: HTTP 404 for
+...)".
 
 Checklist for ERROR:
 
@@ -596,6 +669,8 @@ Checklist for ERROR:
      Is there a space after the colon that should not be there?
   4. JSON path: does it start with "$"? Is there an index after a filter
      (see 9.3.1)?
+  5. Jenkins: is the login of the username of type "Jenkins"? With
+     BasicAuth the path is applied to the raw JSON of Jenkins (9.2.3).
 
 
 9.6 Examples
@@ -614,9 +689,14 @@ Checklist for ERROR:
   Gateway        POST:https://monitor@host/cid/ui/gwt/rest/versions/getVersionData
                                                          json:$.versionData[?(search(@.name, 'Gateway'))].version
   Releases       ssh://deploy@host:2222/opt/app/releases/  regex:app-[\d.]+\.jar
+  Build          https://builder@jenkins:8443/job/IS/job/CSS-264.0.0/job/customer-integration
+                                                         (empty)
+  Build number   https://builder@jenkins:8443/job/IS/job/CSS-264.0.0/job/customer-integration
+                                                         json:$.number
 
 The two "Portal" and "Gateway" entries share one location, so the OIDC login
-and the request run only once.
+and the request run only once. The same applies to "Build" and "Build
+number": the builds of the Jenkins job are requested only once.
 
 
 10. TLS certificates and proxies
@@ -649,6 +729,8 @@ Proxies:
                                              the system proxy settings
   BasicAuth version locations                Proxy of the login, otherwise
                                              the system proxy settings
+  Jenkins "Check logins" and Jenkins         Proxy of the login, otherwise
+  version locations                          the application proxy setting
 
   The application proxy setting is part of the application configuration
   ("Configuration" dialog). System proxy settings are the Java properties

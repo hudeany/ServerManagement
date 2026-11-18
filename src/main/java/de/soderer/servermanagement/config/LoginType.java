@@ -8,10 +8,16 @@ public enum LoginType {
 	BasicAuth,
 
 	/** Login via OpenID Connect */
-	OIDC;
+	OIDC,
 
 	/**
-	 * Case-insensitive lookup; null or blank values result in CLASSIC, so configurations without login type keep their
+	 * Login at a Jenkins server with username and password (or API token): HTTP Basic authentication, checked by
+	 * requesting a CSRF crumb from "&lt;url&gt;/crumbIssuer/api/json"
+	 */
+	Jenkins;
+
+	/**
+	 * Case-insensitive lookup; null or blank values result in BasicAuth, so configurations without login type keep their
 	 * former behaviour.
 	 */
 	public static LoginType getFromString(final String value) {

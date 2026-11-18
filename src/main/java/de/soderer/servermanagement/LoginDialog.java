@@ -39,6 +39,7 @@ public class LoginDialog extends JDialog {
 
 	private final JRadioButton classicRadioButton;
 	private final JRadioButton oidcRadioButton;
+	private final JRadioButton jenkinsRadioButton;
 	private final JTextField urlField;
 	private final JTextField usernameField;
 	private final JPasswordField passwordField;
@@ -58,12 +59,15 @@ public class LoginDialog extends JDialog {
 		// Kind of authentication
 		classicRadioButton = new JRadioButton(LangResources.get("loginType.basicauth"), true);
 		oidcRadioButton = new JRadioButton(LangResources.get("loginType.oidc"));
+		jenkinsRadioButton = new JRadioButton(LangResources.get("loginType.jenkins"));
 		final ButtonGroup loginTypeGroup = new ButtonGroup();
 		loginTypeGroup.add(classicRadioButton);
 		loginTypeGroup.add(oidcRadioButton);
+		loginTypeGroup.add(jenkinsRadioButton);
 		final JPanel loginTypePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
 		loginTypePanel.add(classicRadioButton);
 		loginTypePanel.add(oidcRadioButton);
+		loginTypePanel.add(jenkinsRadioButton);
 
 		urlField = new JTextField(40);
 		usernameField = new JTextField(40);
@@ -83,6 +87,7 @@ public class LoginDialog extends JDialog {
 		// The optional IdP selection is only used for OIDC
 		classicRadioButton.addItemListener(e -> updateFieldStatus());
 		oidcRadioButton.addItemListener(e -> updateFieldStatus());
+		jenkinsRadioButton.addItemListener(e -> updateFieldStatus());
 		updateFieldStatus();
 
 		// Buttons
@@ -173,8 +178,13 @@ public class LoginDialog extends JDialog {
 	 */
 	public LoginDialog withLogin(final Login login) {
 		if (login != null) {
-			oidcRadioButton.setSelected(login.getLoginType() == LoginType.OIDC);
-			classicRadioButton.setSelected(login.getLoginType() != LoginType.OIDC);
+			if (login.getLoginType() == LoginType.OIDC) {
+				oidcRadioButton.setSelected(true);
+			} else if (login.getLoginType() == LoginType.Jenkins) {
+				jenkinsRadioButton.setSelected(true);
+			} else {
+				classicRadioButton.setSelected(true);
+			}
 			urlField.setText(login.getUrl() == null ? "" : login.getUrl());
 			usernameField.setText(login.getUsername() == null ? "" : login.getUsername());
 			// The stored password is encrypted, the field shows the decrypted password
@@ -210,7 +220,15 @@ public class LoginDialog extends JDialog {
 		final boolean isOidc = oidcRadioButton.isSelected();
 		final String idpSelection = idpSelectionField.getText().trim();
 		final String proxyUrl = proxyUrlField.getText().trim();
-		login.setLoginType(isOidc ? LoginType.OIDC : LoginType.BasicAuth)
+		final LoginType loginType;
+		if (isOidc) {
+			loginType = LoginType.OIDC;
+		} else if (jenkinsRadioButton.isSelected()) {
+			loginType = LoginType.Jenkins;
+		} else {
+			loginType = LoginType.BasicAuth;
+		}
+		login.setLoginType(loginType)
 		.setUrl(urlField.getText().trim())
 		.setUsername(usernameField.getText().trim())
 		// Encrypted with the master key; an empty password removes it

@@ -22,7 +22,10 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -62,7 +65,9 @@ import org.w3c.dom.Document;
 import org.xml.sax.InputSource;
 
 import de.soderer.applicationbase.ApplicationConfigurationProperties;
+import de.soderer.json.JsonArray;
 import de.soderer.json.JsonNode;
+import de.soderer.json.JsonObject;
 import de.soderer.json.JsonReader;
 import de.soderer.json.JsonValueBoolean;
 import de.soderer.json.JsonValueInteger;
@@ -437,6 +442,13 @@ public class ServerManagementItem extends JPanel {
 	}
 
 	public void setVersion(final String name, final String versionText) {
+		setVersion(name, versionText, false);
+	}
+
+	/**
+	 * Shows a version; with warning the table turns yellow (e.g. a Jenkins version, whose newer builds failed).
+	 */
+	public void setVersion(final String name, final String versionText, final boolean warning) {
 		versionsTable.clearSelection();
 		for (int i = 0; i < versionsTable.getModel().getRowCount(); i++) {
 			if (versionsTable.getModel().getValueAt(i, 0).equals(name)) {
@@ -445,6 +457,9 @@ public class ServerManagementItem extends JPanel {
 				if ("ERROR".equals(versionText)) {
 					raiseTableColor(versionsTable, CustomizedColor.RED);
 					raiseStatus("ERROR");
+				} else if (warning) {
+					raiseTableColor(versionsTable, CustomizedColor.YELLOW);
+					raiseStatus("WARNING");
 				} else {
 					raiseTableColor(versionsTable, CustomizedColor.GREEN);
 				}
@@ -1289,7 +1304,13 @@ public class ServerManagementItem extends JPanel {
 	}
 
 	private static String getLoginTypeDisplayName(final LoginType loginType) {
-		return loginType == LoginType.OIDC ? LangResources.get("loginType.oidc") : LangResources.get("loginType.basicauth");
+		if (loginType == LoginType.OIDC) {
+			return LangResources.get("loginType.oidc");
+		} else if (loginType == LoginType.Jenkins) {
+			return LangResources.get("loginType.jenkins");
+		} else {
+			return LangResources.get("loginType.basicauth");
+		}
 	}
 
 	private static void loadLogsData(final DefaultTableModel model, final List<Log> logs) {
@@ -1844,6 +1865,9 @@ public class ServerManagementItem extends JPanel {
 		// Open SSH connections per user, host and port; a failed connection is not opened again
 		final Map<String, SftpConnection> sftpConnections = new HashMap<>();
 		final Map<String, Exception> failedSftpConnections = new HashMap<>();
+		// Jenkins: one crumb per login and one build request per job, also failed ones are cached
+		final Map<Login, JenkinsCrumbAttempt> jenkinsCrumbCache = new HashMap<>();
+		final Map<String, JenkinsBuildAttempt> jenkinsBuildCache = new HashMap<>();
 
 		try {
 			for (final Version version : server.getVersions()) {
@@ -1851,6 +1875,13 @@ public class ServerManagementItem extends JPanel {
 				// the check of all further versions of this server
 				String data = null;
 				try {
+					// Locations referencing a Jenkins login show the latest successful build of the Jenkins job
+					final LoginLocation jenkinsJobLocation = getJenkinsJobLocation(version);
+					if (jenkinsJobLocation != null) {
+						refreshJenkinsVersion(version, jenkinsJobLocation, jenkinsCrumbCache, jenkinsBuildCache);
+						continue;
+					}
+
 					final String locationKey = getLocationCacheKey(version);
 					if (locationDataCache.containsKey(locationKey)) {
 						data = locationDataCache.get(locationKey);
@@ -1938,6 +1969,224 @@ public class ServerManagementItem extends JPanel {
 					// Closing errors are irrelevant for the result
 				}
 			}
+		}
+	}
+
+	/**
+	 * Latest successful build of a Jenkins job.
+	 *
+	 * @param number
+	 *            build number
+	 * @param timestamp
+	 *            start time of the build in epoch milliseconds
+	 * @param buildTime
+	 *            start time of the build in the local time zone
+	 * @param isMostCurrent
+	 *            false if a newer build failed (aborted and still running builds are ignored)
+	 */
+	private record JenkinsBuild(int number, long timestamp, LocalDateTime buildTime, boolean isMostCurrent) {
+		private static final DateTimeFormatter DISPLAY_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
+		/**
+		 * Text shown as version for an empty version path, e.g. "#123 (2026-11-18 10:40)".
+		 */
+		String toDisplayText() {
+			return "#" + number + " (" + buildTime.format(DISPLAY_FORMAT) + ")";
+		}
+
+		/**
+		 * JSON data of the build for version paths "json:...", e.g. "json:$.number".
+		 */
+		String toJson() {
+			return "{\"number\": " + number
+					+ ", \"timestamp\": " + timestamp
+					+ ", \"buildTime\": \"" + buildTime.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) + "\""
+					+ ", \"mostCurrent\": " + isMostCurrent + "}";
+		}
+	}
+
+	/**
+	 * Result of a Jenkins crumb request within one version refresh: the crumb (null if the server has no crumb issuer) or
+	 * the error
+	 */
+	private record JenkinsCrumbAttempt(String crumb, Exception error) {
+	}
+
+	/**
+	 * The Jenkins server has no crumb issuer (HTTP 404), because its CSRF protection is disabled.
+	 */
+	private static class JenkinsCrumbIssuerNotAvailableException extends Exception {
+		private static final long serialVersionUID = 6170932861594027851L;
+
+		JenkinsCrumbIssuerNotAvailableException(final String message) {
+			super(message);
+		}
+	}
+
+	/** Result of a Jenkins build request within one version refresh: the build (null if none) or the error */
+	private record JenkinsBuildAttempt(JenkinsBuild build, Exception error) {
+	}
+
+	/**
+	 * Returns the Jenkins job of a version location "[GET:]https://&lt;jenkins login username&gt;@&lt;host&gt;/job/&lt;component&gt;/job/&lt;branch&gt;/job/&lt;build
+	 * job&gt;" (the job URL as shown in the browser, with the username of a Jenkins login of this server).
+	 *
+	 * @return the resolved location, or null if the location does not reference a Jenkins login (then the version is read
+	 *         as before)
+	 */
+	private LoginLocation getJenkinsJobLocation(final Version version) {
+		if (version.getLocation() == null) {
+			return null;
+		}
+		final Matcher loginLocationMatcher = LOGIN_LOCATION_PATTERN.matcher(version.getLocation().trim());
+		if (!loginLocationMatcher.matches()) {
+			return null;
+		}
+		try {
+			final LoginLocation loginLocation = resolveLoginLocation(loginLocationMatcher.group(2));
+			if (loginLocation.login().getLoginType() == LoginType.Jenkins) {
+				if ("POST".equalsIgnoreCase(loginLocationMatcher.group(1))) {
+					// Should not silently be read with GET
+					throw new Exception("POST is not supported for Jenkins version locations");
+				}
+				return loginLocation;
+			} else {
+				return null;
+			}
+		} catch (@SuppressWarnings("unused") final Exception e) {
+			// Invalid location or unknown login: shown as ERROR by the normal version check
+			return null;
+		}
+	}
+
+	/**
+	 * Shows the latest successful build of a Jenkins job as version. With an empty version path the build number and
+	 * build time are shown (e.g. "#123 (2026-11-18 10:40)"), a path "json:..." is applied to the build data
+	 * {"number", "timestamp", "buildTime", "mostCurrent"} (e.g. "json:$.number"). If a newer build failed, the version is
+	 * shown as warning.
+	 */
+	private void refreshJenkinsVersion(final Version version, final LoginLocation jobLocation, final Map<Login, JenkinsCrumbAttempt> crumbCache,
+			final Map<String, JenkinsBuildAttempt> buildCache) {
+		try {
+			final Login login = jobLocation.login();
+			final String buildCacheKey = login.getUsername() + "@" + jobLocation.url();
+			JenkinsBuildAttempt buildAttempt = buildCache.get(buildCacheKey);
+			if (buildAttempt == null) {
+				try {
+					JenkinsCrumbAttempt crumbAttempt = crumbCache.get(login);
+					if (crumbAttempt == null) {
+						try {
+							final String crumb = getJenkinsAuthCrumb(login);
+							crumbAttempt = crumb != null ? new JenkinsCrumbAttempt(crumb, null)
+									: new JenkinsCrumbAttempt(null, new Exception("Jenkins login of user '" + login.getUsername() + "' was rejected"));
+						} catch (@SuppressWarnings("unused") final JenkinsCrumbIssuerNotAvailableException e) {
+							// Without crumb issuer the builds are requested without crumb (GET requests do not need one)
+							crumbAttempt = new JenkinsCrumbAttempt(null, null);
+						} catch (final Exception e) {
+							crumbAttempt = new JenkinsCrumbAttempt(null, e);
+						}
+						crumbCache.put(login, crumbAttempt);
+					}
+					if (crumbAttempt.error() != null) {
+						throw crumbAttempt.error();
+					}
+					buildAttempt = new JenkinsBuildAttempt(getJenkinsLatestSuccessfulBuild(login, jobLocation.targetUri(), crumbAttempt.crumb()), null);
+				} catch (final Exception e) {
+					buildAttempt = new JenkinsBuildAttempt(null, e);
+				}
+				buildCache.put(buildCacheKey, buildAttempt);
+			}
+			if (buildAttempt.error() != null) {
+				throw buildAttempt.error();
+			}
+
+			final JenkinsBuild build = buildAttempt.build();
+			if (build == null) {
+				// Job not found or no successful build
+				setVersion(version.getName(), "ERROR");
+				return;
+			}
+
+			final String versionText;
+			if (StringUtilities.isBlank(version.getPath())) {
+				versionText = build.toDisplayText();
+			} else if (isJsonPath(version)) {
+				versionText = readFirstValueByJsonPath(build.toJson(), version.getPath().trim().substring(5).trim());
+			} else {
+				throw new Exception("Unsupported version path for Jenkins location, expected empty path or 'json:...'");
+			}
+			setVersion(version.getName(), versionText, !build.isMostCurrent());
+		} catch (@SuppressWarnings("unused") final Exception e) {
+			setVersion(version.getName(), "ERROR");
+		}
+	}
+
+	/**
+	 * Reads the builds of a Jenkins job ("&lt;job url&gt;/api/json?tree=builds[number,result,timestamp]", newest build
+	 * first) and returns the latest successful build. Basic authentication with username and password (or API token) of
+	 * the login, the crumb is sent as header "Jenkins-Crumb"; TLS trust and proxy as for the Jenkins login check.
+	 *
+	 * @param jobUri
+	 *            URL of the job without username, e.g. "https://jenkins/job/component/job/branch/job/build"
+	 * @return the latest successful build, or null if the job does not exist (HTTP 404) or has no successful build
+	 * @throws Exception
+	 *             if the request fails or the response is invalid
+	 */
+	private JenkinsBuild getJenkinsLatestSuccessfulBuild(final Login login, final URI jobUri, final String crumb) throws Exception {
+		String jobUrl = jobUri.getScheme() + "://" + jobUri.getRawAuthority() + (jobUri.getRawPath() == null ? "" : jobUri.getRawPath());
+		while (jobUrl.endsWith("/")) {
+			jobUrl = jobUrl.substring(0, jobUrl.length() - 1);
+		}
+
+		final HttpRequest request = new HttpRequest(HttpMethod.GET, jobUrl + "/api/json?tree=builds[number,result,timestamp]");
+		final char[] password = login.getPasswordArray();
+		final String credentials = (login.getUsername() == null ? "" : login.getUsername()) + ":" + (password == null ? "" : new String(password));
+		request.addHeader("Authorization", "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8)));
+		if (crumb != null) {
+			request.addHeader("Jenkins-Crumb", crumb);
+		}
+
+		final HttpResponse response = HttpUtilities.executeHttpRequest(request, getProxyForLogin(login, request.getUrl()), trustManager, deactivateHostnameVerification);
+		if (response.getHttpCode() == 200) {
+			final JsonNode contentJson;
+			try {
+				contentJson = JsonReader.readJsonItemString(response.getContent());
+			} catch (final Exception e) {
+				throw new Exception("Invalid JSON data from Jenkins job " + jobUrl + ": " + e.getMessage() + "\nResponse: " + shorten(response.getContent(), 500), e);
+			}
+			if (!(contentJson instanceof JsonObject) || !(((JsonObject) contentJson).get("builds") instanceof JsonArray)) {
+				throw new Exception("Invalid JSON data from Jenkins job " + jobUrl + ": object with 'builds' array expected");
+			}
+
+			final JsonArray builds = (JsonArray) ((JsonObject) contentJson).get("builds");
+			boolean isMostCurrent = true;
+			for (final Object buildObject : builds) {
+				if (!(buildObject instanceof JsonObject)) {
+					continue;
+				}
+				final JsonObject build = (JsonObject) buildObject;
+				final Object result = build.getSimpleValue("result");
+				if ("SUCCESS".equals(result)) {
+					// Numbers may be read as Integer or Long, depending on their size
+					final Object numberValue = build.getSimpleValue("number");
+					final Object timestampValue = build.getSimpleValue("timestamp");
+					if (!(numberValue instanceof Number) || !(timestampValue instanceof Number)) {
+						throw new Exception("Invalid build data of Jenkins job " + jobUrl + ": 'number' and 'timestamp' expected");
+					}
+					final long timestamp = ((Number) timestampValue).longValue();
+					final LocalDateTime buildTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), ZoneId.systemDefault());
+					return new JenkinsBuild(((Number) numberValue).intValue(), timestamp, buildTime, isMostCurrent);
+				} else if (result != null && !"ABORTED".equals(result)) {
+					// A newer failed or unstable build; still running builds (result null) do not count
+					isMostCurrent = false;
+				}
+			}
+
+			return null;
+		} else if (response.getHttpCode() == 404) {
+			return null;
+		} else {
+			throw new Exception("Jenkins build request failed: HTTP " + response.getHttpCode() + " for " + request.getUrl() + "\nResponse: " + shorten(response.getContent(), 500));
 		}
 	}
 
@@ -2135,10 +2384,11 @@ public class ServerManagementItem extends JPanel {
 	}
 
 	/**
-	 * Checks a login. CLASSIC logins are checked via HTTP Basic authentication, OIDC logins are not checked yet.
+	 * Checks a login. BasicAuth logins are checked via HTTP Basic authentication, OIDC logins by a complete OIDC login,
+	 * Jenkins logins by requesting a CSRF crumb.
 	 *
-	 * @return n/a for OIDC, OK for HTTP 2xx, FAILED for HTTP 401/403 (credentials rejected), ERROR for anything else (e.g. server
-	 *         not reachable, unexpected HTTP code)
+	 * @return OK for a successful login (HTTP 2xx, OIDC session, Jenkins crumb), FAILED for rejected credentials (HTTP
+	 *         401/403, failed OIDC login), ERROR for anything else (e.g. server not reachable, unexpected HTTP code)
 	 */
 	private String checkLogin(final Login login) {
 		if (login.getLoginType() == LoginType.BasicAuth) {
@@ -2165,8 +2415,64 @@ public class ServerManagementItem extends JPanel {
 			} catch (@SuppressWarnings("unused") final Exception e) {
 				return LOGIN_RESULT_FAILED;
 			}
+		} else if (login.getLoginType() == LoginType.Jenkins) {
+			try {
+				return getJenkinsAuthCrumb(login) != null ? LOGIN_RESULT_OK : LOGIN_RESULT_FAILED;
+			} catch (@SuppressWarnings("unused") final Exception e) {
+				return LOGIN_RESULT_ERROR;
+			}
 		} else {
 			return LOGIN_RESULT_ERROR;
+		}
+	}
+
+	/**
+	 * Logs in at a Jenkins server and requests a CSRF crumb from "&lt;login url&gt;/crumbIssuer/api/json" with HTTP Basic
+	 * authentication. Username and password (or API token) are taken from the login. TLS trust and proxy are the same as
+	 * for all other login requests (configured keystore or default trust store of the JVM, proxy of the login or of the
+	 * application configuration).
+	 *
+	 * @return the crumb, or null if the credentials were rejected (HTTP 401/403)
+	 * @throws JenkinsCrumbIssuerNotAvailableException
+	 *             if the server has no crumb issuer (HTTP 404, CSRF protection disabled)
+	 * @throws Exception
+	 *             if the server is not reachable, returns an unexpected HTTP code or no valid crumb
+	 */
+	private String getJenkinsAuthCrumb(final Login login) throws Exception {
+		String jenkinsBaseUrl = parseHttpUri(login.getUrl()).toString();
+		while (jenkinsBaseUrl.endsWith("/")) {
+			jenkinsBaseUrl = jenkinsBaseUrl.substring(0, jenkinsBaseUrl.length() - 1);
+		}
+
+		final HttpRequest request = new HttpRequest(HttpMethod.GET, jenkinsBaseUrl + "/crumbIssuer/api/json");
+		final char[] password = login.getPasswordArray();
+		final String credentials = (login.getUsername() == null ? "" : login.getUsername()) + ":" + (password == null ? "" : new String(password));
+		request.addHeader("Authorization", "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8)));
+
+		final HttpResponse response = HttpUtilities.executeHttpRequest(request, getProxyForLogin(login, request.getUrl()), trustManager, deactivateHostnameVerification);
+		if (response.getHttpCode() == 200) {
+			final JsonNode contentJson;
+			try {
+				contentJson = JsonReader.readJsonItemString(response.getContent());
+			} catch (final Exception e) {
+				throw new Exception("Invalid JSON data from Jenkins crumb issuer: " + e.getMessage(), e);
+			}
+			if (!(contentJson instanceof JsonObject)) {
+				throw new Exception("Invalid JSON data from Jenkins crumb issuer: JSON object expected");
+			}
+			final Object crumb = ((JsonObject) contentJson).getSimpleValue("crumb");
+			if (!(crumb instanceof String) || ((String) crumb).isBlank()) {
+				throw new Exception("No crumb in response of Jenkins crumb issuer");
+			}
+			return (String) crumb;
+		} else if (response.getHttpCode() == 401 || response.getHttpCode() == 403) {
+			return null;
+		} else if (response.getHttpCode() == 404) {
+			// CSRF protection of the Jenkins server is disabled, so there is no crumb issuer
+			throw new JenkinsCrumbIssuerNotAvailableException("Jenkins crumb issuer not available (CSRF protection disabled?): HTTP 404 for " + request.getUrl());
+		} else {
+			// The response content may help to find the cause, but it must not flood the error message
+			throw new Exception("Jenkins crumb request failed: HTTP " + response.getHttpCode() + " for " + request.getUrl() + "\nResponse: " + shorten(response.getContent(), 500));
 		}
 	}
 
@@ -2291,21 +2597,10 @@ public class ServerManagementItem extends JPanel {
 	 *             if the login fails or the request does not return HTTP 2xx
 	 */
 	private String readWithLogin(final String httpMethod, final String urlWithUsername, final boolean jsonRequest, final Map<Login, LoginAttempt> loginSessionCache) throws Exception {
-		final URI uriWithUsername = parseHttpUri(urlWithUsername);
-		final String rawUserInfo = uriWithUsername.getRawUserInfo();
-		if (rawUserInfo == null || rawUserInfo.isEmpty()) {
-			throw new Exception("Missing username in version location URL (e.g. https://monitor@host/path)");
-		}
-		if (rawUserInfo.contains(":")) {
-			// A password must never be stored as plain text in the version location
-			throw new Exception("Password in version location URL is not supported, the password is taken from the login");
-		}
-		// Decodes URL encoded characters, e.g. "max%40firma.de" to "max@firma.de"
-		final String username = uriWithUsername.getUserInfo();
-		// The username is only for the login lookup and is not sent to the server
-		final String url = urlWithUsername.trim().replaceFirst("://" + Pattern.quote(rawUserInfo) + "@", "://");
-		final URI targetUri = parseHttpUri(url);
-		final Login login = findLoginByUsername(username, targetUri);
+		final LoginLocation loginLocation = resolveLoginLocation(urlWithUsername);
+		final String url = loginLocation.url();
+		final URI targetUri = loginLocation.targetUri();
+		final Login login = loginLocation.login();
 		final HttpMethod method = "POST".equalsIgnoreCase(httpMethod) ? HttpMethod.POST : HttpMethod.GET;
 
 		if (login.getLoginType() == LoginType.OIDC) {
@@ -2338,7 +2633,8 @@ public class ServerManagementItem extends JPanel {
 			}
 			return sessionResponse.body();
 		} else {
-			// BasicAuth: same trust manager and proxy rules as the BasicAuth login check
+			// BasicAuth: same trust manager and proxy rules as the BasicAuth login check (Jenkins logins are handled by
+			// refreshJenkinsVersion before)
 			final HttpRequest request = new HttpRequest(method, url);
 			if (jsonRequest) {
 				request.addHeader("Content-Type", "application/json");
@@ -2352,6 +2648,37 @@ public class ServerManagementItem extends JPanel {
 			}
 			return response.getContent();
 		}
+	}
+
+	/**
+	 * Target of a version location with login: the URL without the username, as URI, and the login of the username.
+	 */
+	private record LoginLocation(String url, URI targetUri, Login login) {
+	}
+
+	/**
+	 * Resolves a version location URL with username, e.g. "https://monitor@host/path", to the URL without username and
+	 * the login of this server with that username.
+	 *
+	 * @throws Exception
+	 *             if the URL is invalid, has no username, contains a password or no login of the username exists
+	 */
+	private LoginLocation resolveLoginLocation(final String urlWithUsername) throws Exception {
+		final URI uriWithUsername = parseHttpUri(urlWithUsername);
+		final String rawUserInfo = uriWithUsername.getRawUserInfo();
+		if (rawUserInfo == null || rawUserInfo.isEmpty()) {
+			throw new Exception("Missing username in version location URL (e.g. https://monitor@host/path)");
+		}
+		if (rawUserInfo.contains(":")) {
+			// A password must never be stored as plain text in the version location
+			throw new Exception("Password in version location URL is not supported, the password is taken from the login");
+		}
+		// Decodes URL encoded characters, e.g. "max%40firma.de" to "max@firma.de"
+		final String username = uriWithUsername.getUserInfo();
+		// The username is only for the login lookup and is not sent to the server
+		final String url = urlWithUsername.trim().replaceFirst("://" + Pattern.quote(rawUserInfo) + "@", "://");
+		final URI targetUri = parseHttpUri(url);
+		return new LoginLocation(url, targetUri, findLoginByUsername(username, targetUri));
 	}
 
 	/**

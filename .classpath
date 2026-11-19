@@ -4,13 +4,13 @@
 	<classpathentry kind="src" path="src/main/resources"/>
 	<classpathentry kind="lib" path="lib/jsch-2.28.8.jar"/>
 	<classpathentry kind="lib" path="lib/csv-26.1.16.jar"/>
-	<classpathentry kind="lib" path="lib/soderer-swing-26.0.46.jar"/>
+	<classpathentry kind="lib" path="lib/soderer-swing-26.0.49.jar"/>
 	<classpathentry kind="lib" path="lib/soderer-utilities-26.3.7.jar"/>
 	<classpathentry kind="lib" path="lib/bcpkix-jdk18on-1.86.jar"/>
 	<classpathentry kind="lib" path="lib/bcprov-jdk18on-1.86.jar"/>
-	<classpathentry kind="lib" path="lib/soderer-applicationbase-26.0.64.jar"/>
-	<classpathentry kind="lib" path="lib/soderer-console-26.0.17.jar"/>
-	<classpathentry kind="lib" path="lib/soderer-remote-26.0.24.jar"/>
+	<classpathentry kind="lib" path="lib/soderer-applicationbase-26.0.65.jar"/>
+	<classpathentry kind="lib" path="lib/soderer-console-26.0.18.jar"/>
+	<classpathentry kind="lib" path="lib/soderer-remote-26.0.25.jar"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER">
 		<attributes>
 			<attribute name="module" value="true"/>

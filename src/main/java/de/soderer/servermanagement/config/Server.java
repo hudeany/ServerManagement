@@ -1,7 +1,9 @@
 package de.soderer.servermanagement.config;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 public class Server {
 	private String name;
@@ -12,6 +14,7 @@ public class Server {
 	private List<Version> versions = new ArrayList<>();
 	private List<Login> logins = new ArrayList<>();
 	private List<Log> logs = new ArrayList<>();
+	private Set<String> hiddenSections = new LinkedHashSet<>();
 
 	public String getName() {
 		return name;
@@ -82,6 +85,18 @@ public class Server {
 
 	public Server setLogs(final List<Log> logs) {
 		this.logs = logs;
+		return this;
+	}
+
+	/**
+	 * Ids of the sections hidden in the card of this server (e.g. "logs", "versions"); empty if all sections are shown.
+	 */
+	public Set<String> getHiddenSections() {
+		return hiddenSections;
+	}
+
+	public Server setHiddenSections(final Set<String> hiddenSections) {
+		this.hiddenSections = hiddenSections == null ? new LinkedHashSet<>() : new LinkedHashSet<>(hiddenSections);
 		return this;
 	}
 }

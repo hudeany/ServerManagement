@@ -7,6 +7,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -71,6 +72,12 @@ public class ServerManagementItem extends JPanel {
 	/** Language resource key of the display name of each section, in display order */
 	private final Map<ItemSection, String> sectionNameKeys = new LinkedHashMap<>();
 
+	/**
+	 * Stable id of each section, used to persist the hidden sections in the server configuration. These ids must never
+	 * change, otherwise the stored selection of existing configurations is lost.
+	 */
+	private final Map<ItemSection, String> sectionIds = new LinkedHashMap<>();
+
 	/** Sections hidden by the user; hidden sections are still checked, they are only not shown */
 	private final Set<ItemSection> hiddenSections = new HashSet<>();
 
@@ -103,6 +110,14 @@ public class ServerManagementItem extends JPanel {
 		sectionNameKeys.put(urlsSection, "section.urls");
 		sectionNameKeys.put(versionsSection, "section.versions");
 		sectionNameKeys.put(logsSection, "section.logs");
+
+		sectionIds.put(usersSection, "users");
+		sectionIds.put(loginsSection, "logins");
+		sectionIds.put(urlsSection, "urls");
+		sectionIds.put(versionsSection, "versions");
+		sectionIds.put(logsSection, "logs");
+
+		loadHiddenSections();
 
 		rebuild();
 	}
@@ -300,8 +315,39 @@ public class ServerManagementItem extends JPanel {
 		if (!newHiddenSections.equals(hiddenSections)) {
 			hiddenSections.clear();
 			hiddenSections.addAll(newHiddenSections);
+			storeHiddenSections();
 			rebuild();
+			signalUnsavedChanges();
 		}
+	}
+
+	/**
+	 * Reads the hidden sections from the server configuration. Unknown ids (e.g. of sections removed in a later version)
+	 * are ignored.
+	 */
+	private void loadHiddenSections() {
+		hiddenSections.clear();
+		final Set<String> storedIds = server.getHiddenSections();
+		if (storedIds != null) {
+			for (final Map.Entry<ItemSection, String> entry : sectionIds.entrySet()) {
+				if (storedIds.contains(entry.getValue())) {
+					hiddenSections.add(entry.getKey());
+				}
+			}
+		}
+	}
+
+	/**
+	 * Writes the hidden sections into the server configuration, in display order so the stored value is stable.
+	 */
+	private void storeHiddenSections() {
+		final Set<String> ids = new LinkedHashSet<>();
+		for (final Map.Entry<ItemSection, String> entry : sectionIds.entrySet()) {
+			if (hiddenSections.contains(entry.getKey())) {
+				ids.add(entry.getValue());
+			}
+		}
+		server.setHiddenSections(ids);
 	}
 
 	/**

@@ -18,11 +18,12 @@ import de.soderer.utilities.StringUtilities;
 import de.soderer.utilities.Utilities;
 
 /**
- * Section of the version entries (name, location, path) and their read versions.
+ * Section of the version entries and their read versions. The table only shows the name and the read version; location
+ * and path are part of the configuration and are edited in the version dialog.
  */
 class ItemVersionsSection extends ItemSection {
 	/** Column of the read version */
-	private static final int VERSION_COLUMN = 3;
+	private static final int VERSION_COLUMN = 1;
 
 	private Button removeVersionButton;
 
@@ -81,17 +82,15 @@ class ItemVersionsSection extends ItemSection {
 	protected DefaultTableModel createTableModel() {
 		final List<String[]> rows = new ArrayList<>();
 		for (final Version version : getServer().getVersions()) {
-			rows.add(new String[] { version.getName(), version.getLocation(), version.getPath(), "" });
+			rows.add(new String[] { version.getName(), "" });
 		}
-		return createModel(List.of(LangResources.get("versionName"), LangResources.get("location"), LangResources.get("path"), LangResources.get("version")), rows);
+		return createModel(List.of(LangResources.get("versionName"), LangResources.get("version")), rows);
 	}
 
 	@Override
 	protected void configureColumns(final JTable newTable) {
-		ItemTables.configureColumn(newTable, 0, 50, null);
-		ItemTables.configureColumn(newTable, 1, 200, SwingConstants.LEFT);
-		ItemTables.configureColumn(newTable, 2, 200, SwingConstants.LEFT);
-		ItemTables.configureColumn(newTable, VERSION_COLUMN, 50, SwingConstants.LEFT);
+		ItemTables.configureColumn(newTable, 0, 200, null);
+		ItemTables.configureColumn(newTable, VERSION_COLUMN, 200, SwingConstants.LEFT);
 	}
 
 	@Override

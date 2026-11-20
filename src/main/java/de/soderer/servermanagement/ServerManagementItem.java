@@ -256,9 +256,14 @@ public class ServerManagementItem extends JPanel {
 		contentPanel.setOpaque(false);
 		contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.PAGE_AXIS));
 		for (final ItemSection section : sections) {
-			if (!hiddenSections.contains(section)) {
-				section.addTo(contentPanel);
-			}
+			// Hidden sections stay in the component tree and are only made invisible, so their tables and buttons
+			// still exist for code that looks them up (e.g. when reading the stored GUI state at startup)
+			final JPanel sectionPanel = new JPanel();
+			sectionPanel.setOpaque(false);
+			sectionPanel.setLayout(new BoxLayout(sectionPanel, BoxLayout.PAGE_AXIS));
+			section.addTo(sectionPanel);
+			sectionPanel.setVisible(!hiddenSections.contains(section));
+			contentPanel.add(sectionPanel);
 		}
 
 		final Card card = new Card(server.getName(), IconKind.SERVER, 10);

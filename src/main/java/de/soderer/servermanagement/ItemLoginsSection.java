@@ -3,12 +3,16 @@ package de.soderer.servermanagement;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
+import java.awt.Desktop;
 import java.awt.Point;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.IntFunction;
 
 import javax.swing.Icon;
@@ -232,35 +236,95 @@ class ItemLoginsSection extends ItemSection {
 			return -1;
 		}
 		final int loginIndex = sourceTable.convertRowIndexToModel(viewRow);
-		return LoginBrowserLauncher.isLaunchable(getLogin(loginIndex)) ? loginIndex : -1;
+		return isLaunchable(getLogin(loginIndex)) ? loginIndex : -1;
 	}
 
 	/**
-	 * Opens the URL of the login in the default browser and copies the password to the clipboard for a limited time.
-	 * The login fields of a page in an external browser cannot be filled in from outside.
+	 * Opens the URL of the login in the default browser. No credentials are passed.
 	 */
 	private void openLoginInBrowser(final Login login) {
-		final URI uri = LoginBrowserLauncher.toBrowserUri(login.getUrl());
+		final URI uri = toBrowserUri(login.getUrl());
 		if (uri == null) {
 			return;
 		}
-		final boolean passwordCopied = LoginBrowserLauncher.copyPasswordToClipboard(login);
 
 		// Desktop.browse may block on some platforms, so it runs outside of the event dispatch thread
 		final Thread browserThread = new Thread(() -> {
 			try {
-				LoginBrowserLauncher.browse(uri);
+				browse(uri);
 			} catch (final Exception e) {
-				SwingUtilities.invokeLater(() -> {
-					if (passwordCopied) {
-						LoginBrowserLauncher.clearPasswordFromClipboard();
-					}
-					showError(new Exception(LangResources.get("error.cannotOpenBrowser", uri.toString(), e.getMessage() != null ? e.getMessage() : e.toString()), e));
-				});
+				SwingUtilities.invokeLater(() -> showError(new Exception(LangResources.get("error.cannotOpenBrowser", uri.toString(), e.getMessage() != null ? e.getMessage() : e.toString()), e)));
 			}
 		}, "OpenLoginInBrowser");
 		browserThread.setDaemon(true);
 		browserThread.start();
+	}
+
+	/**
+	 * Checks whether the login has a URL that may be opened in a browser.
+	 */
+	private static boolean isLaunchable(final Login login) {
+		return login != null && toBrowserUri(login.getUrl()) != null;
+	}
+
+	/**
+	 * Converts the configured login URL into a URI for the browser. Only absolute "http" and "https" URLs with a host
+	 * are accepted, so that a manipulated configuration cannot be used to open local files or other protocol
+	 * handlers. Credentials embedded in the URL are removed.
+	 *
+	 * @return the URI or null, if the URL is missing or not acceptable
+	 */
+	private static URI toBrowserUri(final String url) {
+		if (url == null || url.isBlank()) {
+			return null;
+		}
+		try {
+			final URI uri = new URI(url.trim());
+			final String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
+			if (!"http".equals(scheme) && !"https".equals(scheme)) {
+				return null;
+			} else if (uri.getHost() == null || uri.getHost().isEmpty()) {
+				return null;
+			} else if (uri.getRawUserInfo() != null) {
+				// Credentials embedded in the URL are not passed to the browser
+				return new URI(uri.getScheme(), null, uri.getHost(), uri.getPort(), uri.getPath(), uri.getQuery(), uri.getFragment());
+			} else {
+				return uri;
+			}
+		} catch (@SuppressWarnings("unused") final URISyntaxException e) {
+			return null;
+		}
+	}
+
+	/**
+	 * Opens the URI in the system default browser. Falls back to the platform command ("rundll32", "open" or
+	 * "xdg-open"), if {@link Desktop#browse(URI)} is not supported or fails (e.g. on some Linux desktops). This call
+	 * may block for a while on some platforms, so it must not be executed on the event dispatch thread.
+	 */
+	private static void browse(final URI uri) throws IOException {
+		if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+			try {
+				Desktop.getDesktop().browse(uri);
+				return;
+			} catch (@SuppressWarnings("unused") final IOException | UnsupportedOperationException e) {
+				// Fall back to the platform command
+			}
+		}
+
+		final String osName = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+		final String uriString = uri.toASCIIString();
+		final List<String> command;
+		if (osName.contains("win")) {
+			command = List.of("rundll32", "url.dll,FileProtocolHandler", uriString);
+		} else if (osName.contains("mac")) {
+			command = List.of("open", uriString);
+		} else {
+			command = List.of("xdg-open", uriString);
+		}
+		new ProcessBuilder(command)
+		.redirectErrorStream(true)
+		.redirectOutput(ProcessBuilder.Redirect.DISCARD)
+		.start();
 	}
 
 	private void editLogin(final int loginIndex) throws Exception {
@@ -340,11 +404,9 @@ class ItemLoginsSection extends ItemSection {
 			setHorizontalAlignment(SwingConstants.CENTER);
 
 			final Login login = loginByModelRow.apply(table.convertRowIndexToModel(row));
-			if (LoginBrowserLauncher.isLaunchable(login)) {
+			if (isLaunchable(login)) {
 				setIcon(icon);
-				setToolTipText(login.hasPassword()
-						? LangResources.get("openLoginInBrowserWithPassword", String.valueOf(LoginBrowserLauncher.CLIPBOARD_CLEAR_DELAY_MILLIS / 1000))
-								: LangResources.get("openLoginInBrowser"));
+				setToolTipText(LangResources.get("openLoginInBrowser"));
 			} else {
 				setIcon(null);
 				setToolTipText(null);

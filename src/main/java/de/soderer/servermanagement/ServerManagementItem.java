@@ -1,12 +1,23 @@
 package de.soderer.servermanagement;
 
 import java.awt.BorderLayout;
+import java.awt.Cursor;
 import java.awt.EventQueue;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import javax.swing.BoxLayout;
+import javax.swing.JCheckBox;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
 
 import de.soderer.applicationbase.ApplicationConfigurationProperties;
 import de.soderer.servermanagement.check.LoginCheckResult;
@@ -57,6 +68,12 @@ public class ServerManagementItem extends JPanel {
 	private final ItemLogsSection logsSection;
 	private final List<ItemSection> sections;
 
+	/** Language resource key of the display name of each section, in display order */
+	private final Map<ItemSection, String> sectionNameKeys = new LinkedHashMap<>();
+
+	/** Sections hidden by the user; hidden sections are still checked, they are only not shown */
+	private final Set<ItemSection> hiddenSections = new HashSet<>();
+
 	private RefreshServerItemStatusWorker worker;
 
 	/** Worst status of all checks since the last reset; written by the worker thread and the event dispatch thread */
@@ -80,6 +97,12 @@ public class ServerManagementItem extends JPanel {
 		versionsSection = new ItemVersionsSection(this);
 		logsSection = new ItemLogsSection(this);
 		sections = List.of(usersSection, loginsSection, urlsSection, versionsSection, logsSection);
+
+		sectionNameKeys.put(usersSection, "managedUsers");
+		sectionNameKeys.put(loginsSection, "section.logins");
+		sectionNameKeys.put(urlsSection, "section.urls");
+		sectionNameKeys.put(versionsSection, "section.versions");
+		sectionNameKeys.put(logsSection, "section.logs");
 
 		rebuild();
 	}
@@ -218,10 +241,23 @@ public class ServerManagementItem extends JPanel {
 		contentPanel.setOpaque(false);
 		contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.PAGE_AXIS));
 		for (final ItemSection section : sections) {
-			section.addTo(contentPanel);
+			if (!hiddenSections.contains(section)) {
+				section.addTo(contentPanel);
+			}
 		}
 
 		final Card card = new Card(server.getName(), IconKind.SERVER, 10);
+		final JComponent titleLabel = card.getTitleComponent();
+		titleLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+		titleLabel.setToolTipText(LangResources.get("selectVisibleSections"));
+		titleLabel.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseClicked(final MouseEvent event) {
+				if (SwingUtilities.isLeftMouseButton(event)) {
+					showSectionVisibilityDialog();
+				}
+			}
+		});
 		if (StringUtilities.isNotBlank(server.getHost())) {
 			final JLabel hostLabel = ModernUi.createMutedLabel(server.getHost());
 			hostLabel.setToolTipText(LangResources.get("host"));
@@ -234,6 +270,45 @@ public class ServerManagementItem extends JPanel {
 		repaint();
 
 		updateButtonStatus();
+	}
+
+	/**
+	 * Shows a dialog with one checkbox per section to select which sections of this card are visible. The card is
+	 * rebuilt only if the selection was confirmed and changed.
+	 */
+	void showSectionVisibilityDialog() {
+		final JPanel checkBoxPanel = new JPanel();
+		checkBoxPanel.setLayout(new BoxLayout(checkBoxPanel, BoxLayout.PAGE_AXIS));
+		final Map<ItemSection, JCheckBox> checkBoxes = new LinkedHashMap<>();
+		for (final Map.Entry<ItemSection, String> entry : sectionNameKeys.entrySet()) {
+			final JCheckBox checkBox = new JCheckBox(LangResources.get(entry.getValue()), !hiddenSections.contains(entry.getKey()));
+			checkBoxes.put(entry.getKey(), checkBox);
+			checkBoxPanel.add(checkBox);
+		}
+
+		final int result = JOptionPane.showConfirmDialog(serverManagementGui, checkBoxPanel, server.getName() + ": " + LangResources.get("selectVisibleSections"), JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+		if (result != JOptionPane.OK_OPTION) {
+			return;
+		}
+
+		final Set<ItemSection> newHiddenSections = new HashSet<>();
+		for (final Map.Entry<ItemSection, JCheckBox> entry : checkBoxes.entrySet()) {
+			if (!entry.getValue().isSelected()) {
+				newHiddenSections.add(entry.getKey());
+			}
+		}
+		if (!newHiddenSections.equals(hiddenSections)) {
+			hiddenSections.clear();
+			hiddenSections.addAll(newHiddenSections);
+			rebuild();
+		}
+	}
+
+	/**
+	 * Visibility of a section in this card; hidden sections are still included in the status check.
+	 */
+	boolean isSectionVisible(final ItemSection section) {
+		return !hiddenSections.contains(section);
 	}
 
 	void updateButtonStatus() {

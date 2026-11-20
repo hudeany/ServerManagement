@@ -161,6 +161,8 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 					return;
 				}
 
+				// A password copied for a browser login must not stay in the clipboard
+				LoginBrowserLauncher.clearPasswordFromClipboard();
 				dispose();
 				System.exit(0);
 			}
@@ -580,6 +582,8 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 					return;
 				}
 
+				// A password copied for a browser login must not stay in the clipboard
+				LoginBrowserLauncher.clearPasswordFromClipboard();
 				dispose();
 				System.exit(0);
 			}

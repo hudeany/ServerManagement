@@ -84,6 +84,13 @@ public class Login {
 	}
 
 	/**
+	 * Checks whether a password is set, without decrypting it.
+	 */
+	public boolean hasPassword() {
+		return password != null && !password.isEmpty();
+	}
+
+	/**
 	 * Encrypts and sets the password; null or an empty password removes it.
 	 */
 	public Login setPasswordArray(final char[] password) {

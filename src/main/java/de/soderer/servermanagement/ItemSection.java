@@ -75,6 +75,15 @@ abstract class ItemSection {
 	}
 
 	/**
+	 * Called after the table was created, configured and styled, before it is added to the card. Sections can install
+	 * additional renderers or listeners here, which must not be replaced by the styling.
+	 */
+	@SuppressWarnings("unused")
+	protected void tableCreated(final JTable newTable) {
+		// Nothing to do by default
+	}
+
+	/**
 	 * Adds header and table of the section to the content panel of the card.
 	 */
 	final void addTo(final JPanel contentPanel) {
@@ -90,6 +99,7 @@ abstract class ItemSection {
 			final JTable newTable = ItemTables.createTable(createTableModel(), getSelectionMode(), item::updateButtonStatus, getDoubleClickAction(), item, rowLevels::get, rowMessages::get);
 			configureColumns(newTable);
 			ItemTables.styleTable(newTable);
+			tableCreated(newTable);
 			ItemTables.addTablePanel(contentPanel, newTable, item);
 			table = newTable;
 		}

@@ -1,4 +1,4 @@
-package de.soderer.servermanagement;
+package de.soderer.servermanagement.gui;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -8,6 +8,7 @@ import javax.swing.JTable;
 import javax.swing.SwingConstants;
 import javax.swing.table.DefaultTableModel;
 
+import de.soderer.servermanagement.ServerManagement;
 import de.soderer.servermanagement.check.UrlCheckResult;
 import de.soderer.swing.modern.Button;
 import de.soderer.swing.modern.IconKind;

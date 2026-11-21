@@ -1,4 +1,4 @@
-package de.soderer.servermanagement;
+package de.soderer.servermanagement.gui;
 
 import java.awt.Color;
 import java.awt.Component;
@@ -27,6 +27,7 @@ import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableColumn;
 
+import de.soderer.servermanagement.ServerManagement;
 import de.soderer.servermanagement.check.LoginCheckResult;
 import de.soderer.servermanagement.config.Login;
 import de.soderer.servermanagement.config.LoginType;

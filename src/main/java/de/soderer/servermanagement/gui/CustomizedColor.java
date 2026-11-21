@@ -1,4 +1,4 @@
-package de.soderer.servermanagement;
+package de.soderer.servermanagement.gui;
 
 import java.awt.Color;
 

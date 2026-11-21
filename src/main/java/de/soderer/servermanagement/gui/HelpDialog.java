@@ -1,4 +1,4 @@
-package de.soderer.servermanagement;
+package de.soderer.servermanagement.gui;
 
 import java.awt.Dimension;
 import java.awt.GridLayout;
@@ -13,6 +13,7 @@ import javax.swing.JPanel;
 
 import de.soderer.applicationbase.ApplicationConfigurationProperties;
 import de.soderer.applicationbase.ApplicationUpdateUtilities;
+import de.soderer.servermanagement.ServerManagement;
 import de.soderer.swing.modern.Button;
 import de.soderer.swing.modern.ButtonStyle;
 import de.soderer.swing.modern.DialogStyle;

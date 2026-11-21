@@ -1,4 +1,4 @@
-package de.soderer.servermanagement;
+package de.soderer.servermanagement.gui;
 
 import java.awt.BorderLayout;
 import java.awt.event.MouseAdapter;
@@ -20,6 +20,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
 
+import de.soderer.servermanagement.ServerManagement;
 import de.soderer.servermanagement.config.KnownPublicSshKey;
 import de.soderer.servermanagement.config.Server;
 import de.soderer.servermanagement.config.ServerManagementConfiguration;
@@ -32,6 +33,7 @@ import de.soderer.swing.modern.ButtonStyle;
 import de.soderer.swing.modern.DialogStyle;
 import de.soderer.swing.modern.IconKind;
 import de.soderer.swing.modern.ModalDialog;
+import de.soderer.swing.modern.ModernTables;
 import de.soderer.swing.modern.QuestionDialog;
 import de.soderer.swing.modern.SimpleInputDialog;
 import de.soderer.utilities.LangResources;

@@ -1,4 +1,4 @@
-package de.soderer.servermanagement;
+package de.soderer.servermanagement.gui;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
@@ -24,11 +24,13 @@ import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableModel;
 import javax.swing.table.TableRowSorter;
 
+import de.soderer.servermanagement.ServerManagement;
 import de.soderer.swing.modern.Button;
 import de.soderer.swing.modern.ButtonStyle;
 import de.soderer.swing.modern.DialogStyle;
 import de.soderer.swing.modern.IconKind;
 import de.soderer.swing.modern.ModalDialog;
+import de.soderer.swing.modern.ModernTables;
 import de.soderer.swing.modern.ModernUi;
 import de.soderer.swing.modern.QuestionDialog;
 import de.soderer.utilities.LangResources;

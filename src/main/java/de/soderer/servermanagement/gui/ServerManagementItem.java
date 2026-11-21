@@ -1,4 +1,4 @@
-package de.soderer.servermanagement;
+package de.soderer.servermanagement.gui;
 
 import java.awt.BorderLayout;
 import java.awt.Cursor;
@@ -21,6 +21,7 @@ import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 
 import de.soderer.applicationbase.ApplicationConfigurationProperties;
+import de.soderer.servermanagement.ServerManagement;
 import de.soderer.servermanagement.check.LoginCheckResult;
 import de.soderer.servermanagement.check.LoginChecker;
 import de.soderer.servermanagement.check.StatusLevel;
@@ -231,7 +232,7 @@ public class ServerManagementItem extends JPanel {
 	/**
 	 * Checks all logins of the server (in the calling thread).
 	 */
-	List<LoginCheckResult> runLoginCheck() {
+	public List<LoginCheckResult> runLoginCheck() {
 		return loginChecker.check(server.getLogins());
 	}
 

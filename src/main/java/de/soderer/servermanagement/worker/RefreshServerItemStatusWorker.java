@@ -1,6 +1,6 @@
 package de.soderer.servermanagement.worker;
 
-import de.soderer.servermanagement.ServerManagementItem;
+import de.soderer.servermanagement.gui.ServerManagementItem;
 import de.soderer.utilities.worker.WorkerParentSimple;
 import de.soderer.utilities.worker.WorkerSimple;
 

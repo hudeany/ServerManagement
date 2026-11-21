@@ -21,6 +21,7 @@ import de.soderer.json.JsonReader;
 import de.soderer.json.JsonSerializer;
 import de.soderer.servermanagement.config.CredentialCipher;
 import de.soderer.servermanagement.config.ServerManagementConfiguration;
+import de.soderer.servermanagement.gui.ServerManagementGui;
 import de.soderer.swing.modern.DialogStyle;
 import de.soderer.swing.modern.QuestionDialog;
 import de.soderer.utilities.DateUtilities;

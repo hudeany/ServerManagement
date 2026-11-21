@@ -1,4 +1,4 @@
-package de.soderer.servermanagement;
+package de.soderer.servermanagement.gui;
 
 import java.awt.BorderLayout;
 import java.awt.GridBagConstraints;
@@ -10,6 +10,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 
+import de.soderer.servermanagement.ServerManagement;
 import de.soderer.servermanagement.config.ServerManagementConfiguration;
 import de.soderer.swing.modern.Button;
 import de.soderer.swing.modern.ButtonStyle;

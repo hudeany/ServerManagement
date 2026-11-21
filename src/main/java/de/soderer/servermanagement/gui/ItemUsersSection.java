@@ -1,4 +1,4 @@
-package de.soderer.servermanagement;
+package de.soderer.servermanagement.gui;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -9,6 +9,8 @@ import javax.swing.ListSelectionModel;
 import javax.swing.SwingConstants;
 import javax.swing.table.DefaultTableModel;
 
+import de.soderer.servermanagement.AuthorizedKeysHelper;
+import de.soderer.servermanagement.ServerManagement;
 import de.soderer.servermanagement.config.Admin;
 import de.soderer.servermanagement.config.User;
 import de.soderer.servermanagement.sshkeys.UserKeyStatus;

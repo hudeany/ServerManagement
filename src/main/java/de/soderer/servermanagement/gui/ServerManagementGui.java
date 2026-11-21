@@ -1,4 +1,4 @@
-package de.soderer.servermanagement;
+package de.soderer.servermanagement.gui;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -59,6 +59,8 @@ import de.soderer.json.JsonObject;
 import de.soderer.json.JsonSerializer;
 import de.soderer.json.JsonWriter;
 import de.soderer.network.NetworkUtilities;
+import de.soderer.servermanagement.ServerManagement;
+import de.soderer.servermanagement.ServerManagementException;
 import de.soderer.servermanagement.config.CredentialCipher;
 import de.soderer.servermanagement.config.Server;
 import de.soderer.servermanagement.config.ServerManagementConfiguration;
@@ -662,7 +664,7 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 	 *
 	 * @throws Exception if the configuration could not be written
 	 */
-	static void writeServersConfiguration(final ServerManagementConfiguration serverManagementConfiguration) throws Exception {
+	public static void writeServersConfiguration(final ServerManagementConfiguration serverManagementConfiguration) throws Exception {
 		// A plain text password must never be written to the configuration file
 		CredentialCipher.encryptPlainPasswords(serverManagementConfiguration);
 

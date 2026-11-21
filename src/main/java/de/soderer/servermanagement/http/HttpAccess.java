@@ -57,6 +57,35 @@ public class HttpAccess {
 	}
 
 	/**
+	 * Creates a trust manager for one request, which remembers the server certificate and uses the TLS trust of the
+	 * server checks.
+	 *
+	 * @return the capturing trust manager, null if the trust manager of the server checks is no X509 trust manager
+	 */
+	public CertificateCapturingTrustManager createCertificateCapturingTrustManager() {
+		if (trustManager instanceof final X509TrustManager x509TrustManager) {
+			return new CertificateCapturingTrustManager(x509TrustManager);
+		} else {
+			return null;
+		}
+	}
+
+	/**
+	 * Executes a request with the TLS trust of the server checks and remembers the server certificate in the given
+	 * trust manager.
+	 *
+	 * @param capturingTrustManager trust manager of {@link #createCertificateCapturingTrustManager()}, null for a
+	 *                              request without remembering the certificate
+	 */
+	public HttpResponse execute(final HttpRequest request, final Proxy proxy, final CertificateCapturingTrustManager capturingTrustManager) throws Exception {
+		if (capturingTrustManager == null) {
+			return execute(request, proxy);
+		} else {
+			return HttpUtilities.executeHttpRequest(request, proxy, capturingTrustManager, DEACTIVATE_HOSTNAME_VERIFICATION);
+		}
+	}
+
+	/**
 	 * Proxy of the application configuration for requests without login.
 	 */
 	public Proxy getApplicationProxy(final String url) throws Exception {

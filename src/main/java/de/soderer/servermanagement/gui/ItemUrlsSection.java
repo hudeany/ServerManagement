@@ -1,5 +1,7 @@
 package de.soderer.servermanagement.gui;
 
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -19,11 +21,17 @@ import de.soderer.utilities.StringUtilities;
 import de.soderer.utilities.Utilities;
 
 /**
- * Section of the checked URLs and their response times.
+ * Section of the checked URLs, their response times and the remaining validity of their server certificates.
  */
 class ItemUrlsSection extends ItemSection {
 	/** Column of the response time */
 	private static final int TIME_COLUMN = 1;
+
+	/** Column of the remaining validity of the server certificate */
+	private static final int CERTIFICATE_COLUMN = 2;
+
+	/** Format of the expiry date of a certificate */
+	private static final DateTimeFormatter CERTIFICATE_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneId.systemDefault());
 
 	private Button removeUrlButton;
 
@@ -72,15 +80,16 @@ class ItemUrlsSection extends ItemSection {
 	protected DefaultTableModel createTableModel() {
 		final List<String[]> rows = new ArrayList<>();
 		for (final String url : getServer().getUrls()) {
-			rows.add(new String[] { url, "" });
+			rows.add(new String[] { url, "", "" });
 		}
-		return createModel(List.of(LangResources.get("url"), LangResources.get("time")), rows);
+		return createModel(List.of(LangResources.get("url"), LangResources.get("time"), LangResources.get("certificate")), rows);
 	}
 
 	@Override
 	protected void configureColumns(final JTable newTable) {
 		ItemTables.configureColumn(newTable, 0, 400, null);
 		ItemTables.configureColumn(newTable, TIME_COLUMN, 100, SwingConstants.RIGHT);
+		ItemTables.configureColumn(newTable, CERTIFICATE_COLUMN, 200, null);
 	}
 
 	@Override
@@ -93,6 +102,7 @@ class ItemUrlsSection extends ItemSection {
 		for (int i = 0; i < model.getRowCount(); i++) {
 			if (StringUtilities.isNotBlank((String) model.getValueAt(i, 0))) {
 				model.setValueAt("", i, TIME_COLUMN);
+				model.setValueAt("", i, CERTIFICATE_COLUMN);
 			}
 		}
 	}
@@ -107,7 +117,26 @@ class ItemUrlsSection extends ItemSection {
 	 */
 	void showResults(final List<UrlCheckResult> results) {
 		for (int i = 0; i < results.size(); i++) {
-			showResult(i, TIME_COLUMN, results.get(i).getText(), results.get(i).getLevel());
+			final UrlCheckResult result = results.get(i);
+			showResult(i, TIME_COLUMN, result.getText(), result.getResponseLevel());
+			showResult(i, CERTIFICATE_COLUMN, getCertificateText(result), result.getCertificateLevel());
+		}
+	}
+
+	/**
+	 * Text of the certificate column: remaining days and expiry date, empty for plain http or if no certificate was
+	 * received.
+	 */
+	private static String getCertificateText(final UrlCheckResult result) {
+		final Long daysLeft = result.getCertificateDaysLeft();
+		if (daysLeft == null) {
+			return "";
+		}
+		final String expiryDate = CERTIFICATE_DATE_FORMAT.format(result.certificateNotAfter());
+		if (result.isCertificateExpired()) {
+			return LangResources.get("certificateExpired", expiryDate);
+		} else {
+			return LangResources.get("certificateValidDays", String.valueOf(daysLeft), expiryDate);
 		}
 	}
 

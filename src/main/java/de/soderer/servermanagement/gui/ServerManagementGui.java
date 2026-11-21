@@ -72,10 +72,10 @@ import de.soderer.swing.modern.DialogStyle;
 import de.soderer.swing.modern.GradientHeader;
 import de.soderer.swing.modern.IconKind;
 import de.soderer.swing.modern.ModernUi;
+import de.soderer.swing.modern.MultiInputDialog;
 import de.soderer.swing.modern.ProgressDialog;
 import de.soderer.swing.modern.QuestionDialog;
 import de.soderer.swing.modern.SelectableTableDialog;
-import de.soderer.swing.modern.SimpleInputDialog;
 import de.soderer.utilities.ConfigurationProperties;
 import de.soderer.utilities.DateUtilities;
 import de.soderer.utilities.ExceptionUtilities;
@@ -452,30 +452,26 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 			@Override
 			public void actionPerformed(final ActionEvent event) {
 				try {
-					final String servername = new SimpleInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addServer"), LangResources.get("enterServerName")).open();
-					if (StringUtilities.isNotBlank(servername)) {
-						final String host = new SimpleInputDialog(serverManagementGui, ServerManagement.APPLICATION_NAME + " " + LangResources.get("addServer"), LangResources.get("enterHost")).open();
-						if (StringUtilities.isNotBlank(host)) {
-							final Server newServer = new Server().setName(servername.trim()).setHost(host.trim());
-							serverManagementConfiguration.getServers().add(newServer);
-							final ServerManagementItem serverItem = new ServerManagementItem(serverManagementGui, newServer, applicationConfiguration);
-							newServerInformationPanel.add(serverItem);
-							newServerInformationPanel.add(Box.createRigidArea(new Dimension(SERVER_ITEM_GAP, SERVER_ITEM_GAP)));
-							serverItems.add(serverItem);
-							rebuildTableOfContents();
-							// Before, a new server was lost without warning when closing the application
-							serverManagementGui.signalUnsavedChanges();
+					final Server newServer = askForNewServer(serverManagementGui);
+					if (newServer != null) {
+						serverManagementConfiguration.getServers().add(newServer);
+						final ServerManagementItem serverItem = new ServerManagementItem(serverManagementGui, newServer, applicationConfiguration);
+						newServerInformationPanel.add(serverItem);
+						newServerInformationPanel.add(Box.createRigidArea(new Dimension(SERVER_ITEM_GAP, SERVER_ITEM_GAP)));
+						serverItems.add(serverItem);
+						rebuildTableOfContents();
+						// Before, a new server was lost without warning when closing the application
+						serverManagementGui.signalUnsavedChanges();
 
-							// The window is resizable, so its size is kept and only the list is laid out again
-							newServerInformationPanel.revalidate();
-							newServerInformationPanel.repaint();
+						// The window is resizable, so its size is kept and only the list is laid out again
+						newServerInformationPanel.revalidate();
+						newServerInformationPanel.repaint();
 
-							// Scroll to end, once the new card was laid out
-							SwingUtilities.invokeLater(() -> {
-								final JScrollBar verticalScrollBar = serverInformationScrollPane.getVerticalScrollBar();
-								verticalScrollBar.setValue(verticalScrollBar.getMaximum());
-							});
-						}
+						// Scroll to end, once the new card was laid out
+						SwingUtilities.invokeLater(() -> {
+							final JScrollBar verticalScrollBar = serverInformationScrollPane.getVerticalScrollBar();
+							verticalScrollBar.setValue(verticalScrollBar.getMaximum());
+						});
 					}
 				} catch (final Exception e) {
 					showError(serverManagementGui, e);
@@ -607,6 +603,55 @@ public class ServerManagementGui extends UpdateableGuiApplication {
 		final Card actionCard = new Card(null, null, 6);
 		actionCard.setContent(actionContent);
 		return actionCard;
+	}
+
+	/**
+	 * Asks for the data of a new server (name and host) in one dialog. The dialog is shown again with the entered
+	 * values as long as a value is missing or the server name is already used.
+	 *
+	 * @param serverManagementGui parent window
+	 * @return the new server, null if the user canceled
+	 */
+	private Server askForNewServer(final ServerManagementGui serverManagementGui) {
+		final String title = ServerManagement.APPLICATION_NAME + " " + LangResources.get("addServer");
+		String servername = "";
+		String host = "";
+		while (true) {
+			final List<String> values = new MultiInputDialog(serverManagementGui, title, LangResources.get("enterNewServerData"), LangResources.get("serverName"), LangResources.get("host"))
+					.withDefaultTexts(servername, host)
+					.open();
+			// null when canceled or closed via the window decoration
+			if (values == null) {
+				return null;
+			}
+
+			servername = values.get(0).trim();
+			host = values.get(1).trim();
+
+			if (StringUtilities.isBlank(servername) || StringUtilities.isBlank(host)) {
+				new QuestionDialog(serverManagementGui, title, LangResources.get("error.serverNameAndHostRequired")).withDialogStyle(DialogStyle.WARNING).open();
+			} else if (isServerNameInUse(servername)) {
+				// Removing servers identifies them by name, so a name must be unique
+				new QuestionDialog(serverManagementGui, title, LangResources.get("error.serverNameAlreadyExists", servername)).withDialogStyle(DialogStyle.WARNING).open();
+			} else {
+				return new Server().setName(servername).setHost(host);
+			}
+		}
+	}
+
+	/**
+	 * Checks whether a server name is already used by a configured server (case-insensitive).
+	 *
+	 * @param servername server name to check
+	 * @return true, if a server with this name exists
+	 */
+	private boolean isServerNameInUse(final String servername) {
+		for (final Server server : serverManagementConfiguration.getServers()) {
+			if (server.getName() != null && server.getName().trim().equalsIgnoreCase(servername)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

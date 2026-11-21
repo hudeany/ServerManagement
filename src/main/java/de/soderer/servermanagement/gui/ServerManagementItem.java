@@ -5,6 +5,8 @@ import java.awt.Cursor;
 import java.awt.EventQueue;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -13,10 +15,8 @@ import java.util.Map;
 import java.util.Set;
 
 import javax.swing.BoxLayout;
-import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 
@@ -42,6 +42,7 @@ import de.soderer.swing.modern.DialogStyle;
 import de.soderer.swing.modern.IconKind;
 import de.soderer.swing.modern.ModernUi;
 import de.soderer.swing.modern.QuestionDialog;
+import de.soderer.swing.modern.SelectableTableDialog;
 import de.soderer.utilities.LangResources;
 import de.soderer.utilities.StringUtilities;
 
@@ -294,29 +295,41 @@ public class ServerManagementItem extends JPanel {
 	}
 
 	/**
-	 * Shows a dialog with one checkbox per section to select which sections of this card are visible. The card is
+	 * Shows a dialog with one checkable row per section to select which sections of this card are visible. The card is
 	 * rebuilt only if the selection was confirmed and changed.
 	 */
 	void showSectionVisibilityDialog() {
-		final JPanel checkBoxPanel = new JPanel();
-		checkBoxPanel.setLayout(new BoxLayout(checkBoxPanel, BoxLayout.PAGE_AXIS));
-		final Map<ItemSection, JCheckBox> checkBoxes = new LinkedHashMap<>();
-		for (final Map.Entry<ItemSection, String> entry : sectionNameKeys.entrySet()) {
-			final JCheckBox checkBox = new JCheckBox(LangResources.get(entry.getValue()), !hiddenSections.contains(entry.getKey()));
-			checkBoxes.put(entry.getKey(), checkBox);
-			checkBoxPanel.add(checkBox);
+		// Row i of the dialog is section i of this list
+		final List<ItemSection> dialogSections = new ArrayList<>(sectionNameKeys.keySet());
+		final List<List<String>> items = new ArrayList<>();
+		final List<Integer> visibleRowIndexes = new ArrayList<>();
+		for (int rowIndex = 0; rowIndex < dialogSections.size(); rowIndex++) {
+			final ItemSection section = dialogSections.get(rowIndex);
+			items.add(Collections.singletonList(LangResources.get(sectionNameKeys.get(section))));
+			if (!hiddenSections.contains(section)) {
+				visibleRowIndexes.add(rowIndex);
+			}
 		}
 
-		final int result = JOptionPane.showConfirmDialog(serverManagementGui, checkBoxPanel, server.getName() + ": " + LangResources.get("selectVisibleSections"), JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-		if (result != JOptionPane.OK_OPTION) {
+		final SelectableTableDialog dialog = new SelectableTableDialog(serverManagementGui,
+				server.getName() + ": " + LangResources.get("selectVisibleSections"),
+				LangResources.get("selectVisibleSections_text"),
+				Collections.singletonList(LangResources.get("section")),
+				items,
+				true,
+				LangResources.get("selectAll"),
+				LangResources.get("selectNone"),
+				LangResources.get("ok"),
+				LangResources.get("cancel"))
+				.withSelectedRowIndexes(visibleRowIndexes);
+		// null when closed via the window decoration
+		if (!Boolean.TRUE.equals(dialog.open())) {
 			return;
 		}
 
-		final Set<ItemSection> newHiddenSections = new HashSet<>();
-		for (final Map.Entry<ItemSection, JCheckBox> entry : checkBoxes.entrySet()) {
-			if (!entry.getValue().isSelected()) {
-				newHiddenSections.add(entry.getKey());
-			}
+		final Set<ItemSection> newHiddenSections = new HashSet<>(dialogSections);
+		for (final Integer rowIndex : dialog.getSelectedRowIndexes()) {
+			newHiddenSections.remove(dialogSections.get(rowIndex));
 		}
 		if (!newHiddenSections.equals(hiddenSections)) {
 			hiddenSections.clear();

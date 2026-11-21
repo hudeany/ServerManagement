@@ -61,7 +61,7 @@ public class Login {
 	 */
 	@Deprecated
 	public String getPassword() {
-		return password;
+		return password == null || password.isEmpty() ? null : new String(CredentialCipher.getInstance().decrypt(password));
 	}
 
 	/**

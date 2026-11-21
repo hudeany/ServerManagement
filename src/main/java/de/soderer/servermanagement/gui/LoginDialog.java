@@ -40,6 +40,7 @@ public class LoginDialog extends JDialog {
 	private final JRadioButton classicRadioButton;
 	private final JRadioButton oidcRadioButton;
 	private final JRadioButton jenkinsRadioButton;
+	private final JRadioButton standardRadioButton;
 	private final JTextField urlField;
 	private final JTextField usernameField;
 	private final JPasswordField passwordField;
@@ -60,14 +61,17 @@ public class LoginDialog extends JDialog {
 		classicRadioButton = new JRadioButton(LangResources.get("loginType.basicauth"), true);
 		oidcRadioButton = new JRadioButton(LangResources.get("loginType.oidc"));
 		jenkinsRadioButton = new JRadioButton(LangResources.get("loginType.jenkins"));
+		standardRadioButton = new JRadioButton(LangResources.get("loginType.standard"));
 		final ButtonGroup loginTypeGroup = new ButtonGroup();
 		loginTypeGroup.add(classicRadioButton);
 		loginTypeGroup.add(oidcRadioButton);
 		loginTypeGroup.add(jenkinsRadioButton);
+		loginTypeGroup.add(standardRadioButton);
 		final JPanel loginTypePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
 		loginTypePanel.add(classicRadioButton);
 		loginTypePanel.add(oidcRadioButton);
 		loginTypePanel.add(jenkinsRadioButton);
+		loginTypePanel.add(standardRadioButton);
 
 		urlField = new JTextField(40);
 		usernameField = new JTextField(40);
@@ -88,6 +92,7 @@ public class LoginDialog extends JDialog {
 		classicRadioButton.addItemListener(e -> updateFieldStatus());
 		oidcRadioButton.addItemListener(e -> updateFieldStatus());
 		jenkinsRadioButton.addItemListener(e -> updateFieldStatus());
+		standardRadioButton.addItemListener(e -> updateFieldStatus());
 		updateFieldStatus();
 
 		// Buttons
@@ -182,6 +187,8 @@ public class LoginDialog extends JDialog {
 				oidcRadioButton.setSelected(true);
 			} else if (login.getLoginType() == LoginType.Jenkins) {
 				jenkinsRadioButton.setSelected(true);
+			} else if (login.getLoginType() == LoginType.Standard) {
+				standardRadioButton.setSelected(true);
 			} else {
 				classicRadioButton.setSelected(true);
 			}
@@ -225,6 +232,8 @@ public class LoginDialog extends JDialog {
 			loginType = LoginType.OIDC;
 		} else if (jenkinsRadioButton.isSelected()) {
 			loginType = LoginType.Jenkins;
+		} else if (standardRadioButton.isSelected()) {
+			loginType = LoginType.Standard;
 		} else {
 			loginType = LoginType.BasicAuth;
 		}

@@ -59,6 +59,24 @@ public class LoginChecker {
 			} catch (@SuppressWarnings("unused") final Exception e) {
 				return LoginCheckResult.ERROR;
 			}
+		} else if (login.getLoginType() == LoginType.Standard) {
+			try {
+				final HttpRequest request = new HttpRequest(HttpMethod.POST, login.getUrl());
+				request.addPostParameter("username", login.getUsername());
+				request.addPostParameter("password", new String(login.getPasswordArray()));
+				request.addPostParameter("login", "Login");
+				final HttpResponse response = httpAccess.execute(request, httpAccess.getProxyForLogin(login, request.getUrl()));
+				final int httpCode = response.getHttpCode();
+				if (httpCode >= 200 && httpCode < 300 && (response.getContent().contains("Abmelden") || response.getContent().contains("Logout"))) {
+					return LoginCheckResult.OK;
+				} else if (httpCode == 401 || httpCode == 403) {
+					return LoginCheckResult.FAILED;
+				} else {
+					return LoginCheckResult.ERROR;
+				}
+			} catch (@SuppressWarnings("unused") final Exception e) {
+				return LoginCheckResult.ERROR;
+			}
 		} else if (login.getLoginType() == LoginType.OIDC) {
 			try {
 				return oidcClient.login(login) != null ? LoginCheckResult.OK : LoginCheckResult.FAILED;

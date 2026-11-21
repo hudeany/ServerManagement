@@ -210,13 +210,16 @@ class ItemLoginsSection extends ItemSection {
 	}
 
 	static String getLoginTypeDisplayName(final LoginType loginType) {
-		if (loginType == LoginType.OIDC) {
-			return LangResources.get("loginType.oidc");
-		} else if (loginType == LoginType.Jenkins) {
-			return LangResources.get("loginType.jenkins");
-		} else {
+		if (loginType == null) {
 			return LangResources.get("loginType.basicauth");
 		}
+		// Exhaustive switch without default: a new login type causes a compile error here instead of being shown as BasicAuth
+		return switch (loginType) {
+			case BasicAuth -> LangResources.get("loginType.basicauth");
+			case OIDC -> LangResources.get("loginType.oidc");
+			case Jenkins -> LangResources.get("loginType.jenkins");
+			case Standard -> LangResources.get("loginType.standard");
+		};
 	}
 
 	/**

@@ -67,7 +67,7 @@ public class LoginChecker {
 				request.addPostParameter("login", "Login");
 				final HttpResponse response = httpAccess.execute(request, httpAccess.getProxyForLogin(login, request.getUrl()));
 				final int httpCode = response.getHttpCode();
-				if (httpCode >= 200 && httpCode < 300 && (response.getContent().contains("Abmelden") || response.getContent().contains("Logout"))) {
+				if (httpCode >= 200 && httpCode < 300) {
 					return LoginCheckResult.OK;
 				} else if (httpCode == 401 || httpCode == 403) {
 					return LoginCheckResult.FAILED;
